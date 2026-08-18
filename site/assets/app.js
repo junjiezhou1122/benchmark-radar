@@ -4395,6 +4395,135 @@ function clearAdoptionFrontier(message) {
   ]);
 }
 
+const SNAPSHOT_UI_ROW_LIMIT = 20;
+
+function formatSnapshotScore(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return "";
+  // Scores are shown as reported, not rounded to integers: 8017.59 on a
+  // 10000-scale benchmark is a different number from 8018.
+  const decimals = parsed >= 100 ? 2 : 3;
+  return String(Number(parsed.toFixed(decimals)));
+}
+
+function renderSnapshotSourceCard(source) {
+  return element("details", { className: "record-card snapshot-source" }, [
+    element("summary", { className: "record-summary" }, [
+      element("strong", { text: source.source }),
+      element("small", {
+        text: t("Crawled {date} · {benchmarks} benchmarks · {scores} score rows", {
+          date: formatDate(source.crawled_at, { dateStyle: "medium" }),
+          benchmarks: Number(source.benchmark_count).toLocaleString(),
+          scores: Number(source.score_row_count).toLocaleString(),
+        }),
+      }),
+    ]),
+    element("div", { className: "record-detail" }, [
+      element("p", { className: "section-note", text: source.description }),
+      element("ul", { className: "evidence-detail-list" }, [
+        element("li", {
+          text: t("{n} benchmarks mapped onto the curated registry", {
+            n: Number(source.matched_benchmark_count).toLocaleString(),
+          }),
+        }),
+        element("li", {
+          text: t("{n} benchmarks kept under their external id (full rows stay in the committed snapshot files)", {
+            n: Number(source.unmatched_benchmark_count).toLocaleString(),
+          }),
+        }),
+      ]),
+      element("a", {
+        className: "primary-link",
+        text: t("Open source ↗"),
+        attrs: { href: safeHttpUrl(source.source_url), target: "_blank", rel: "noopener noreferrer" },
+      }),
+    ]),
+  ]);
+}
+
+function renderSnapshotBenchmarkTable(benchmarkId, record) {
+  const rows = (record.entries || [])
+    .slice()
+    .sort((a, b) => a.snapshot.localeCompare(b.snapshot) || (a.rank ?? 999) - (b.rank ?? 999));
+  const perSource = new Map();
+  for (const entry of rows) {
+    if (!perSource.has(entry.snapshot)) perSource.set(entry.snapshot, []);
+    perSource.get(entry.snapshot).push(entry);
+  }
+  const tables = [...perSource.entries()].map(([snapshot, entries]) => {
+    const shown = entries.slice(0, SNAPSHOT_UI_ROW_LIMIT);
+    const cells = shown.map((entry) => {
+      const flags = [
+        entry.verified === "True" ? t("verified") : null,
+        entry.self_reported === "True" ? t("self-reported") : null,
+      ].filter(Boolean);
+      return element("tr", {}, [
+        element("td", { text: entry.rank != null ? String(entry.rank) : "" }),
+        element("td", { text: entry.model }),
+        element("td", { text: entry.organization }),
+        element("td", { text: formatSnapshotScore(entry.score) }),
+        element("td", {
+          text: entry.normalized_score != null ? formatSnapshotScore(entry.normalized_score) : "",
+        }),
+        element("td", { text: flags.join(", ") }),
+      ]);
+    });
+    if (entries.length > shown.length) {
+      cells.push(
+        element("tr", { className: "snapshot-more" }, [
+          element("td", {
+            attrs: { colspan: 6 },
+            text: t("{n} more rows in the committed snapshot file", {
+              n: Number(entries.length - shown.length).toLocaleString(),
+            }),
+          }),
+        ]),
+      );
+    }
+    return element("div", { className: "snapshot-source-table" }, [
+      element("h3", { text: snapshot }),
+      element("div", { className: "table-wrap" }, [
+        element("table", {}, [
+          element("thead", {}, [
+            element("tr", {}, [
+              element("th", { text: t("Rank") }),
+              element("th", { text: t("Model") }),
+              element("th", { text: t("Organization") }),
+              element("th", { text: t("Score") }),
+              element("th", { text: t("Normalized") }),
+              element("th", { text: t("Flags") }),
+            ]),
+          ]),
+          element("tbody", {}, cells),
+        ]),
+      ]),
+    ]);
+  });
+  return element("details", { className: "record-card snapshot-benchmark" }, [
+    element("summary", { className: "record-summary" }, [
+      element("strong", { text: record.name }),
+      element("small", {
+        text: t("{n} crawled rows", { n: Number(record.entry_count).toLocaleString() }),
+      }),
+    ]),
+    element("div", { className: "record-detail" }, tables),
+  ]);
+}
+
+function renderLeaderboardSnapshots() {
+  const snapshots = state.data?.leaderboard_snapshots;
+  const panel = byId("leaderboard-snapshots-panel");
+  if (!snapshots || !panel) return;
+  panel.hidden = false;
+  byId("snapshots-measures").textContent = snapshots.measures || "";
+  const sources = (snapshots.sources || []).map(renderSnapshotSourceCard);
+  const benchmarks = Object.keys(snapshots.benchmarks || {})
+    .sort()
+    .map((id) => renderSnapshotBenchmarkTable(id, snapshots.benchmarks[id]));
+  replaceChildren(byId("snapshot-sources"), sources);
+  replaceChildren(byId("snapshot-benchmark-tables"), benchmarks);
+}
+
 function renderAdoptionFrontier(board) {
   const adopted = (board.entries || []).filter((entry) => entry.card_count > 0);
   const defaultEntry = frontierDefaultEntry(board);
@@ -4720,9 +4849,11 @@ function renderLeaderboard() {
   const navButton = document.querySelector('[data-view="leaderboard"]');
   // A checkout without the curated registry publishes no ranking. Hiding the
   // nav entry is the honest response: offering a tab that opens an empty page
-  // reads as a broken feature rather than as absent data.
+  // reads as a broken feature rather than as absent data. The crawled
+  // snapshots still render: they cite their own files, not the registry.
   if (!board) {
     if (navButton) navButton.hidden = true;
+    renderLeaderboardSnapshots();
     return;
   }
   if (navButton) navButton.hidden = false;
@@ -4731,6 +4862,7 @@ function renderLeaderboard() {
   renderLeaderboardFilters(board);
   renderBenchmarkFindings(board);
   renderAdoptionFrontier(board);
+  renderLeaderboardSnapshots();
 
   const topEntries = (board.entries || []).filter((entry) => entry.card_count > 0);
 

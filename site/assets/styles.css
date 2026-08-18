@@ -3851,3 +3851,29 @@ footer {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Crawled leaderboard snapshots: source cards and per-source score tables.
+   The tables reuse .table-wrap from the trend ledger; these rules only stack
+   the per-source table group and the truncation footer. */
+.snapshot-panel {
+  margin-top: 1.25rem;
+}
+
+.snapshot-source-table {
+  margin-top: 1rem;
+}
+
+.snapshot-source-table h3 {
+  font-size: 0.9rem;
+  margin: 0 0 0.4rem;
+}
+
+.snapshot-source-table .table-wrap {
+  max-height: 22rem;
+  overflow: auto;
+}
+
+tr.snapshot-more td {
+  font-style: italic;
+  opacity: 0.75;
+}
