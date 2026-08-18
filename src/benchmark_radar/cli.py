@@ -214,6 +214,17 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--leaderboard-snapshots",
+        type=Path,
+        default=None,
+        help=(
+            "Crawled aggregator leaderboard snapshot registry (data/"
+            "leaderboard_snapshots.yml). Published as its own dashboard layer, "
+            "never joined to the curated score readings. Pass a custom path to "
+            "publish a different snapshot set; a missing file omits the layer."
+        ),
+    )
+    parser.add_argument(
         "--export-dir",
         type=Path,
         default=Path("site/data"),
@@ -330,6 +341,7 @@ def main() -> None:
             registry_path=args.model_cards,
             scores_path=args.benchmark_scores,
             kw_bench_store_path=args.kw_bench_store,
+            leaderboards_path=args.leaderboard_snapshots,
         )
         report = dashboard["kw_bench"]["coverage"]
         print(
@@ -362,6 +374,7 @@ def main() -> None:
             registry_path=args.model_cards,
             scores_path=args.benchmark_scores,
             kw_bench_store_path=args.kw_bench_store,
+            leaderboards_path=args.leaderboard_snapshots,
         )
         action = "Backfilled" if args.command == "backfill" else "Rebuilt"
         print(f"{action} {args.dashboard_output} from {data['snapshot_count']} daily snapshots")
@@ -459,6 +472,7 @@ def main() -> None:
             registry_path=args.model_cards,
             scores_path=args.benchmark_scores,
             kw_bench_store_path=args.kw_bench_store,
+            leaderboards_path=args.leaderboard_snapshots,
         )
         print(
             f"Simulated {len(written)} historical snapshots with coverage "
@@ -476,6 +490,7 @@ def main() -> None:
             registry_path=args.model_cards,
             scores_path=args.benchmark_scores,
             kw_bench_store_path=args.kw_bench_store,
+            leaderboards_path=args.leaderboard_snapshots,
         )
         print(
             f"Rescored {summary['snapshots']} snapshots against taxonomy "
@@ -503,6 +518,7 @@ def main() -> None:
             registry_path=args.model_cards,
             scores_path=args.benchmark_scores,
             kw_bench_store_path=args.kw_bench_store,
+            leaderboards_path=args.leaderboard_snapshots,
         )
         print(
             f"Migrated {len(snapshots)} snapshots to schema {dashboard['schema_version']} "
@@ -678,6 +694,7 @@ def main() -> None:
         registry_path=args.model_cards,
         scores_path=args.benchmark_scores,
         kw_bench_store_path=args.kw_bench_store,
+        leaderboards_path=args.leaderboard_snapshots,
     )
     print(
         f"Wrote {len(run.items)} items, snapshot {snapshot_path}, and dashboard data "

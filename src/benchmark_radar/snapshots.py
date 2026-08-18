@@ -20,6 +20,10 @@ from .corpus import (
 from .feed import write_feed
 from .insights import build_insights
 from .kw_bench_tracks import classification_layer, derive_tracks
+from .leaderboard_snapshots import (
+    DEFAULT_SNAPSHOTS_PATH,
+    build_leaderboard_snapshots_layer,
+)
 from .model_cards import DEFAULT_REGISTRY_PATH, adoption_rank, load_registry
 from .models import RadarRun
 from .pipeline import match_phrase, match_proximity_rule
@@ -819,12 +823,36 @@ def kw_bench_layer(
     return classification_layer(store_path, tracks=tracks)
 
 
+def _leaderboard_snapshots_layer(
+    registry_path: Path | None,
+    leaderboards_path: Path | None,
+) -> dict[str, Any] | None:
+    """The crawled aggregator leaderboard layer, or None when absent.
+
+    Same contract as the curated layers: a missing file is not an error (a
+    checkout without the snapshot data still publishes a working dashboard),
+    but an invalid one fails the build, because a silently dropped layer would
+    leave the previous snapshot on the page with no indication it went stale.
+    The registry is passed through only for canonical id mapping; the layer
+    does not cite the registry, so it publishes even without one.
+    """
+    snapshots_file = leaderboards_path or DEFAULT_SNAPSHOTS_PATH
+    if not snapshots_file.exists():
+        return None
+    registry = None
+    registry_file = registry_path or DEFAULT_REGISTRY_PATH
+    if registry_file.exists():
+        registry = load_registry(registry_file)
+    return build_leaderboard_snapshots_layer(snapshots_file, registry)
+
+
 def dashboard_data(
     snapshots: list[dict[str, Any]],
     *,
     registry_path: Path | None = None,
     scores_path: Path | None = None,
     kw_bench_store_path: Path | None = None,
+    leaderboards_path: Path | None = None,
 ) -> dict[str, Any]:
     days: list[dict[str, Any]] = []
     categories: set[str] = set()
@@ -977,6 +1005,12 @@ def dashboard_data(
         # are different questions from "what was released today" and move on a
         # different clock.
         **_curated_layers(registry_path, scores_path),
+        # Crawled aggregator leaderboard snapshots, versioned beside the
+        # curated layers and never joined to them: a leaderboard row carries
+        # no protocol, so it cannot be compared with a document reading.
+        "leaderboard_snapshots": _leaderboard_snapshots_layer(
+            registry_path, leaderboards_path
+        ),
         # Keep every rubric required by the history. The browser selects by
         # each record's score_version, so a v1 score is never explained using
         # v2 arithmetic.
@@ -1040,6 +1074,7 @@ def rebuild_dashboard(
     registry_path: Path | None = None,
     scores_path: Path | None = None,
     kw_bench_store_path: Path | None = None,
+    leaderboards_path: Path | None = None,
 ) -> dict[str, Any]:
     snapshots = load_snapshots(snapshot_dir)
     value = dashboard_data(
@@ -1047,6 +1082,7 @@ def rebuild_dashboard(
         registry_path=registry_path,
         scores_path=scores_path,
         kw_bench_store_path=kw_bench_store_path,
+        leaderboards_path=leaderboards_path,
     )
     _write_json(output, value)
     # The record-count badge lives beside radar.json so it deploys with the same
