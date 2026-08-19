@@ -1,0 +1,61 @@
+name: Report a wrong or unreadable logo
+description: A brand mark is the wrong one, missing, or too hard to read at the size a chart draws it.
+title: "Logo: "
+labels: ["logo"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Logos are drawn small, so one that reads fine on its own can turn into a
+        smudge on a chart. A screenshot of it at the size you actually saw it is
+        the most useful thing you can attach.
+
+  - type: input
+    id: organization
+    attributes:
+      label: Whose logo is it
+      placeholder: Acme
+    validations:
+      required: true
+
+  - type: dropdown
+    id: problem
+    attributes:
+      label: What is wrong with it
+      options:
+        - It is the wrong logo
+        - It is missing
+        - It is too hard to read at chart size
+        - It is out of date
+    validations:
+      required: true
+
+  - type: textarea
+    id: visual
+    attributes:
+      label: Screenshot
+      description: |
+        Drag the image straight into this box and GitHub will upload it. Please
+        show it at the size it appears on the page, not zoomed in, so the
+        readability problem is visible.
+      placeholder: Drop your screenshot here.
+    validations:
+      required: false
+
+  - type: input
+    id: page
+    attributes:
+      label: Page address
+      description: Where you saw it.
+      placeholder: https://ktwu01.github.io/benchmark-radar/
+    validations:
+      required: true
+
+  - type: input
+    id: correct_source
+    attributes:
+      label: Where the correct logo can be found
+      description: Optional. A press kit or brand page is ideal.
+      placeholder: https://example.com/brand
+    validations:
+      required: false
