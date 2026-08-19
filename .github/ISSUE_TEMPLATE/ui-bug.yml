@@ -1,0 +1,69 @@
+name: Report something that looks wrong
+description: A chart, logo, label, or page renders badly, is unreadable, or is cut off.
+title: "Looks wrong: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        How the site looks is part of whether it works. A chart nobody can read
+        is a broken chart.
+
+        A picture settles this faster than any description. Please drag a
+        screenshot or a short screen recording into the box below. If you cannot
+        take one right now, file anyway and describe what you see.
+
+  - type: textarea
+    id: visual
+    attributes:
+      label: Screenshot or screen recording
+      description: |
+        Drag the image or video file straight into this box and GitHub will
+        upload it. A recording helps most when the problem only shows up while
+        you scroll, hover, or resize.
+
+        Please crop out anything private before you upload.
+      placeholder: Drop your screenshot here.
+    validations:
+      required: false
+
+  - type: input
+    id: page
+    attributes:
+      label: Page address
+      description: Copy the address bar from the page where you saw it.
+      placeholder: https://ktwu01.github.io/benchmark-radar/?view=leaderboard
+    validations:
+      required: true
+
+  - type: dropdown
+    id: viewport
+    attributes:
+      label: Screen you were on
+      options:
+        - Desktop or laptop
+        - Phone
+        - Tablet
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What looks wrong, and what you expected instead
+      description: One or two sentences is plenty.
+      placeholder: |
+        The bar labels run into each other, so I cannot tell which model each bar belongs to.
+        I expected each bar to be labelled clearly.
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      description: Optional, but it helps if the problem only happens in one of them.
+      placeholder: Chrome, Safari, Firefox
+    validations:
+      required: false
