@@ -1,0 +1,56 @@
+name: Report a bug
+description: Something on the site does not work. For data that disagrees with its source, use "Report a data error" instead.
+title: "Bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If the problem is with how something looks (a chart, a logo, a label, a
+        layout), please use "Report something that looks wrong" instead. It asks
+        for the few extra details that make a visual problem fixable.
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened
+      description: What you did, and what the site did instead of what you expected.
+      placeholder: |
+        I clicked the source filter and picked one source. The table went empty.
+        I expected it to show the rows from that source.
+    validations:
+      required: true
+
+  - type: input
+    id: page
+    attributes:
+      label: Page address
+      description: Copy the address bar from the page where it happened.
+      placeholder: https://ktwu01.github.io/benchmark-radar/
+    validations:
+      required: true
+
+  - type: dropdown
+    id: viewport
+    attributes:
+      label: Screen you were on
+      options:
+        - Desktop or laptop
+        - Phone
+        - Tablet
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: visual
+    attributes:
+      label: Screenshot or screen recording
+      description: |
+        Strongly wanted, and usually the fastest way to get this fixed. Drag the
+        image or video file straight into this box and GitHub will upload it.
+        Please crop out anything private first. If you cannot take one, leave
+        this empty and file anyway.
+      placeholder: Drop your screenshot here.
+    validations:
+      required: false
