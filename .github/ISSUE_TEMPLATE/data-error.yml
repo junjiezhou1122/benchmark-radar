@@ -33,3 +33,15 @@ body:
       description: Quote it if you can, so the correction is checkable without re-reading the whole document.
     validations:
       required: true
+
+  - type: textarea
+    id: visual
+    attributes:
+      label: Screenshot of the row as published
+      description: |
+        Optional but helpful. Drag the image straight into this box and GitHub
+        will upload it. It shows exactly what you were looking at, which settles
+        questions the text version cannot.
+      placeholder: Drop your screenshot here.
+    validations:
+      required: false
