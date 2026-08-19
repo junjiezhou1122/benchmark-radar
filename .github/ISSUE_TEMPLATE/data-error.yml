@@ -1,35 +1,39 @@
-name: Report a data error
-description: A row in the adoption ranking or the daily radar does not match its source.
+name: Report a wrong number
+description: A number on the site does not match the document it came from.
 title: "Data error: "
 labels: ["data-error"]
 body:
   - type: markdown
     attributes:
       value: |
-        A wrong row is a real bug, not a nitpick. This project's only claim is
-        that every entry can be checked against the record it came from, so a
-        row that does not match its source breaks the one guarantee it makes.
+        A wrong number is a real bug, not a nitpick. This site makes one
+        promise: every number on it can be checked against the document it
+        was taken from. A number that does not match breaks that promise.
 
   - type: input
     id: source_url
     attributes:
-      label: Source document URL
-      description: The record the entry claims to be derived from.
+      label: Link to the document
+      description: The paper, model card, or post the number was supposed to come from.
     validations:
       required: true
 
   - type: textarea
     id: claimed
     attributes:
-      label: What the radar currently shows
-      description: The benchmark id, ranking row, or daily entry as published.
+      label: What the site says
+      description: |
+        Paste the line as it appears, or link to the page it is on. If you
+        know the benchmark's name, include it.
     validations:
       required: true
 
   - type: textarea
     id: actual
     attributes:
-      label: What the source actually says
-      description: Quote it if you can, so the correction is checkable without re-reading the whole document.
+      label: What the document says
+      description: |
+        Quote it if you can. A quote means the fix can be checked without
+        anyone having to read the whole document again.
     validations:
       required: true
