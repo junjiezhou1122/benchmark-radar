@@ -2518,8 +2518,22 @@ function renderToday({ resultsOnly = false } = {}) {
   // click or filter keystroke in the load window must no-op, not throw.
   if (!state.data) return;
   const showingAllDates = state.todayDate === "all";
-  const day = dailySnapshot(showingAllDates ? state.data.latest_date : state.todayDate);
+  const requestedDate = showingAllDates ? state.data.latest_date : state.todayDate;
+  const day = dailySnapshot(requestedDate);
   if (!day) return;
+  // Trends days carry counts but not evidence_items. Rendering that date as
+  // Today would wipe the latest-scan list until radar.json arrives. Stay on
+  // the latest day we can actually list, then fill the requested date after
+  // ensureFullData() lands.
+  if (
+    !showingAllDates &&
+    requestedDate &&
+    requestedDate !== state.data.latest_date &&
+    !Array.isArray(day.evidence_items)
+  ) {
+    state.todayDate = state.data.latest_date;
+    return renderToday({ resultsOnly });
+  }
   byId("today-date").value = state.todayDate;
 
   if (!resultsOnly) {
@@ -2930,7 +2944,9 @@ function renderTrends() {
         window.scrollTo({ top: 0, behavior: "smooth" });
         ensureFullData()
           .then(() => {
-            if (state.view === "today") renderToday();
+            if (state.view !== "today") return;
+            state.todayDate = day.date;
+            renderToday();
           })
           .catch((error) => console.error(error));
       });
@@ -2951,7 +2967,9 @@ function renderTrends() {
         renderToday();
         ensureFullData()
           .then(() => {
-            if (state.view === "today") renderToday();
+            if (state.view !== "today") return;
+            state.todayDate = day.date;
+            renderToday();
           })
           .catch((error) => console.error(error));
       });
@@ -3345,7 +3363,7 @@ function isRelease(item) {
 function allObservations() {
   if (state.observations) return state.observations;
   const evidence = state.data.days.flatMap((day) =>
-    day.evidence_items.map((item) => ({
+    (day.evidence_items || []).map((item) => ({
       ...item,
       recommended:
         item.recommended ??
@@ -8317,6 +8335,12 @@ function bindEvents() {
         return;
       }
       if (anchor) event.preventDefault();
+      // The Today tab is the latest scan. A Trends column writes ?date= into
+      // the URL for a historical day; clicking Today must not keep that date
+      // or the list looks empty / stuck on an old scan.
+      if (view === "today" && state.todayDate !== "all") {
+        state.todayDate = state.data.latest_date || "";
+      }
       setView(view);
       if (view === "today") renderToday();
       if (view === "leaderboard") renderLeaderboard();

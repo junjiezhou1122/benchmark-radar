@@ -779,6 +779,17 @@ def test_initial_page_uses_small_bootstrap_and_lazy_loads_history():
     )
     assert "function mergeDashboardData" in script
     assert 'state.todayDate === "all"' in script
+    # A Trends day has counts but no evidence_items. Mapping those days would
+    # throw and leave Today blank; listing an unloaded historical date would
+    # replace the latest-scan rows with an empty state.
+    assert "(day.evidence_items || []).map" in script
+    today = script.split("function renderToday", 1)[1].split("function renderTrends", 1)[0]
+    assert "!Array.isArray(day.evidence_items)" in today
+    assert "state.todayDate = state.data.latest_date;" in today
+    nav_today = script.split('document.querySelectorAll("[data-view]")', 1)[1].split(
+        "// Reads every control rather than the event target", 1
+    )[0]
+    assert 'if (view === "today" && state.todayDate !== "all")' in nav_today
 
 
 def test_rubric_is_read_from_published_data_not_restated_in_the_browser():
