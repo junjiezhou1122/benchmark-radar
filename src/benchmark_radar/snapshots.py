@@ -24,6 +24,7 @@ from .kw_bench_tracks import classification_layer, derive_tracks
 from .model_cards import DEFAULT_REGISTRY_PATH, adoption_rank, load_registry
 from .models import RadarRun
 from .pipeline import match_phrase, match_proximity_rule
+from .release_leaderboard import build_latest_releases_leaderboard
 from .rubric import (
     SCORING_VERSION,
     legacy_rubric_reference,
@@ -388,6 +389,67 @@ def _validate_attention(attention: Any, *, source: str) -> None:
             )
 
 
+def _validate_benchmark_attention(benchmark_attention: Any, *, source: str) -> None:
+    if not isinstance(benchmark_attention, dict):
+        raise SnapshotError(f"{source}: benchmark_attention must be an object")
+    if benchmark_attention.get("schema_version") != 1:
+        raise SnapshotError(
+            f"{source}: benchmark_attention schema_version must be 1, got "
+            f"{benchmark_attention.get('schema_version')!r}"
+        )
+    _validate_time(
+        benchmark_attention.get("observed_at"),
+        source=source,
+        field="benchmark_attention observed_at",
+    )
+    if not isinstance(benchmark_attention.get("observations"), list):
+        raise SnapshotError(f"{source}: benchmark_attention.observations must be an array")
+    if not isinstance(benchmark_attention.get("health", []), list):
+        raise SnapshotError(f"{source}: benchmark_attention.health must be an array")
+
+    required = {
+        "canonical_artifact_id",
+        "source",
+        "metric",
+        "value",
+        "value_kind",
+        "source_url",
+        "status",
+    }
+    for index, observation in enumerate(benchmark_attention["observations"]):
+        if not isinstance(observation, dict):
+            raise SnapshotError(
+                f"{source}: benchmark_attention observation {index} must be an object"
+            )
+        missing = sorted(required - observation.keys())
+        if missing:
+            raise SnapshotError(
+                f"{source}: benchmark_attention observation {index} "
+                f"missing fields: {', '.join(missing)}"
+            )
+        if not str(observation["canonical_artifact_id"]).strip():
+            raise SnapshotError(
+                f"{source}: benchmark_attention observation {index} "
+                "canonical_artifact_id must be non-empty"
+            )
+        val = observation["value"]
+        if val is not None and (not isinstance(val, (int, float)) or val < 0):
+            raise SnapshotError(
+                f"{source}: benchmark_attention observation {index} "
+                "value must be a non-negative number or null"
+            )
+        url = str(observation["source_url"] or "")
+        if not url.startswith(("https://", "http://")):
+            raise SnapshotError(
+                f"{source}: benchmark_attention observation {index} source_url must be HTTP(S)"
+            )
+        status = observation["status"]
+        if status not in {"fresh", "stale", "unknown", "unavailable"}:
+            raise SnapshotError(
+                f"{source}: benchmark_attention observation {index} status is invalid: {status!r}"
+            )
+
+
 def validate_snapshot(snapshot: dict[str, Any], *, source: str = "snapshot") -> None:
     version = snapshot.get("schema_version")
     if version not in SUPPORTED_SCHEMA_VERSIONS:
@@ -441,6 +503,8 @@ def validate_snapshot(snapshot: dict[str, Any], *, source: str = "snapshot") -> 
     # Optional: snapshots written before the daily Q&A was persisted stay valid.
     if "questions" in snapshot:
         _validate_questions(snapshot["questions"], source=source, date=snapshot["date"])
+    if "benchmark_attention" in snapshot:
+        _validate_benchmark_attention(snapshot["benchmark_attention"], source=source)
 
 
 def normalize_snapshot(snapshot: dict[str, Any], *, source: str = "snapshot") -> dict[str, Any]:
@@ -1003,6 +1067,7 @@ def dashboard_data(
             kw_bench_store_path,
             tracks=derive_tracks(snapshots),
         ),
+        "latest_releases_leaderboard": build_latest_releases_leaderboard(snapshots),
         # Curated and versioned in the repository rather than collected daily:
         # they answer "which benchmarks do vendors report", "how have the
         # readable scores moved", and "what do those two together say", which
