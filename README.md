@@ -60,19 +60,18 @@ If Benchmark Radar saves you research time, **[star the repository](https://gith
 
 ## Query it locally (CLI version)
 
-The web dashboard is the hosted view. For offline querying, use **the CLI
-version**: it installs the CLI, downloads the local searchable data, and
-answers from local files. Give this prompt to your coding agent:
-
-```text
-Set up Benchmark Radar for local benchmark search. Follow
-https://github.com/ktwu01/benchmark-radar/blob/main/skills/benchmark-radar/SKILL.md
-to install the CLI and consumer Skill, initialize the local data, and verify the
-setup. Use only consumer commands.
+```bash
+npx skills add ktwu01/benchmark-radar
 ```
+
+Then ask your coding agent about benchmarks. It installs the command-line tool
+and downloads the data to your computer the first time you ask. What it does is
+written in the
+[setup and usage guide](https://github.com/ktwu01/benchmark-radar/blob/main/skills/benchmark-radar/SKILL.md).
 
 ## More
 
+- [Design principles](design.md)
 - [Scoring rubric](https://benchmark-radar.org/rubric/)
 - [Model-card adoption data](data/model_cards.yml)
 - [Public corpus schema](docs/cumulative-corpus.schema.json)

@@ -55,17 +55,17 @@ SWE-bench Verified 的 saturation 过程。**
 
 ## 在本地查询（CLI 版本）
 
-网页版 dashboard 是托管视图。需要离线查询时，请使用 **CLI 版本**：它会安装
-CLI、下载本地可搜索的数据，并从本地文件回答。把下面这段直接发给你的 coding agent：
-
-```text
-请帮我配置 Benchmark Radar 的本地 benchmark 搜索。请遵循
-https://github.com/ktwu01/benchmark-radar/blob/main/skills/benchmark-radar/SKILL.md，
-安装 CLI 和 consumer Skill，初始化本地数据并确认配置成功。只使用面向用户的命令。
+```bash
+npx skills add ktwu01/benchmark-radar
 ```
+
+之后直接问你的 coding agent benchmark 就行。第一次问的时候，它会安装命令行工具，
+并把数据下载到你的电脑。它具体做了什么，写在
+[安装与使用指南](https://github.com/ktwu01/benchmark-radar/blob/main/skills/benchmark-radar/SKILL.md)。
 
 ## 更多
 
+- [设计原则](design.md)
 - [评分规则](https://benchmark-radar.org/rubric/)
 - [模型卡采用数据](data/model_cards.yml)
 - [公开语料 schema](docs/cumulative-corpus.schema.json)
