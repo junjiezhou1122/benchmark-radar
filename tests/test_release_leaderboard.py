@@ -504,7 +504,40 @@ def test_build_latest_releases_leaderboard_payload():
         },
     ]
 
-    snapshots = [make_snapshot("2026-09-01", generated_at.isoformat(), evidence_items=items)]
+    attention = {
+        "schema_version": 1,
+        "observed_at": generated_at.isoformat(),
+        "observations": [
+            {
+                "canonical_artifact_id": "artifact:github:org/fast-bench",
+                "source": "github",
+                "metric": "stars",
+                "value": 200,
+                "value_kind": "cumulative",
+                "source_url": "https://github.com/org/fast-bench",
+                "status": "fresh",
+            },
+            {
+                "canonical_artifact_id": "artifact:github:org/slow-bench",
+                "source": "github",
+                "metric": "stars",
+                "value": 100,
+                "value_kind": "cumulative",
+                "source_url": "https://github.com/org/slow-bench",
+                "status": "fresh",
+            },
+        ],
+        "health": [],
+    }
+
+    snapshots = [
+        make_snapshot(
+            "2026-09-01",
+            generated_at.isoformat(),
+            evidence_items=items,
+            benchmark_attention=attention,
+        )
+    ]
     payload = build_latest_releases_leaderboard(snapshots, as_of=generated_at)
 
     assert payload["schema_version"] == 1
@@ -526,3 +559,168 @@ def test_build_latest_releases_leaderboard_payload():
     assert len(w30d["entries"]) == 2
     assert w30d["entries"][0]["name"] == "Fast Bench"
     assert w30d["entries"][1]["name"] == "Slow Bench"
+
+
+def test_evidence_item_fallback_without_attention_or_reviewed_does_not_rank():
+    # Issue #530 / Review blocker 1:
+    # Ordinary keyword/category discovery with connector metrics must NOT establish formal rank.
+    # Without dated benchmark_attention or reviewed benchmark status, items remain unranked.
+    generated_at = datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC)
+    rel_time = (generated_at - timedelta(days=10)).isoformat()
+
+    items = [
+        {
+            "id": "unreviewed-discovery",
+            "url": "https://github.com/random/discovered-tool",
+            "title": "Random Discovered Tool",
+            "event_kind": "released",
+            "discovered_at": rel_time,
+            "published_at": rel_time,
+            "source": "GitHub",
+            "source_id": "random/discovered-tool",
+            "metrics": {"stars": 999},  # Historical connector metric
+        }
+    ]
+
+    # No benchmark_attention block
+    snapshots = [make_snapshot("2026-09-01", generated_at.isoformat(), evidence_items=items)]
+    # Explicitly empty reviewed benchmark set
+    payload = build_latest_releases_leaderboard(
+        snapshots, as_of=generated_at, reviewed_benchmark_ids=set()
+    )
+
+    w30d = payload["windows"]["30d"]
+    assert w30d["ranked_count"] == 0
+    assert w30d["total_cohort_count"] == 1
+    entry = w30d["entries"][0]
+    assert entry["rank"] is None
+    assert entry["status"] == "limited_signals"
+
+
+def test_newer_unavailable_observation_makes_signal_stale_and_unranked():
+    # Issue #530 / Review blocker 2:
+    # When a newer observation reports value: null with status: unavailable,
+    # the latest source status must govern the signal. The last-known value is
+    # retained as stale with last_successful_date, and cannot cross the ranking threshold.
+    generated_at_1 = datetime(2026, 8, 15, 12, 0, 0, tzinfo=UTC)
+    generated_at_2 = datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC)
+    rel_time = (generated_at_2 - timedelta(days=20)).isoformat()
+
+    items = [
+        {
+            "id": "bench-refresh-failed",
+            "url": "https://github.com/org/refresh-failed",
+            "title": "Refresh Failed Bench",
+            "event_kind": "released",
+            "discovered_at": rel_time,
+            "published_at": rel_time,
+            "source": "GitHub",
+            "source_id": "org/refresh-failed",
+        }
+    ]
+
+    # Snapshot 1: fresh observation (stars = 500)
+    att_1 = {
+        "schema_version": 1,
+        "observed_at": generated_at_1.isoformat(),
+        "observations": [
+            {
+                "canonical_artifact_id": "artifact:github:org/refresh-failed",
+                "source": "github",
+                "metric": "stars",
+                "value": 500,
+                "value_kind": "cumulative",
+                "source_url": "https://github.com/org/refresh-failed",
+                "status": "fresh",
+            }
+        ],
+        "health": [],
+    }
+
+    # Snapshot 2: failed refresh (status: unavailable, value: null)
+    att_2 = {
+        "schema_version": 1,
+        "observed_at": generated_at_2.isoformat(),
+        "observations": [
+            {
+                "canonical_artifact_id": "artifact:github:org/refresh-failed",
+                "source": "github",
+                "metric": "stars",
+                "value": None,
+                "value_kind": "cumulative",
+                "source_url": "https://github.com/org/refresh-failed",
+                "status": "unavailable",
+            }
+        ],
+        "health": [],
+    }
+
+    snapshots = [
+        make_snapshot(
+            "2026-08-15",
+            generated_at_1.isoformat(),
+            evidence_items=items,
+            benchmark_attention=att_1,
+        ),
+        make_snapshot(
+            "2026-09-01",
+            generated_at_2.isoformat(),
+            evidence_items=items,
+            benchmark_attention=att_2,
+        ),
+    ]
+
+    payload = build_latest_releases_leaderboard(snapshots, as_of=generated_at_2)
+    w30d = payload["windows"]["30d"]
+
+    # Must NOT receive formal rank because the signal is now stale
+    assert w30d["ranked_count"] == 0
+    entry = w30d["entries"][0]
+    assert entry["rank"] is None
+    assert entry["status"] == "limited_signals"
+
+    # Retained signal is marked stale with date
+    stars_comp = entry["components"]["github_stars"]
+    assert stars_comp["value"] == 500
+    assert stars_comp["status"] == "stale"
+    assert "2026-08-15" in stars_comp["last_successful_date"]
+
+
+def test_exact_45_percent_eligibility_boundary_hf_upvotes_plus_dataset_downloads():
+    # Issue #530 / Review blocker 3:
+    # 0.30 (HF upvotes) + 0.15 (HF dataset downloads) evaluates to
+    # 0.44999999999999996 in binary floating point.
+    # The threshold check must be numerically stable so that exactly 45% weight qualifies
+    # for rank #1.
+    candidates = [
+        {
+            "canonical_artifact_id": "artifact:hf:org/dual-hf-bench",
+            "name": "Dual HF Bench",
+            "purpose": "A benchmark with HF paper upvotes and HF dataset downloads",
+            "release_date": "2026-08-20T10:00:00Z",
+            "has_dated_attention": True,
+            "signals": {
+                "github_stars": {"value": None, "status": "unknown", "source_url": None},
+                "hf_paper_upvotes": {
+                    "value": 50,
+                    "status": "fresh",
+                    "source_url": "https://huggingface.co/papers/2608.55555",
+                },
+                "hf_dataset_downloads": {
+                    "value": 1200,
+                    "status": "fresh",
+                    "source_url": "https://huggingface.co/datasets/org/dual-hf-bench",
+                },
+            },
+        }
+    ]
+
+    ranking = compute_window_ranking(candidates, window_days=30)
+    assert ranking["ranked_count"] == 1
+    entry = ranking["entries"][0]
+    assert entry["rank"] == 1
+    assert entry["status"] == "ranked"
+    assert entry["coverage"] == 0.45
+    assert entry["score"] == 45
+    assert entry["components"]["hf_paper_upvotes"]["status"] == "fresh"
+    assert entry["components"]["hf_dataset_downloads"]["status"] == "fresh"

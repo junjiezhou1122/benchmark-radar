@@ -1068,7 +1068,10 @@ def dashboard_data(
             kw_bench_store_path,
             tracks=derive_tracks(snapshots),
         ),
-        "latest_releases_leaderboard": build_latest_releases_leaderboard(snapshots),
+        "latest_releases_leaderboard": build_latest_releases_leaderboard(
+            snapshots,
+            registry_path=registry_path,
+        ),
         # Curated and versioned in the repository rather than collected daily:
         # they answer "which benchmarks do vendors report", "how have the
         # readable scores moved", and "what do those two together say", which

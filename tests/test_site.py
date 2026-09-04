@@ -1103,6 +1103,7 @@ def test_static_html_references_existing_local_assets():
     generated_assets = {
         "feed.xml",
         "data/radar.json",
+        "blog/",
         "leaderboard/",
         "trends/",
         "explore/",
