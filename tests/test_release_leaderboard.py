@@ -584,9 +584,19 @@ def test_evidence_item_fallback_without_attention_or_reviewed_does_not_rank():
 
     # No benchmark_attention block
     snapshots = [make_snapshot("2026-09-01", generated_at.isoformat(), evidence_items=items)]
-    # Explicitly empty reviewed benchmark set
-    payload = build_latest_releases_leaderboard(
+    # By default, unreviewed discoveries do not enter the leaderboard payload at all
+    default_payload = build_latest_releases_leaderboard(
         snapshots, as_of=generated_at, reviewed_benchmark_ids=set()
+    )
+    assert default_payload["windows"]["30d"]["total_cohort_count"] == 0
+    assert default_payload["windows"]["30d"]["ranked_count"] == 0
+
+    # If unconfirmed items are explicitly retained for inspection, they remain unranked
+    payload = build_latest_releases_leaderboard(
+        snapshots,
+        as_of=generated_at,
+        reviewed_benchmark_ids=set(),
+        include_unconfirmed=True,
     )
 
     w30d = payload["windows"]["30d"]

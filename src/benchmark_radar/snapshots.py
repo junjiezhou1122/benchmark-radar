@@ -1158,12 +1158,25 @@ def dashboard_bootstrap(dashboard: dict[str, Any]) -> dict[str, Any]:
     way to that panel, so dropping it left the panel permanently empty.
     """
     corpus = dashboard.get("corpus") or {}
-    return {
+    bootstrap: dict[str, Any] = {
         **dashboard,
         "bootstrap": True,
         "days": (dashboard.get("days") or [])[-1:],
         "corpus": {"aggregates": corpus.get("aggregates") or {}},
     }
+    if "latest_releases_leaderboard" in dashboard:
+        lrl = dashboard["latest_releases_leaderboard"]
+        def_win = lrl.get("default_window", "30d")
+        bootstrap["latest_releases_leaderboard"] = {
+            "schema_version": lrl.get("schema_version", 1),
+            "method_version": lrl.get("method_version"),
+            "generated_at": lrl.get("generated_at"),
+            "default_window": def_win,
+            "windows": {
+                def_win: lrl.get("windows", {}).get(def_win, {}),
+            },
+        }
+    return bootstrap
 
 
 def rebuild_dashboard(

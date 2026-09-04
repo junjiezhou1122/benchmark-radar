@@ -87,6 +87,9 @@ def is_dedicated_benchmark_repo(url: str | None) -> bool:
     return len(parts) == 2
 
 
+DEFAULT_TOP_LIMIT = 10
+
+
 def normalize_log1p(value: int | float | None, window_max: int | float | None) -> float | None:
     """Log-max normalized value: log1p(val) / log1p(window_max)."""
     if value is None:
@@ -191,6 +194,7 @@ def filter_release_cohort(
     as_of: datetime | str | None = None,
     registry_path: Path | None = None,
     reviewed_benchmark_ids: set[str] | None = None,
+    include_unconfirmed: bool = True,
 ) -> list[dict[str, Any]]:
     """Filter canonical entities released within the UTC window [as_of - window_days, as_of]."""
     if not snapshots:
@@ -290,6 +294,13 @@ def filter_release_cohort(
 
         ba_obs_pairs = attention_by_canonical.get(canonical_id, [])
         has_dated_attention = bool(ba_obs_pairs)
+
+        # Unconfirmed keyword/category discoveries without dated benchmark_attention
+        # or reviewed benchmark eligibility do not enter the release cohort.
+        # Issue #530 / review blocker: limited_signals describes confirmed benchmarks with
+        # insufficient signals, not thousands of raw unreviewed discovery items.
+        if not include_unconfirmed and not (has_dated_attention or is_reviewed):
+            continue
 
         # Gather signals
         signals: dict[str, dict[str, Any]] = {
@@ -432,6 +443,7 @@ def compute_window_ranking(
     candidates: list[dict[str, Any]],
     *,
     window_days: int,
+    top_limit: int | None = DEFAULT_TOP_LIMIT,
 ) -> dict[str, Any]:
     """Rank candidates for a window using Ranking v1 formulas."""
     # Find window max for each signal
@@ -576,6 +588,7 @@ def compute_window_ranking(
     )
 
     all_entries = ranked_entries + unranked_entries
+    visible_entries = all_entries[:top_limit] if top_limit is not None else all_entries
 
     avg_coverage = (
         round(sum(e["coverage"] for e in all_entries) / len(all_entries), 2) if all_entries else 0.0
@@ -586,7 +599,7 @@ def compute_window_ranking(
         "ranked_count": len(ranked_entries),
         "total_cohort_count": len(all_entries),
         "signal_coverage": avg_coverage,
-        "entries": all_entries,
+        "entries": visible_entries,
     }
 
 
@@ -596,6 +609,8 @@ def build_latest_releases_leaderboard(
     as_of: datetime | str | None = None,
     registry_path: Path | None = None,
     reviewed_benchmark_ids: set[str] | None = None,
+    include_unconfirmed: bool = False,
+    top_limit: int | None = DEFAULT_TOP_LIMIT,
 ) -> dict[str, Any]:
     """Build the full multi-window latest releases leaderboard for radar.json."""
     if not snapshots:
@@ -622,8 +637,9 @@ def build_latest_releases_leaderboard(
             as_of=as_of_dt,
             registry_path=registry_path,
             reviewed_benchmark_ids=reviewed_benchmark_ids,
+            include_unconfirmed=include_unconfirmed,
         )
-        ranking = compute_window_ranking(cohort, window_days=days)
+        ranking = compute_window_ranking(cohort, window_days=days, top_limit=top_limit)
         window_start = (as_of_dt - timedelta(days=days)).isoformat()
         windows_data[window_key] = {
             "window_start": window_start,
