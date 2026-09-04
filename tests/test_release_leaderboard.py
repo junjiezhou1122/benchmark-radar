@@ -143,7 +143,9 @@ def test_window_boundaries_utc():
     ]
 
     snapshots = [make_snapshot("2026-09-01", generated_at.isoformat(), evidence_items=items)]
-    cohort = filter_release_cohort(snapshots, window_days=30, as_of=generated_at)
+    cohort = filter_release_cohort(
+        snapshots, window_days=30, as_of=generated_at, include_unconfirmed=True
+    )
     cohort_ids = {entry["canonical_artifact_id"] for entry in cohort}
 
     assert "artifact:github:org/bench-start" in cohort_ids
@@ -217,7 +219,9 @@ def test_released_versus_updated_eligibility():
         make_snapshot("2026-09-01", generated_at.isoformat(), evidence_items=items),
     ]
 
-    cohort = filter_release_cohort(snapshots, window_days=30, as_of=generated_at)
+    cohort = filter_release_cohort(
+        snapshots, window_days=30, as_of=generated_at, include_unconfirmed=True
+    )
     cohort_ids = {entry["canonical_artifact_id"] for entry in cohort}
 
     assert "artifact:github:org/new-bench" in cohort_ids
@@ -258,7 +262,9 @@ def test_canonical_identity_deduplication():
     ]
 
     snapshots = [make_snapshot("2026-09-01", generated_at.isoformat(), evidence_items=items)]
-    cohort = filter_release_cohort(snapshots, window_days=30, as_of=generated_at)
+    cohort = filter_release_cohort(
+        snapshots, window_days=30, as_of=generated_at, include_unconfirmed=True
+    )
 
     # Must collapse to exactly 1 canonical release entity
     assert len(cohort) == 1

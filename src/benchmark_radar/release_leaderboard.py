@@ -75,6 +75,7 @@ def is_dedicated_benchmark_repo(url: str | None) -> bool:
     """Check if URL points to a dedicated GitHub repository rather than a subdirectory/tree."""
     if not url or not isinstance(url, str):
         return False
+    url = url.strip()
     if re.search(r"github\.com/[^/]+/[^/]+/(?:tree|blob)/", url, re.I):
         return False
     match = re.search(r"^https?://(?:www\.)?github\.com/([^/]+)/([^/#?]+)", url, re.I)
@@ -135,7 +136,10 @@ def load_reviewed_benchmark_identifiers(
                     reviewed.add(str(group["group_id"]))
                 for m in group.get("members", []):
                     if m:
-                        reviewed.add(str(m))
+                        m_str = str(m)
+                        reviewed.add(m_str)
+                        if m_str.startswith("http"):
+                            reviewed.add(exact_artifact_key({"url": m_str}))
                 for a in group.get("anchors", []):
                     if a:
                         a_str = str(a)
@@ -311,7 +315,8 @@ def filter_release_cohort(
     as_of: datetime | str | None = None,
     registry_path: Path | None = None,
     reviewed_benchmark_ids: set[str] | None = None,
-    include_unconfirmed: bool = True,
+    aliases: dict[str, str] | None = None,
+    include_unconfirmed: bool = False,
 ) -> list[dict[str, Any]]:
     """Filter canonical entities released within the UTC window [as_of - window_days, as_of]."""
     if not snapshots:
@@ -328,8 +333,9 @@ def filter_release_cohort(
     if reviewed_benchmark_ids is None:
         reviewed_benchmark_ids = load_reviewed_benchmark_identifiers(registry_path=registry_path)
 
-    all_evidence = [item for snap in snapshots for item in snap.get("evidence_items", [])]
-    aliases = artifact_alias_map(all_evidence)
+    if aliases is None:
+        all_evidence = [item for snap in snapshots for item in snap.get("evidence_items", [])]
+        aliases = artifact_alias_map(all_evidence)
 
     attention_by_canonical: dict[str, list[tuple[dict[str, Any], dict[str, Any]]]] = {}
     for snap in snapshots:
@@ -543,6 +549,9 @@ def build_latest_releases_leaderboard(
     if reviewed_benchmark_ids is None:
         reviewed_benchmark_ids = load_reviewed_benchmark_identifiers(registry_path=registry_path)
 
+    all_evidence = [item for snap in snapshots for item in snap.get("evidence_items", [])]
+    shared_aliases = artifact_alias_map(all_evidence)
+
     windows_data: dict[str, Any] = {}
     for window_key, days in WINDOW_DAYS.items():
         cohort = filter_release_cohort(
@@ -551,6 +560,7 @@ def build_latest_releases_leaderboard(
             as_of=as_of_dt,
             registry_path=registry_path,
             reviewed_benchmark_ids=reviewed_benchmark_ids,
+            aliases=shared_aliases,
             include_unconfirmed=include_unconfirmed,
         )
         ranking = compute_window_ranking(cohort, window_days=days, top_limit=top_limit)
