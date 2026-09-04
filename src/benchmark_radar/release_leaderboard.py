@@ -39,6 +39,7 @@ from .model_cards import DEFAULT_REGISTRY_PATH
 
 METHOD_VERSION = "attention-ranking-v1"
 MIN_OBSERVED_WEIGHT_RANK = 0.45
+DEFAULT_TOP_LIMIT = 10
 
 WINDOW_DAYS: dict[str, int] = {
     "7d": 7,
@@ -74,20 +75,14 @@ def is_dedicated_benchmark_repo(url: str | None) -> bool:
     """Check if URL points to a dedicated GitHub repository rather than a subdirectory/tree."""
     if not url or not isinstance(url, str):
         return False
-    # If the URL points to tree/blob/subfolder, it's a hosting repo
     if re.search(r"github\.com/[^/]+/[^/]+/(?:tree|blob)/", url, re.I):
         return False
-    # Must match github.com/owner/repo
     match = re.search(r"^https?://(?:www\.)?github\.com/([^/]+)/([^/#?]+)", url, re.I)
     if not match:
         return False
-    # If there are additional path segments beyond owner/repo, it's not the dedicated root repo
     path_suffix = url.split("github.com/", 1)[1].split("?")[0].split("#")[0].strip("/")
     parts = [p for p in path_suffix.split("/") if p]
     return len(parts) == 2
-
-
-DEFAULT_TOP_LIMIT = 10
 
 
 def normalize_log1p(value: int | float | None, window_max: int | float | None) -> float | None:
@@ -117,12 +112,10 @@ def load_reviewed_benchmark_identifiers(
         try:
             data = yaml.safe_load(mc_path.read_text(encoding="utf-8")) or {}
             for b in data.get("benchmarks", []):
-                bid = b.get("id")
-                if bid:
-                    reviewed.add(str(bid))
-                bname = b.get("name")
-                if bname:
-                    reviewed.add(str(bname).lower())
+                if b.get("id"):
+                    reviewed.add(str(b["id"]))
+                if b.get("name"):
+                    reviewed.add(str(b["name"]).lower())
                 for a in b.get("aliases", []):
                     if a:
                         reviewed.add(str(a).lower())
@@ -138,16 +131,22 @@ def load_reviewed_benchmark_identifiers(
         try:
             data = yaml.safe_load(id_path.read_text(encoding="utf-8")) or {}
             for group in data.get("equivalent", []):
-                gid = group.get("group_id")
-                if gid:
-                    reviewed.add(str(gid))
+                if group.get("group_id"):
+                    reviewed.add(str(group["group_id"]))
                 for m in group.get("members", []):
                     if m:
                         reviewed.add(str(m))
                 for a in group.get("anchors", []):
                     if a:
-                        reviewed.add(str(a))
-                        reviewed.add(f"artifact:{a}")
+                        a_str = str(a)
+                        reviewed.add(a_str)
+                        reviewed.add(f"artifact:{a_str}")
+                        if a_str.startswith("gh:"):
+                            reviewed.add(f"artifact:github:{a_str[3:]}")
+                        elif a_str.startswith("arxiv:"):
+                            reviewed.add(f"artifact:arxiv:{a_str[6:]}")
+                        elif a_str.startswith("hf:"):
+                            reviewed.add(f"artifact:huggingface:{a_str[3:]}")
         except Exception:
             pass
 
@@ -187,6 +186,124 @@ def _obs_time(obs: dict[str, Any], snap: dict[str, Any]) -> datetime:
     return _parse_utc_datetime(t) or datetime.min.replace(tzinfo=UTC)
 
 
+def _is_reviewed_entity(
+    canonical_id: str,
+    name: str,
+    occurrences: list[tuple[dict[str, Any], dict[str, Any]]],
+    reviewed_ids: set[str] | None,
+) -> bool:
+    if not reviewed_ids:
+        return False
+    if canonical_id in reviewed_ids or name.lower() in reviewed_ids:
+        return True
+    for item, _ in occurrences:
+        if exact_artifact_key(item) in reviewed_ids:
+            return True
+        u = item.get("url")
+        if u and exact_artifact_key({"url": u}) in reviewed_ids:
+            return True
+        for au in item.get("artifact_urls") or []:
+            if au and exact_artifact_key({"url": au}) in reviewed_ids:
+                return True
+    return False
+
+
+FALLBACK_METRIC_CONFIG = {
+    "github_stars": ("github.com", "stars", is_dedicated_benchmark_repo),
+    "hf_paper_upvotes": ("huggingface.co", "upvotes", None),
+    "hf_dataset_downloads": ("huggingface.co/datasets", "downloads", None),
+}
+
+
+def _extract_fallback_metric(
+    key: str,
+    occurrences: list[tuple[dict[str, Any], dict[str, Any]]],
+    is_reviewed: bool,
+) -> dict[str, Any]:
+    domain_substring, metric_field, validator = FALLBACK_METRIC_CONFIG[key]
+    for item, _ in occurrences:
+        metrics = item.get("metrics") or {}
+        if metric_field not in metrics or metrics[metric_field] is None:
+            continue
+        urls = [item.get("url"), *(item.get("artifact_urls") or [])]
+        matched_url = next(
+            (u for u in urls if u and isinstance(u, str) and domain_substring in u.lower()),
+            None,
+        )
+        if not matched_url:
+            continue
+        if validator and not validator(matched_url):
+            continue
+        return {
+            "value": metrics[metric_field],
+            "status": "fresh" if is_reviewed else "unknown",
+            "source_url": matched_url,
+        }
+    return {"value": None, "status": "unknown", "source_url": None}
+
+
+def _resolve_attention_metric(
+    key: str,
+    observations: list[tuple[dict[str, Any], dict[str, Any]]],
+) -> dict[str, Any]:
+    """Resolve metric value from snapshot benchmark_attention using latest source status."""
+    observations.sort(key=lambda pair: _obs_time(pair[0], pair[1]))
+
+    last_val = None
+    last_date = None
+    last_url = None
+
+    for obs, snap in observations:
+        val = obs.get("value")
+        st = obs.get("status", "fresh")
+        if val is not None and st in {"fresh", "stale"}:
+            last_val = val
+            obs_dt = _obs_time(obs, snap)
+            last_date = obs.get("last_successful_date") or (
+                obs_dt.date().isoformat() if obs_dt > datetime.min.replace(tzinfo=UTC) else None
+            )
+            last_url = obs.get("source_url")
+
+    latest_obs, _ = observations[-1]
+    latest_st = latest_obs.get("status", "fresh")
+    latest_val = latest_obs.get("value")
+    url = latest_obs.get("source_url") or last_url
+
+    if key == "github_stars" and not is_dedicated_benchmark_repo(url):
+        return {"value": None, "status": "unknown", "source_url": None}
+
+    if latest_st == "fresh" and latest_val is not None:
+        return {"value": latest_val, "status": "fresh", "source_url": url}
+
+    if (latest_st in {"unavailable", "stale"} or latest_val is None) and last_val is not None:
+        return {
+            "value": last_val,
+            "status": "stale",
+            "last_successful_date": str(last_date),
+            "source_url": url,
+        }
+
+    status = latest_st if latest_st in {"unavailable", "stale"} else "unknown"
+    return {"value": None, "status": status, "source_url": url}
+
+
+def _resolve_signals(
+    ba_obs_pairs: list[tuple[dict[str, Any], dict[str, Any]]],
+    occurrences: list[tuple[dict[str, Any], dict[str, Any]]],
+    is_reviewed: bool,
+) -> dict[str, dict[str, Any]]:
+    signals = {}
+    for key in WINDOW_WEIGHTS:
+        key_obs = [
+            pair for pair in ba_obs_pairs if _canonical_metric_key(pair[0].get("metric")) == key
+        ]
+        if key_obs:
+            signals[key] = _resolve_attention_metric(key, key_obs)
+        else:
+            signals[key] = _extract_fallback_metric(key, occurrences, is_reviewed)
+    return signals
+
+
 def filter_release_cohort(
     snapshots: list[dict[str, Any]],
     *,
@@ -201,238 +318,77 @@ def filter_release_cohort(
         return []
 
     latest_snapshot = snapshots[-1]
-    if as_of is None:
-        as_of_dt = _parse_utc_datetime(latest_snapshot.get("generated_at")) or datetime.now(UTC)
-    else:
-        as_of_dt = _parse_utc_datetime(as_of) or datetime.now(UTC)
-
+    as_of_dt = (
+        _parse_utc_datetime(as_of)
+        or _parse_utc_datetime(latest_snapshot.get("generated_at"))
+        or datetime.now(UTC)
+    )
     window_start_dt = as_of_dt - timedelta(days=window_days)
 
     if reviewed_benchmark_ids is None:
         reviewed_benchmark_ids = load_reviewed_benchmark_identifiers(registry_path=registry_path)
 
-    # 1. Collect all evidence items across all snapshots and map to canonical identities
-    all_evidence: list[dict[str, Any]] = [
-        item for snapshot in snapshots for item in snapshot.get("evidence_items", [])
-    ]
+    all_evidence = [item for snap in snapshots for item in snap.get("evidence_items", [])]
     aliases = artifact_alias_map(all_evidence)
 
-    # 2. Collect benchmark_attention observations from all snapshots
     attention_by_canonical: dict[str, list[tuple[dict[str, Any], dict[str, Any]]]] = {}
-    for snapshot in snapshots:
-        ba = snapshot.get("benchmark_attention") or {}
-        for obs in ba.get("observations", []):
+    for snap in snapshots:
+        for obs in (snap.get("benchmark_attention") or {}).get("observations", []):
             cid = obs.get("canonical_artifact_id")
             if cid:
-                attention_by_canonical.setdefault(cid, []).append((obs, snapshot))
+                attention_by_canonical.setdefault(cid, []).append((obs, snap))
 
-    # Group evidence items by canonical artifact id
     items_by_canonical: dict[str, list[tuple[dict[str, Any], dict[str, Any]]]] = {}
-    for snapshot in snapshots:
-        for item in snapshot.get("evidence_items", []):
-            exact_key = exact_artifact_key(item)
-            canonical_id = aliases.get(exact_key, exact_key)
-            items_by_canonical.setdefault(canonical_id, []).append((item, snapshot))
+    for snap in snapshots:
+        for item in snap.get("evidence_items", []):
+            key = exact_artifact_key(item)
+            cid = aliases.get(key, key)
+            items_by_canonical.setdefault(cid, []).append((item, snap))
 
-    cohort: list[dict[str, Any]] = []
-
+    cohort = []
     for canonical_id, occurrences in items_by_canonical.items():
-        # Check all release events for this canonical entity
-        release_events: list[tuple[datetime, dict[str, Any], dict[str, Any]]] = []
-        for item, snapshot in occurrences:
+        release_dates = []
+        for item, snap in occurrences:
             if item.get("event_kind") == "released":
-                event_time_str = (
+                ts = (
                     item.get("published_at")
                     or item.get("discovered_at")
-                    or snapshot.get("generated_at")
+                    or snap.get("generated_at")
                 )
-                dt = _parse_utc_datetime(event_time_str)
+                dt = _parse_utc_datetime(ts)
                 if dt:
-                    release_events.append((dt, item, snapshot))
+                    release_dates.append((dt, item))
 
-        if not release_events:
+        if not release_dates:
             continue
 
-        # Sort release events by timestamp
-        release_events.sort(key=lambda pair: pair[0])
-
-        # To prevent updated records from qualifying, check if the earliest release
-        # was already prior to the window. If an entity was released 60 days ago
-        # and updated 5 days ago, it was released outside the window.
-        earliest_release_dt = release_events[0][0]
-        if not (window_start_dt <= earliest_release_dt <= as_of_dt):
+        release_dates.sort(key=lambda pair: pair[0])
+        earliest_dt, primary_item = release_dates[0]
+        if not (window_start_dt <= earliest_dt <= as_of_dt):
             continue
 
-        primary_item = release_events[0][1]
         name = primary_item.get("title") or primary_item.get("source_id") or canonical_id
-        purpose = (
-            primary_item.get("summary")
-            or primary_item.get("title")
-            or "Benchmark and evaluation suite"
-        )
-        release_date = earliest_release_dt.isoformat()
+        is_reviewed = _is_reviewed_entity(canonical_id, name, occurrences, reviewed_benchmark_ids)
+        ba_obs = attention_by_canonical.get(canonical_id, [])
+        has_attention = bool(ba_obs)
 
-        # Check reviewed benchmark eligibility
-        is_reviewed = False
-        if reviewed_benchmark_ids:
-            if canonical_id in reviewed_benchmark_ids or name.lower() in reviewed_benchmark_ids:
-                is_reviewed = True
-            else:
-                for item, _ in occurrences:
-                    ek = exact_artifact_key(item)
-                    if ek in reviewed_benchmark_ids:
-                        is_reviewed = True
-                        break
-                    u = item.get("url")
-                    if u and exact_artifact_key({"url": u}) in reviewed_benchmark_ids:
-                        is_reviewed = True
-                        break
-                    for au in item.get("artifact_urls") or []:
-                        if au and exact_artifact_key({"url": au}) in reviewed_benchmark_ids:
-                            is_reviewed = True
-                            break
-
-        ba_obs_pairs = attention_by_canonical.get(canonical_id, [])
-        has_dated_attention = bool(ba_obs_pairs)
-
-        # Unconfirmed keyword/category discoveries without dated benchmark_attention
-        # or reviewed benchmark eligibility do not enter the release cohort.
-        # Issue #530 / review blocker: limited_signals describes confirmed benchmarks with
-        # insufficient signals, not thousands of raw unreviewed discovery items.
-        if not include_unconfirmed and not (has_dated_attention or is_reviewed):
+        # Unconfirmed keyword discoveries without dated attention or reviewed status are excluded
+        if not include_unconfirmed and not (has_attention or is_reviewed):
             continue
-
-        # Gather signals
-        signals: dict[str, dict[str, Any]] = {
-            "github_stars": {"value": None, "status": "unknown", "source_url": None},
-            "hf_paper_upvotes": {"value": None, "status": "unknown", "source_url": None},
-            "hf_dataset_downloads": {"value": None, "status": "unknown", "source_url": None},
-        }
-
-        # First, check explicit snapshot benchmark_attention observations
-        for key in WINDOW_WEIGHTS:
-            key_obs = [
-                pair for pair in ba_obs_pairs if _canonical_metric_key(pair[0].get("metric")) == key
-            ]
-
-            if key_obs:
-                key_obs.sort(key=lambda pair: _obs_time(pair[0], pair[1]))
-
-                last_successful_val = None
-                last_successful_date = None
-                last_successful_url = None
-
-                for obs, snap in key_obs:
-                    val = obs.get("value")
-                    st = obs.get("status", "fresh")
-                    if val is not None and st in {"fresh", "stale"}:
-                        last_successful_val = val
-                        obs_dt = _obs_time(obs, snap)
-                        last_successful_date = obs.get("last_successful_date") or (
-                            obs_dt.date().isoformat()
-                            if obs_dt > datetime.min.replace(tzinfo=UTC)
-                            else None
-                        )
-                        last_successful_url = obs.get("source_url")
-
-                latest_obs, latest_snap = key_obs[-1]
-                latest_st = latest_obs.get("status", "fresh")
-                latest_val = latest_obs.get("value")
-                latest_url = latest_obs.get("source_url") or last_successful_url
-
-                if latest_st == "fresh" and latest_val is not None:
-                    if key == "github_stars" and not is_dedicated_benchmark_repo(latest_url):
-                        signals[key] = {"value": None, "status": "unknown", "source_url": None}
-                    else:
-                        signals[key] = {
-                            "value": latest_val,
-                            "status": "fresh",
-                            "source_url": latest_url,
-                        }
-                elif latest_st in {"unavailable", "stale"} or latest_val is None:
-                    if last_successful_val is not None:
-                        target_url = latest_url or last_successful_url
-                        if key == "github_stars" and not is_dedicated_benchmark_repo(target_url):
-                            signals[key] = {"value": None, "status": "unknown", "source_url": None}
-                        else:
-                            signals[key] = {
-                                "value": last_successful_val,
-                                "status": "stale",
-                                "last_successful_date": str(last_successful_date),
-                                "source_url": target_url,
-                            }
-                    else:
-                        fallback_status = (
-                            latest_st if latest_st in {"unavailable", "stale"} else "unknown"
-                        )
-                        signals[key] = {
-                            "value": None,
-                            "status": fallback_status,
-                            "source_url": latest_url,
-                        }
-                else:
-                    signals[key] = {
-                        "value": None,
-                        "status": latest_st,
-                        "source_url": latest_url,
-                    }
-            else:
-                # Evidence item fallback if still unknown
-                for item, _ in occurrences:
-                    metrics = item.get("metrics") or {}
-                    urls = [item.get("url"), *(item.get("artifact_urls") or [])]
-                    urls = [u for u in urls if u and isinstance(u, str)]
-
-                    if key == "github_stars" and signals["github_stars"]["value"] is None:
-                        gh_url = next((u for u in urls if "github.com" in u.lower()), None)
-                        if gh_url and is_dedicated_benchmark_repo(gh_url) and "stars" in metrics:
-                            val = metrics.get("stars")
-                            if val is not None:
-                                signals["github_stars"] = {
-                                    "value": val,
-                                    "status": "fresh" if is_reviewed else "unknown",
-                                    "source_url": gh_url,
-                                }
-                                break
-
-                    elif key == "hf_paper_upvotes" and signals["hf_paper_upvotes"]["value"] is None:
-                        hf_url = next((u for u in urls if "huggingface.co" in u.lower()), None)
-                        if "upvotes" in metrics:
-                            val = metrics.get("upvotes")
-                            if val is not None:
-                                signals["hf_paper_upvotes"] = {
-                                    "value": val,
-                                    "status": "fresh" if is_reviewed else "unknown",
-                                    "source_url": hf_url or item.get("url"),
-                                }
-                                break
-
-                    elif (
-                        key == "hf_dataset_downloads"
-                        and signals["hf_dataset_downloads"]["value"] is None
-                    ):
-                        ds_url = next(
-                            (u for u in urls if "huggingface.co/datasets" in u.lower()), None
-                        )
-                        if ds_url and "downloads" in metrics:
-                            val = metrics.get("downloads")
-                            if val is not None:
-                                signals["hf_dataset_downloads"] = {
-                                    "value": val,
-                                    "status": "fresh" if is_reviewed else "unknown",
-                                    "source_url": ds_url,
-                                }
-                                break
 
         cohort.append(
             {
                 "canonical_artifact_id": canonical_id,
                 "name": name,
-                "purpose": purpose,
-                "release_date": release_date,
-                "has_dated_attention": has_dated_attention,
+                "purpose": (
+                    primary_item.get("summary")
+                    or primary_item.get("title")
+                    or "Benchmark and evaluation suite"
+                ),
+                "release_date": earliest_dt.isoformat(),
+                "has_dated_attention": has_attention,
                 "is_reviewed_benchmark": is_reviewed,
-                "signals": signals,
+                "signals": _resolve_signals(ba_obs, occurrences, is_reviewed),
             }
         )
 
@@ -446,42 +402,43 @@ def compute_window_ranking(
     top_limit: int | None = DEFAULT_TOP_LIMIT,
 ) -> dict[str, Any]:
     """Rank candidates for a window using Ranking v1 formulas."""
-    # Find window max for each signal
-    window_maxes: dict[str, float] = {}
-    for signal in WINDOW_WEIGHTS:
-        values = [
-            float(c["signals"][signal]["value"])
-            for c in candidates
-            if c.get("signals", {}).get(signal, {}).get("value") is not None
-        ]
-        window_maxes[signal] = max(values) if values else 0.0
+    window_maxes = {
+        signal: max(
+            [
+                float(c["signals"][signal]["value"])
+                for c in candidates
+                if c.get("signals", {}).get(signal, {}).get("value") is not None
+            ]
+            or [0.0]
+        )
+        for signal in WINDOW_WEIGHTS
+    }
 
-    scored_entries: list[dict[str, Any]] = []
-
+    scored_entries = []
     for c in candidates:
         coverage = 0.0
         fresh_weight = 0.0
         observed_count = 0
         composite_score = 0.0
-        components: dict[str, Any] = {}
-        has_durable_signal = False
+        components = {}
+        has_durable = False
 
         for signal, weight in WINDOW_WEIGHTS.items():
-            sig_data = c.get("signals", {}).get(signal, {})
-            val = sig_data.get("value")
-            status = sig_data.get("status", "unknown")
+            sig = c.get("signals", {}).get(signal, {})
+            val = sig.get("value")
+            status = sig.get("status", "unknown")
             norm = normalize_log1p(val, window_maxes[signal])
 
-            comp_entry: dict[str, Any] = {
+            entry = {
                 "value": val,
                 "normalized": norm,
                 "weight": weight,
                 "status": status,
-                "source_url": sig_data.get("source_url"),
+                "source_url": sig.get("source_url"),
             }
-            if sig_data.get("last_successful_date"):
-                comp_entry["last_successful_date"] = sig_data["last_successful_date"]
-            components[signal] = comp_entry
+            if sig.get("last_successful_date"):
+                entry["last_successful_date"] = sig["last_successful_date"]
+            components[signal] = entry
 
             if norm is not None:
                 coverage += weight
@@ -490,44 +447,26 @@ def compute_window_ranking(
                 if status == "fresh":
                     fresh_weight += weight
                     if signal in DURABLE_SIGNALS:
-                        has_durable_signal = True
+                        has_durable = True
 
         score = round(100.0 * composite_score + 1e-9) if observed_count > 0 else None
-        coverage_rounded = round(coverage, 2)
-
-        # Confidence: High >= 0.75 & 2 signals; Medium >= 0.40 & 2 signals; Low otherwise
+        coverage_rnd = round(coverage, 2)
         confidence = (
             "High"
-            if coverage_rounded >= 0.75 and observed_count >= 2
+            if coverage_rnd >= 0.75 and observed_count >= 2
             else "Medium"
-            if coverage_rounded >= 0.40 and observed_count >= 2
+            if coverage_rnd >= 0.40 and observed_count >= 2
             else "Low"
         )
 
-        # Formal rank eligibility:
-        # 1. Eligible benchmark entity: requires explicit dated attention observations
-        #    from snapshot benchmark_attention or hand-reviewed benchmark status.
-        #    Ordinary keyword/category discovery and connector fallback cannot establish rank.
-        # 2. At least one durable signal from dedicated GitHub repo or exact HF dataset
-        # 3. Observed fresh component weight >= 45% (evaluated with numerical stability)
-        # 4. Stale values cannot cross the ranking threshold
-        is_eligible_benchmark = bool(
-            c.get("has_dated_attention", False) or c.get("is_reviewed_benchmark", False)
-        )
+        is_eligible = bool(c.get("has_dated_attention") or c.get("is_reviewed_benchmark"))
         if "has_dated_attention" not in c and "is_reviewed_benchmark" not in c:
-            # Standalone candidate dicts in unit tests default to eligible unless stated
-            is_eligible_benchmark = c.get("is_eligible", True)
+            is_eligible = c.get("is_eligible", True)
 
-        is_weight_sufficient = round(
-            fresh_weight, 4
-        ) >= MIN_OBSERVED_WEIGHT_RANK or fresh_weight >= (MIN_OBSERVED_WEIGHT_RANK - 1e-9)
-
-        qualifies_for_rank = (
-            is_eligible_benchmark
-            and has_durable_signal
-            and is_weight_sufficient
-            and score is not None
+        sufficient_weight = round(fresh_weight, 4) >= MIN_OBSERVED_WEIGHT_RANK or fresh_weight >= (
+            MIN_OBSERVED_WEIGHT_RANK - 1e-9
         )
+        qualifies = is_eligible and has_durable and sufficient_weight and score is not None
 
         scored_entries.append(
             {
@@ -536,70 +475,45 @@ def compute_window_ranking(
                 "purpose": c.get("purpose", ""),
                 "release_date": c["release_date"],
                 "score": score,
-                "coverage": coverage_rounded,
+                "coverage": coverage_rnd,
                 "confidence": confidence,
-                "status": "ranked" if qualifies_for_rank else "limited_signals",
-                "rank": None,  # assigned below for qualified items
+                "status": "ranked" if qualifies else "limited_signals",
+                "rank": None,
                 "components": components,
             }
         )
 
-    # Sort and rank eligible items
-    # Tie breaking: composite score desc, release_date desc, name asc
-    def sort_key(entry: dict[str, Any]) -> tuple[int, float, str, str]:
-        qual = 0 if entry["status"] == "ranked" else 1
-        sc = -(entry["score"] or 0)
-        rd = entry.get("release_date") or ""
-        # Descending release date
-        return (qual, sc, f"-{rd}", entry.get("name") or "")
+    def _ts(e: dict[str, Any]) -> float:
+        dt = _parse_utc_datetime(e.get("release_date"))
+        return (dt or datetime.min.replace(tzinfo=UTC)).timestamp()
 
-    scored_entries.sort(
-        key=lambda e: (
-            0 if e["status"] == "ranked" else 1,
-            -(e["score"] if e["score"] is not None else -1),
-            # Reverse release date by taking string inversion or sorting ranked separately
-        )
-    )
+    ranked = [e for e in scored_entries if e["status"] == "ranked"]
+    unranked = [e for e in scored_entries if e["status"] != "ranked"]
 
-    # Clean separate sort:
-    ranked_entries = [e for e in scored_entries if e["status"] == "ranked"]
-    unranked_entries = [e for e in scored_entries if e["status"] != "ranked"]
+    ranked.sort(key=lambda e: (-(e["score"] or 0), -_ts(e), e.get("name", "")))
+    for idx, e in enumerate(ranked, start=1):
+        e["rank"] = idx
 
-    def _entry_timestamp(entry: dict[str, Any]) -> float:
-        parsed = _parse_utc_datetime(entry.get("release_date"))
-        return (parsed or datetime.min.replace(tzinfo=UTC)).timestamp()
-
-    ranked_entries.sort(
-        key=lambda e: (
-            -(e["score"] or 0),
-            -_entry_timestamp(e),
-            e.get("name", ""),
-        )
-    )
-    for idx, entry in enumerate(ranked_entries, start=1):
-        entry["rank"] = idx
-
-    unranked_entries.sort(
+    unranked.sort(
         key=lambda e: (
             -(e["score"] if e["score"] is not None else -1),
-            -_entry_timestamp(e),
+            -_ts(e),
             e.get("name", ""),
         )
     )
 
-    all_entries = ranked_entries + unranked_entries
-    visible_entries = all_entries[:top_limit] if top_limit is not None else all_entries
-
-    avg_coverage = (
+    all_entries = ranked + unranked
+    visible = all_entries[:top_limit] if top_limit is not None else all_entries
+    avg_cov = (
         round(sum(e["coverage"] for e in all_entries) / len(all_entries), 2) if all_entries else 0.0
     )
 
     return {
         "window_days": window_days,
-        "ranked_count": len(ranked_entries),
+        "ranked_count": len(ranked),
         "total_cohort_count": len(all_entries),
-        "signal_coverage": avg_coverage,
-        "entries": visible_entries,
+        "signal_coverage": avg_cov,
+        "entries": visible,
     }
 
 
