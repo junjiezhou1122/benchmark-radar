@@ -29,6 +29,7 @@ const LEGACY_SOURCE_COLLECTION_METHODS = {
   huggingface_papers: "API",
   kaggle_datasets: "API",
   zenodo: "API",
+  crossref: "API",
   openreview: "API",
   semantic_scholar: "API",
   github_releases: "API",
@@ -50,6 +51,7 @@ const SOURCE_DISPLAY_NAMES = {
   huggingface_papers: "Hugging Face Papers",
   kaggle_datasets: "Kaggle Dataset",
   zenodo: "Zenodo",
+  crossref: "Crossref",
   openreview: "OpenReview",
   semantic_scholar: "Semantic Scholar",
   github_releases: "GitHub Release",
@@ -7983,16 +7985,15 @@ function openContact(updateUrl = true) {
   if (!dialog.open) dialog.showModal();
 }
 
-// The published technical report. These strings are the citation itself, so
-// they are held verbatim rather than assembled from parts: a citation the page
-// rebuilds on the fly is a citation that can drift from CITATION.cff.
+// The published technical report. Contract tests keep these copyable strings
+// aligned with CITATION.cff and the server-rendered citation route.
 const CITE_DOI_URL = "https://doi.org/10.5281/zenodo.22167102";
 const CITE_CFF_URL = "https://github.com/ktwu01/benchmark-radar/blob/main/CITATION.cff";
 const CITE_APA =
-  "Wu, K. (2026). Benchmark Radar v0.9.0: Technical Report (Version 0.9.0). " + CITE_DOI_URL;
+  "Wu, K., & Zhou, J. (2026). Benchmark Radar v0.9.0: Technical Report (Version 0.9.0). " + CITE_DOI_URL;
 const CITE_BIBTEX = [
   "@techreport{Wu_Benchmark_Radar_v0_9_0_2026,",
-  "author = {Wu, Koutian},",
+  "author = {Wu, Koutian and Zhou, Junjie},",
   "doi = {10.5281/zenodo.22167102},",
   "month = aug,",
   "title = {{Benchmark Radar v0.9.0: Technical Report}},",
@@ -8502,8 +8503,8 @@ function setStarCount(value) {
   badge.setAttribute("aria-label", t("Star this repository on GitHub. {count} stars", { count }));
 }
 
-async function renderRepoBadges() {
-  // Counts are decoration: the badges link out and stay usable if this fails,
+async function renderStarCount() {
+  // The count is decoration: the badge links out and stays usable if this fails,
   // so a rate-limited API must never surface as an error state.
   try {
     const response = await fetch(`https://api.github.com/repos/${REPO_SLUG}`, {
@@ -8513,7 +8514,7 @@ async function renderRepoBadges() {
     const repo = await response.json();
     setStarCount(repo.stargazers_count);
   } catch (error) {
-    console.debug("Repository badge counts unavailable", error);
+    console.debug("Repository star count unavailable", error);
   }
 }
 
@@ -8727,7 +8728,7 @@ async function initialize() {
     syncNavState();
   }
   // Independent of the data file, so badges still render on an error state.
-  renderRepoBadges();
+  renderStarCount();
   // The citation and the CLI setup route are fixed text, not readings of the
   // corpus. Someone arriving from a paper's reference link or looking for the
   // offline route should still get them on a build whose data file is broken,
