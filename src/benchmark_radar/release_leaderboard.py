@@ -29,6 +29,7 @@ import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -54,6 +55,29 @@ WINDOW_WEIGHTS: dict[str, float] = {
 }
 
 DURABLE_SIGNALS: frozenset[str] = frozenset({"github_stars", "hf_dataset_downloads"})
+
+METRIC_ALIASES: dict[str, str] = {
+    "stars": "github_stars",
+    "github_stars": "github_stars",
+    "paper_upvotes": "hf_paper_upvotes",
+    "hf_paper_upvotes": "hf_paper_upvotes",
+    "upvotes": "hf_paper_upvotes",
+    "downloads": "hf_dataset_downloads",
+    "downloads_30d": "hf_dataset_downloads",
+    "hf_dataset_downloads": "hf_dataset_downloads",
+}
+
+SIGNAL_SOURCES: dict[str, str] = {
+    "github_stars": "github",
+    "hf_paper_upvotes": "huggingface",
+    "hf_dataset_downloads": "huggingface",
+}
+
+SIGNAL_VALUE_KINDS: dict[str, str] = {
+    "github_stars": "cumulative",
+    "hf_paper_upvotes": "cumulative",
+    "hf_dataset_downloads": "rolling_30d",
+}
 
 
 def _parse_utc_datetime(value: Any, *, fallback: datetime | None = None) -> datetime | None:
@@ -84,6 +108,27 @@ def is_dedicated_benchmark_repo(url: str | None) -> bool:
     path_suffix = url.split("github.com/", 1)[1].split("?")[0].split("#")[0].strip("/")
     parts = [p for p in path_suffix.split("/") if p]
     return len(parts) == 2
+
+
+def is_exact_attention_source_url(signal: str, url: str | None) -> bool:
+    """Whether a metric URL names the exact resource required by Ranking v1."""
+    if not isinstance(url, str) or not url.strip():
+        return False
+    if signal == "github_stars":
+        return is_dedicated_benchmark_repo(url)
+
+    parsed = urlsplit(url.strip())
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    host = parsed.netloc.casefold().removeprefix("www.")
+    segments = [segment for segment in parsed.path.split("/") if segment]
+    if host != "huggingface.co":
+        return False
+    if signal == "hf_paper_upvotes":
+        return len(segments) == 2 and segments[0].casefold() == "papers"
+    if signal == "hf_dataset_downloads":
+        return len(segments) == 3 and segments[0].casefold() == "datasets"
+    return False
 
 
 def normalize_log1p(value: int | float | None, window_max: int | float | None) -> float | None:
@@ -175,18 +220,17 @@ def load_reviewed_benchmark_identifiers(
     return reviewed
 
 
-def _canonical_metric_key(metric: str | None) -> str | None:
-    if metric in {"stars", "github_stars"}:
-        return "github_stars"
-    if metric in {"paper_upvotes", "hf_paper_upvotes", "upvotes"}:
-        return "hf_paper_upvotes"
-    if metric in {"downloads", "downloads_30d", "hf_dataset_downloads"}:
-        return "hf_dataset_downloads"
-    return None
+def canonical_metric_key(metric: str | None) -> str | None:
+    return METRIC_ALIASES.get(metric or "")
 
 
 def _obs_time(obs: dict[str, Any], snap: dict[str, Any]) -> datetime:
-    t = obs.get("observed_at") or snap.get("generated_at") or snap.get("date")
+    t = (
+        obs.get("observed_at")
+        or (snap.get("benchmark_attention") or {}).get("observed_at")
+        or snap.get("generated_at")
+        or snap.get("date")
+    )
     return _parse_utc_datetime(t) or datetime.min.replace(tzinfo=UTC)
 
 
@@ -222,10 +266,16 @@ FALLBACK_METRIC_CONFIG = {
 def _extract_fallback_metric(
     key: str,
     occurrences: list[tuple[dict[str, Any], dict[str, Any]]],
-    is_reviewed: bool,
 ) -> dict[str, Any]:
     domain_substring, metric_field, validator = FALLBACK_METRIC_CONFIG[key]
-    for item, _ in occurrences:
+    newest_first = sorted(
+        occurrences,
+        key=lambda pair: (
+            _parse_utc_datetime(pair[1].get("generated_at")) or datetime.min.replace(tzinfo=UTC)
+        ),
+        reverse=True,
+    )
+    for item, snap in newest_first:
         metrics = item.get("metrics") or {}
         if metric_field not in metrics or metrics[metric_field] is None:
             continue
@@ -240,7 +290,11 @@ def _extract_fallback_metric(
             continue
         return {
             "value": metrics[metric_field],
-            "status": "fresh" if is_reviewed else "unknown",
+            # Connector counters predate the source-health-aware attention
+            # contract. Keep them visible for audit, but never promote them to
+            # fresh merely because the benchmark identity was reviewed.
+            "status": "unknown",
+            "last_successful_date": str(snap.get("date") or "") or None,
             "source_url": matched_url,
         }
     return {"value": None, "status": "unknown", "source_url": None}
@@ -249,6 +303,7 @@ def _extract_fallback_metric(
 def _resolve_attention_metric(
     key: str,
     observations: list[tuple[dict[str, Any], dict[str, Any]]],
+    health_events: list[tuple[datetime, bool]],
 ) -> dict[str, Any]:
     """Resolve metric value from snapshot benchmark_attention using latest source status."""
     observations.sort(key=lambda pair: _obs_time(pair[0], pair[1]))
@@ -273,13 +328,20 @@ def _resolve_attention_metric(
     latest_val = latest_obs.get("value")
     url = latest_obs.get("source_url") or last_url
 
-    if key == "github_stars" and not is_dedicated_benchmark_repo(url):
+    if not is_exact_attention_source_url(key, url):
         return {"value": None, "status": "unknown", "source_url": None}
 
-    if latest_st == "fresh" and latest_val is not None:
+    latest_obs_time = _obs_time(latest_obs, observations[-1][1])
+    later_failed_health = any(
+        event_time >= latest_obs_time and not ok for event_time, ok in health_events
+    )
+
+    if latest_st == "fresh" and latest_val is not None and not later_failed_health:
         return {"value": latest_val, "status": "fresh", "source_url": url}
 
-    if (latest_st in {"unavailable", "stale"} or latest_val is None) and last_val is not None:
+    if (
+        latest_st in {"unavailable", "stale"} or latest_val is None or later_failed_health
+    ) and last_val is not None:
         return {
             "value": last_val,
             "status": "stale",
@@ -294,17 +356,33 @@ def _resolve_attention_metric(
 def _resolve_signals(
     ba_obs_pairs: list[tuple[dict[str, Any], dict[str, Any]]],
     occurrences: list[tuple[dict[str, Any], dict[str, Any]]],
-    is_reviewed: bool,
+    snapshots: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
     signals = {}
     for key in WINDOW_WEIGHTS:
         key_obs = [
-            pair for pair in ba_obs_pairs if _canonical_metric_key(pair[0].get("metric")) == key
+            pair for pair in ba_obs_pairs if canonical_metric_key(pair[0].get("metric")) == key
         ]
         if key_obs:
-            signals[key] = _resolve_attention_metric(key, key_obs)
+            health_events = []
+            expected_source = SIGNAL_SOURCES[key]
+            for snap in snapshots:
+                block = snap.get("benchmark_attention") or {}
+                event_time = _parse_utc_datetime(block.get("observed_at")) or _parse_utc_datetime(
+                    snap.get("generated_at")
+                )
+                if event_time is None:
+                    continue
+                for health in block.get("health", []):
+                    health_metric = health.get("metric")
+                    if health.get("source") != expected_source:
+                        continue
+                    if health_metric is not None and canonical_metric_key(health_metric) != key:
+                        continue
+                    health_events.append((event_time, health.get("ok") is True))
+            signals[key] = _resolve_attention_metric(key, key_obs, health_events)
         else:
-            signals[key] = _extract_fallback_metric(key, occurrences, is_reviewed)
+            signals[key] = _extract_fallback_metric(key, occurrences)
     return signals
 
 
@@ -342,7 +420,8 @@ def filter_release_cohort(
         for obs in (snap.get("benchmark_attention") or {}).get("observations", []):
             cid = obs.get("canonical_artifact_id")
             if cid:
-                attention_by_canonical.setdefault(cid, []).append((obs, snap))
+                canonical_id = aliases.get(str(cid), str(cid))
+                attention_by_canonical.setdefault(canonical_id, []).append((obs, snap))
 
     items_by_canonical: dict[str, list[tuple[dict[str, Any], dict[str, Any]]]] = {}
     for snap in snapshots:
@@ -394,7 +473,7 @@ def filter_release_cohort(
                 "release_date": earliest_dt.isoformat(),
                 "has_dated_attention": has_attention,
                 "is_reviewed_benchmark": is_reviewed,
-                "signals": _resolve_signals(ba_obs, occurrences, is_reviewed),
+                "signals": _resolve_signals(ba_obs, occurrences, snapshots),
             }
         )
 
@@ -414,6 +493,7 @@ def compute_window_ranking(
                 float(c["signals"][signal]["value"])
                 for c in candidates
                 if c.get("signals", {}).get(signal, {}).get("value") is not None
+                and c.get("signals", {}).get(signal, {}).get("status") == "fresh"
             ]
             or [0.0]
         )
@@ -425,6 +505,7 @@ def compute_window_ranking(
         coverage = 0.0
         fresh_weight = 0.0
         observed_count = 0
+        fresh_count = 0
         composite_score = 0.0
         components = {}
         has_durable = False
@@ -449,13 +530,15 @@ def compute_window_ranking(
             if norm is not None:
                 coverage += weight
                 observed_count += 1
-                composite_score += weight * norm
                 if status == "fresh":
+                    composite_score += weight * norm
+                    fresh_count += 1
                     fresh_weight += weight
                     if signal in DURABLE_SIGNALS:
                         has_durable = True
 
-        score = round(100.0 * composite_score + 1e-9) if observed_count > 0 else None
+        raw_score = 100.0 * composite_score if fresh_count > 0 else None
+        score = round(raw_score + 1e-9) if raw_score is not None else None
         coverage_rnd = round(coverage, 2)
         confidence = (
             "High"
@@ -486,6 +569,7 @@ def compute_window_ranking(
                 "status": "ranked" if qualifies else "limited_signals",
                 "rank": None,
                 "components": components,
+                "_ranking_score": raw_score,
             }
         )
 
@@ -496,19 +580,21 @@ def compute_window_ranking(
     ranked = [e for e in scored_entries if e["status"] == "ranked"]
     unranked = [e for e in scored_entries if e["status"] != "ranked"]
 
-    ranked.sort(key=lambda e: (-(e["score"] or 0), -_ts(e), e.get("name", "")))
+    ranked.sort(key=lambda e: (-(e["_ranking_score"] or 0), -_ts(e), e.get("name", "")))
     for idx, e in enumerate(ranked, start=1):
         e["rank"] = idx
 
     unranked.sort(
         key=lambda e: (
-            -(e["score"] if e["score"] is not None else -1),
+            -(e["_ranking_score"] if e["_ranking_score"] is not None else -1),
             -_ts(e),
             e.get("name", ""),
         )
     )
 
     all_entries = ranked + unranked
+    for entry in all_entries:
+        entry.pop("_ranking_score", None)
     visible = all_entries[:top_limit] if top_limit is not None else all_entries
     avg_cov = (
         round(sum(e["coverage"] for e in all_entries) / len(all_entries), 2) if all_entries else 0.0

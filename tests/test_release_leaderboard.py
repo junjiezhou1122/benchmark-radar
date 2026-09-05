@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -82,6 +83,47 @@ def test_snapshot_benchmark_attention_validation():
     }
     with pytest.raises(SnapshotError, match="HTTP"):
         validate_snapshot(make_snapshot("2026-09-01", base_time, benchmark_attention=invalid_url))
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("source", "huggingface", "metric/source mismatch"),
+        ("metric", "downloads_30d", "metric/source mismatch"),
+        ("value", True, "non-negative number or null"),
+        ("value_kind", "rolling_30d", "value_kind is invalid"),
+        (
+            "source_url",
+            "https://github.com/example/monorepo/tree/main/bench",
+            "exact metric resource",
+        ),
+    ],
+)
+def test_snapshot_benchmark_attention_rejects_misattributed_signals(
+    field: str, value: Any, message: str
+):
+    observed_at = "2026-09-01T12:00:00+00:00"
+    attention = {
+        "schema_version": 1,
+        "observed_at": observed_at,
+        "observations": [
+            {
+                "canonical_artifact_id": "artifact:github:example/bench",
+                "source": "github",
+                "metric": "stars",
+                "value": 150,
+                "value_kind": "cumulative",
+                "source_url": "https://github.com/example/bench",
+                "status": "fresh",
+            }
+        ],
+        "health": [],
+    }
+    invalid = deepcopy(attention)
+    invalid["observations"][0][field] = value
+
+    with pytest.raises(SnapshotError, match=message):
+        validate_snapshot(make_snapshot("2026-09-01", observed_at, benchmark_attention=invalid))
 
 
 def test_window_boundaries_utc():
@@ -740,3 +782,263 @@ def test_exact_45_percent_eligibility_boundary_hf_upvotes_plus_dataset_downloads
     assert entry["score"] == 45
     assert entry["components"]["hf_paper_upvotes"]["status"] == "fresh"
     assert entry["components"]["hf_dataset_downloads"]["status"] == "fresh"
+
+
+def test_attention_observation_joins_through_canonical_alias():
+    generated_at = datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC)
+    released_at = (generated_at - timedelta(days=5)).isoformat()
+    paper_url = "https://arxiv.org/abs/2608.99999"
+    repo_url = "https://github.com/example/identity-bench"
+    items = [
+        {
+            "url": paper_url,
+            "artifact_urls": [repo_url],
+            "title": "Identity Bench",
+            "event_kind": "released",
+            "published_at": released_at,
+            "source": "arXiv",
+            "source_id": "2608.99999",
+            "metrics": {},
+        },
+        {
+            "url": repo_url,
+            "artifact_urls": [paper_url],
+            "title": "Identity Bench",
+            "event_kind": "released",
+            "published_at": released_at,
+            "source": "GitHub",
+            "source_id": "example/identity-bench",
+            "metrics": {},
+        },
+    ]
+    attention = {
+        "schema_version": 1,
+        "observed_at": generated_at.isoformat(),
+        "observations": [
+            {
+                # The paper becomes the stronger canonical identity. The dated
+                # observation written against the repository identity must
+                # still follow the same alias edge.
+                "canonical_artifact_id": "artifact:github:example/identity-bench",
+                "source": "github",
+                "metric": "stars",
+                "value": 50,
+                "value_kind": "cumulative",
+                "source_url": repo_url,
+                "status": "fresh",
+            }
+        ],
+        "health": [],
+    }
+
+    cohort = filter_release_cohort(
+        [
+            make_snapshot(
+                "2026-09-01",
+                generated_at.isoformat(),
+                evidence_items=items,
+                benchmark_attention=attention,
+            )
+        ],
+        window_days=30,
+        as_of=generated_at,
+        reviewed_benchmark_ids=set(),
+    )
+
+    assert len(cohort) == 1
+    assert cohort[0]["canonical_artifact_id"] == "artifact:arxiv:2608.99999"
+    assert cohort[0]["has_dated_attention"] is True
+    assert cohort[0]["signals"]["github_stars"] == {
+        "value": 50,
+        "status": "fresh",
+        "source_url": repo_url,
+    }
+
+
+def test_later_source_health_failure_marks_retained_value_stale():
+    first_at = datetime(2026, 8, 30, 12, 0, 0, tzinfo=UTC)
+    failed_at = datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC)
+    released_at = (failed_at - timedelta(days=5)).isoformat()
+    repo_url = "https://github.com/example/health-bench"
+    item = {
+        "url": repo_url,
+        "title": "Health Bench",
+        "event_kind": "released",
+        "published_at": released_at,
+        "source": "GitHub",
+        "source_id": "example/health-bench",
+        "metrics": {},
+    }
+    fresh_attention = {
+        "schema_version": 1,
+        "observed_at": first_at.isoformat(),
+        "observations": [
+            {
+                "canonical_artifact_id": "artifact:github:example/health-bench",
+                "source": "github",
+                "metric": "stars",
+                "value": 50,
+                "value_kind": "cumulative",
+                "source_url": repo_url,
+                "status": "fresh",
+            }
+        ],
+        "health": [],
+    }
+    failed_attention = {
+        "schema_version": 1,
+        "observed_at": failed_at.isoformat(),
+        "observations": [],
+        "health": [{"source": "github", "ok": False, "item_count": 0}],
+    }
+    snapshots = [
+        make_snapshot(
+            "2026-08-30",
+            first_at.isoformat(),
+            evidence_items=[item],
+            benchmark_attention=fresh_attention,
+        ),
+        make_snapshot(
+            "2026-09-01",
+            failed_at.isoformat(),
+            evidence_items=[item],
+            benchmark_attention=failed_attention,
+        ),
+    ]
+
+    payload = build_latest_releases_leaderboard(
+        snapshots,
+        as_of=failed_at,
+        reviewed_benchmark_ids=set(),
+    )
+    entry = payload["windows"]["30d"]["entries"][0]
+
+    assert entry["rank"] is None
+    assert entry["score"] is None
+    assert entry["components"]["github_stars"]["status"] == "stale"
+    assert entry["components"]["github_stars"]["value"] == 50
+    assert entry["components"]["github_stars"]["last_successful_date"] == "2026-08-30"
+
+
+def test_reviewed_fallback_uses_latest_value_but_never_claims_freshness():
+    generated_at = datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC)
+    released_at = (generated_at - timedelta(days=12)).isoformat()
+    repo_url = "https://github.com/example/reviewed-bench"
+
+    def item(stars: int) -> dict[str, Any]:
+        return {
+            "url": repo_url,
+            "title": "Reviewed Bench",
+            "event_kind": "released",
+            "published_at": released_at,
+            "source": "GitHub",
+            "source_id": "example/reviewed-bench",
+            "metrics": {"stars": stars},
+        }
+
+    snapshots = [
+        make_snapshot("2026-08-20", "2026-08-20T12:00:00+00:00", [item(10)]),
+        make_snapshot("2026-09-01", generated_at.isoformat(), [item(100)]),
+    ]
+    payload = build_latest_releases_leaderboard(
+        snapshots,
+        as_of=generated_at,
+        reviewed_benchmark_ids={"reviewed bench"},
+    )
+    entry = payload["windows"]["30d"]["entries"][0]
+
+    assert entry["rank"] is None
+    assert entry["score"] is None
+    assert entry["components"]["github_stars"]["value"] == 100
+    assert entry["components"]["github_stars"]["status"] == "unknown"
+    assert entry["components"]["github_stars"]["last_successful_date"] == "2026-09-01"
+
+
+def test_ranking_uses_unrounded_score_before_release_date_tiebreaker():
+    candidates = []
+    for name, stars, release_date in (
+        ("Higher raw score", 100, "2026-08-19T00:00:00Z"),
+        ("Lower raw score", 99, "2026-08-20T00:00:00Z"),
+    ):
+        repo_name = name.replace(" ", "-").lower()
+        candidates.append(
+            {
+                "canonical_artifact_id": name,
+                "name": name,
+                "purpose": "",
+                "release_date": release_date,
+                "has_dated_attention": True,
+                "signals": {
+                    "github_stars": {
+                        "value": stars,
+                        "status": "fresh",
+                        "source_url": f"https://github.com/example/{repo_name}",
+                    },
+                    "hf_paper_upvotes": {
+                        "value": None,
+                        "status": "unknown",
+                        "source_url": None,
+                    },
+                    "hf_dataset_downloads": {
+                        "value": None,
+                        "status": "unknown",
+                        "source_url": None,
+                    },
+                },
+            }
+        )
+
+    entries = compute_window_ranking(candidates, window_days=30)["entries"]
+
+    assert entries[0]["name"] == "Higher raw score"
+    assert entries[0]["rank"] == 1
+    assert entries[1]["name"] == "Lower raw score"
+    assert entries[1]["rank"] == 2
+    assert entries[0]["score"] == entries[1]["score"] == 55
+
+
+def test_stale_values_are_displayed_but_do_not_change_score_order():
+    release_date = "2026-08-20T00:00:00Z"
+    candidates = []
+    for name, stale_upvotes in (("No stale boost", None), ("Stale context", 1_000)):
+        candidates.append(
+            {
+                "canonical_artifact_id": name,
+                "name": name,
+                "purpose": "",
+                "release_date": release_date,
+                "has_dated_attention": True,
+                "signals": {
+                    "github_stars": {
+                        "value": 100,
+                        "status": "fresh",
+                        "source_url": "https://github.com/example/same-score",
+                    },
+                    "hf_paper_upvotes": {
+                        "value": stale_upvotes,
+                        "status": "stale" if stale_upvotes is not None else "unknown",
+                        "source_url": (
+                            "https://huggingface.co/papers/2608.99999"
+                            if stale_upvotes is not None
+                            else None
+                        ),
+                        "last_successful_date": (
+                            "2026-08-01" if stale_upvotes is not None else None
+                        ),
+                    },
+                    "hf_dataset_downloads": {
+                        "value": None,
+                        "status": "unknown",
+                        "source_url": None,
+                    },
+                },
+            }
+        )
+
+    entries = compute_window_ranking(candidates, window_days=30)["entries"]
+
+    assert [entry["score"] for entry in entries] == [55, 55]
+    assert entries[0]["name"] == "No stale boost"
+    stale = next(entry for entry in entries if entry["name"] == "Stale context")
+    assert stale["components"]["hf_paper_upvotes"]["value"] == 1_000
+    assert stale["components"]["hf_paper_upvotes"]["status"] == "stale"
