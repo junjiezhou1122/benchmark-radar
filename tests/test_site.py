@@ -822,6 +822,45 @@ def test_returning_to_explore_after_trends_supersession_reloads_full_data():
     assert 'if (view === "map") await ensureFullData();' not in nav
 
 
+def test_refresh_on_today_after_trends_reloads_evidence():
+    """Issue #528 review regression: Refresh must reload Today's evidence after visiting Trends.
+
+    Visiting Trends sets state.trendsDataLoaded = true. If refreshData()
+    selected radar-trends.json whenever that flag was true, returning to
+    Today and clicking Refresh fetched a trends-only payload with no
+    evidence_items, leaving Today unable to display updated or changed
+    evidence. The request on Today must fetch an evidence-bearing payload
+    and apply changed evidence items to state.
+    """
+    import json
+    import shutil
+    import subprocess
+
+    script = Path("site/assets/app.js").read_text(encoding="utf-8")
+    refresh = script.split("async function refreshData()", 1)[1].split(
+        "async function initialize()", 1
+    )[0]
+    assert 'const needsTrendsPayload = !needsFullPayload && state.view === "trends";' in refresh
+
+    node = shutil.which("node")
+    if not node:
+        import pytest
+
+        pytest.skip("node is not installed")
+
+    result = subprocess.run(
+        [node, "tests/refresh_today_evidence_harness.mjs"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    data = json.loads(result.stdout)
+    assert data["requestedPath"] == "/data/radar-bootstrap.json"
+    assert data["refreshedEvidenceId"] == "item-new"
+    assert data["refreshedEvidenceTitle"] == "New Updated Evidence"
+
+
 def test_rubric_is_read_from_published_data_not_restated_in_the_browser():
     script = Path("site/assets/app.js").read_text(encoding="utf-8")
 

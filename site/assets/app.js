@@ -8798,7 +8798,7 @@ async function refreshData() {
   const requestSequence = ++nextDashboardRequestSequence;
   try {
     const needsFullPayload = state.fullDataLoaded || stateNeedsFullData();
-    const needsTrendsPayload = !needsFullPayload && (state.trendsDataLoaded || stateNeedsTrendsData());
+    const needsTrendsPayload = !needsFullPayload && state.view === "trends";
     const path = needsFullPayload
       ? "/data/radar.json"
       : needsTrendsPayload
