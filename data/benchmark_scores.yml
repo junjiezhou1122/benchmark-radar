@@ -83,14 +83,8 @@
 
 schema_version: 1
 
-sources:
-  - id: frontier_challenge_leaderboard_2026_08_25
-    title: FrontierChallenge leaderboard
-    publisher: ApodexAI
-    document_type: benchmark_leaderboard
-    url: https://apodexai.github.io/FrontierAgent/benchmarks/FrontierChallenge/
-    benchmarks: [frontier_challenge]
-    retrieved_at: 2026-09-02
+# Benchmark-owned sources are registered in data/model_cards.yml under
+# source_documents; score rows cite those reviewed documents by source_id.
 
 # Per-benchmark metric identity. `direction` exists because not every metric
 # improves upward: an edit-distance metric inverts the axis, and a chart that
