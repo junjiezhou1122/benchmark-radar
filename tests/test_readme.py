@@ -12,6 +12,7 @@ README = Path("README.md")
 README_ZH = Path("README.zh-CN.md")
 SKILL = Path("skills/benchmark-radar/SKILL.md")
 TECHNICAL_REPORT = "https://zenodo.org/records/22167102"
+REPORT_PDF = "docs/technical-report/latex/main.pdf"
 
 
 def _run(day: int) -> RadarRun:
@@ -99,11 +100,16 @@ def test_chinese_readme_mirrors_the_english_one():
     assert "[README.md](README.md)" not in zh
 
 
-def test_readmes_link_the_citable_technical_report():
+def test_readmes_link_the_current_technical_report():
+    # The badge and the resource list point at the tracked LaTeX build, which is
+    # the current report and reads directly on GitHub. The Zenodo DOI stays in
+    # the citation block, where it names the frozen deposit.
     for readme in (README, README_ZH):
         text = readme.read_text(encoding="utf-8")
-        assert f'<a href="{TECHNICAL_REPORT}">' in text
+        assert f'<a href="{REPORT_PDF}">' in text
         assert "TECH%20REPORT" in text
+        assert f"({REPORT_PDF})" in text
+        assert TECHNICAL_REPORT in text or "10.5281/zenodo.22167102" in text
 
 
 def test_citation_metadata_prefers_the_technical_report():

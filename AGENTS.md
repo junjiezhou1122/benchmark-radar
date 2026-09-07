@@ -175,16 +175,28 @@ inputs retain their source spelling.
 
 ### Technical report and deposit files
 
-- Report source/builder: `scripts/build_system_evaluation.py`
-- Report instructions and audited inputs: `docs/technical-report/README.md`
-- Zenodo metadata: `docs/technical-report/zenodo-metadata.json`
-- Generated upload file:
-  `output/pdf/benchmark-radar-technical-report-v0.9.0.pdf`
+- Report source: `docs/technical-report/latex/main.tex`. This is the single
+  source of truth for the report. Edit it directly. Nothing generates it from
+  Python, Markdown, or the running site.
+- Built PDF: `docs/technical-report/latex/main.pdf`, tracked so the report reads
+  on GitHub. Rebuild and commit it with any change to `main.tex`.
+- The four PDF figures have native TikZ sources under `latex/figures/`.
+  `make` builds them from the dated `latex/figure-data.tex` export. Refresh that
+  export only after auditing a clean corpus rebuild; review and commit the
+  figure PDFs and manuscript PDF together. The exporter writes no report prose.
+- Build instructions and audited inputs: `docs/technical-report/README.md`
+- Zenodo metadata: `docs/technical-report/zenodo-metadata.json`. It describes
+  the frozen v0.9.0 deposit, so its version and counts are a record of that
+  deposit rather than drift. A new deposit rewrites it in the same change.
+- Frozen deposit: `output/pdf/benchmark-radar-technical-report-v0.9.0.pdf`. This
+  is the artifact behind DOI 10.5281/zenodo.22167102. Nothing writes to that
+  path; leave it byte-for-byte unchanged.
 
 Before changing report claims or Zenodo metadata, run the clean-checkout CI
-sequence below and recompute claims from its outputs. Build the PDF with the DOI
-command in `docs/technical-report/README.md`, inspect the rendered PDF, and
-upload that exact file. The PDF is a dated interpretation, not a data source.
+sequence below and recompute claims from its outputs. Rebuild the PDF with `make`
+in `docs/technical-report/latex/`, inspect the rendered PDF, and commit that
+exact file. A deposit copies the reviewed PDF to a versioned name under
+`output/pdf/`. The PDF is a dated interpretation, not a data source.
 
 ## Query surfaces
 

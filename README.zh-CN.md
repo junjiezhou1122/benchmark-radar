@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://benchmark-radar.org/"><img alt="已收集的 benchmark 记录" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fbenchmark-radar.org%2Fdata%2Frecords-badge.json&amp;style=for-the-badge"></a>
   <a href="https://github.com/ktwu01/benchmark-radar/releases/download/cli-data/benchmark-radar-data.zip"><img alt="下载数据集" src="https://img.shields.io/badge/Dataset-download%20ZIP-2f81f7?style=for-the-badge&amp;logo=json&amp;logoColor=white"></a>
-  <a href="https://zenodo.org/records/22167102"><img alt="阅读技术报告" src="https://img.shields.io/badge/TECH%20REPORT-1682D4?style=for-the-badge&amp;logo=zenodo&amp;logoColor=white"></a>
+  <a href="docs/technical-report/latex/main.pdf"><img alt="阅读技术报告" src="https://img.shields.io/badge/TECH%20REPORT-1682D4?style=for-the-badge&amp;logo=latex&amp;logoColor=white"></a>
   <a href="https://x.com/ktwu01"><img alt="X" src="https://img.shields.io/badge/X-000000?style=for-the-badge&amp;logo=x&amp;logoColor=white"></a>
   <a href="https://www.linkedin.com/in/ktwu01"><img alt="LinkedIn" src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&amp;logo=linkedin&amp;logoColor=white"></a>
   <a href="https://scholar.google.com/citations?user=s9w1k-cAAAAJ&amp;hl=en"><img alt="Google Scholar" src="https://img.shields.io/badge/Google%20Scholar-4285F4?style=for-the-badge&amp;logo=googlescholar&amp;logoColor=white"></a>
@@ -74,7 +74,7 @@ npx skills add ktwu01/benchmark-radar
 - [模型报告登记册](data/model_cards.yml)
 - [公开语料 schema](docs/cumulative-corpus.schema.json)
 - [引用信息](https://benchmark-radar.org/cite/)
-- [技术报告](https://doi.org/10.5281/zenodo.22167102)
+- [技术报告](docs/technical-report/latex/main.pdf)（LaTeX 源文件：[`main.tex`](docs/technical-report/latex/main.tex)）
 - [配置](config.yml)
 - **开发环境：** `python -m pip install -e '.[dev]' && benchmark-radar normalize-catalog`
 - **支持 / 反馈：** [提交 issue](https://github.com/ktwu01/benchmark-radar/issues)
