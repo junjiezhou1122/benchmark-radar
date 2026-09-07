@@ -122,6 +122,7 @@ Run these from the repository root, in this order:
 2. `benchmark-radar classify` reads the dated snapshots plus the shared
    catalog shards and model-report YAML files. It regenerates
    `data/kw_bench_classifications.jsonl`, `site/data/radar.json`,
+   `site/data/radar-bootstrap.json`, `site/data/radar-trends.json`,
    `site/data/models.json`, `site/feed.xml`, the daily brief blog under
    `site/blog/`, and `site/blog/feed.xml`. The classifier currently uses
    the deterministic null extractor in CI; it makes no external model call.

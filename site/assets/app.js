@@ -1219,14 +1219,54 @@ const state = {
   observations: null,
   fullDataLoaded: false,
   fullDataPromise: null,
+  trendsDataLoaded: false,
+  trendsDataPromise: null,
 };
 
-// A Trends or Explore click can wait on the full corpus. A newer route choice
-// must win even if that older request settles later.
+// A Trends, Explore, or archive-wide Today click can wait on a larger payload.
+// A newer route choice must win even if that older request settles later.
 let viewNavigationSequence = 0;
 let successfulDataRefreshSequence = 0;
 let nextDashboardRequestSequence = 0;
 let latestAppliedDashboardRequestSequence = 0;
+
+function dayHasEvidenceItems(day) {
+  return Array.isArray(day?.evidence_items);
+}
+
+function payloadHasEvidenceItems(data) {
+  return Boolean(data?.days?.some(dayHasEvidenceItems));
+}
+
+function payloadHasObservations(data) {
+  return Boolean(
+    data?.days?.some(
+      (day) => dayHasEvidenceItems(day) || Array.isArray(day?.attention?.observations),
+    ),
+  );
+}
+
+function mergeDashboardData(current, incoming) {
+  if (!current) return incoming;
+  const currentDays = new Map((current.days || []).map((day) => [day.date, day]));
+  const days = (incoming.days || []).map((day) => {
+    const previous = currentDays.get(day.date);
+    if (dayHasEvidenceItems(day) || !dayHasEvidenceItems(previous)) return day;
+    return { ...day, ...previous, ...day, evidence_items: previous.evidence_items };
+  });
+  for (const [date, previous] of currentDays) {
+    if (!days.some((day) => day.date === date)) days.push(previous);
+  }
+  days.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const corpus = incoming.corpus?.entities
+    ? incoming.corpus
+    : {
+        ...(current.corpus || {}),
+        ...(incoming.corpus || {}),
+        aggregates: incoming.corpus?.aggregates || current.corpus?.aggregates || {},
+      };
+  return { ...current, ...incoming, days, corpus };
+}
 
 function applyDashboardData(data, requestSequence, fullPayload) {
   // Responses race, especially when a reader presses Refresh while the
@@ -1235,9 +1275,20 @@ function applyDashboardData(data, requestSequence, fullPayload) {
   // response, while an older late success cannot overwrite fresher data.
   if (requestSequence < latestAppliedDashboardRequestSequence) return false;
   latestAppliedDashboardRequestSequence = requestSequence;
-  state.data = data;
-  state.fullDataLoaded = fullPayload || !data.bootstrap;
-  state.observations = null;
+  state.data = mergeDashboardData(state.data, data);
+  // Bootstrap keeps the latest day's evidence_items so Today can paint. That
+  // is not the full archive: only radar.json carries every day's items.
+  // Trends has every day but strips those items, so it must not look full.
+  state.fullDataLoaded =
+    Boolean(fullPayload) ||
+    Boolean(!data.bootstrap && payloadHasEvidenceItems(data) && (data.days || []).length > 1);
+  state.trendsDataLoaded =
+    state.fullDataLoaded ||
+    state.trendsDataLoaded ||
+    Boolean(!data.bootstrap && Array.isArray(data.days) && data.days.length > 1);
+  if (payloadHasObservations(data)) {
+    state.observations = null;
+  }
   return true;
 }
 
@@ -2577,6 +2628,7 @@ function renderSearchScopeBanner(observationCount, benchmarkMatches) {
   });
   todayLink.addEventListener("click", (event) => {
     event.preventDefault();
+    viewNavigationSequence += 1;
     state.todayDate = state.data.latest_date;
     state.todayPage = 1;
     renderToday();
@@ -2617,8 +2669,22 @@ function renderToday({ resultsOnly = false } = {}) {
   // click or filter keystroke in the load window must no-op, not throw.
   if (!state.data) return;
   const showingAllDates = todayIsMultiDate();
-  const day = dailySnapshot(showingAllDates ? state.data.latest_date : state.todayDate);
+  const requestedDate = showingAllDates ? state.data.latest_date : state.todayDate;
+  const day = dailySnapshot(requestedDate);
   if (!day) return;
+  // Trends days carry counts but not evidence_items. Rendering that date as
+  // Today would wipe the latest-scan list until radar.json arrives. Stay on
+  // the latest day we can actually list, then fill the requested date after
+  // ensureFullData() lands.
+  if (
+    !showingAllDates &&
+    requestedDate &&
+    requestedDate !== state.data.latest_date &&
+    !Array.isArray(day.evidence_items)
+  ) {
+    state.todayDate = state.data.latest_date;
+    return renderToday({ resultsOnly });
+  }
   state.todayRenderedDate = state.todayDate;
   byId("today-date").value = state.todayDate;
   const range = todayDateRange();
@@ -3033,10 +3099,18 @@ function renderTrends() {
       button.addEventListener("pointerleave", releaseDayTooltip);
       button.addEventListener("blur", releaseDayTooltip);
       button.addEventListener("click", () => {
+        const navigationSequence = ++viewNavigationSequence;
         state.todayDate = day.date;
         setView("today");
         renderToday();
         window.scrollTo({ top: 0, behavior: "smooth" });
+        ensureFullData()
+          .then(() => {
+            if (navigationSequence !== viewNavigationSequence || state.view !== "today") return;
+            state.todayDate = day.date;
+            renderToday();
+          })
+          .catch((error) => console.error(error));
       });
       return button;
     }),
@@ -3050,9 +3124,17 @@ function renderTrends() {
       const link = element("a", { text: day.date, attrs: { href: `/?date=${day.date}` } });
       link.addEventListener("click", (event) => {
         event.preventDefault();
+        const navigationSequence = ++viewNavigationSequence;
         state.todayDate = day.date;
         setView("today");
         renderToday();
+        ensureFullData()
+          .then(() => {
+            if (navigationSequence !== viewNavigationSequence || state.view !== "today") return;
+            state.todayDate = day.date;
+            renderToday();
+          })
+          .catch((error) => console.error(error));
       });
       return element("tr", {}, [
         element("td", {}, [link]),
@@ -3444,7 +3526,7 @@ function isRelease(item) {
 function allObservations() {
   if (state.observations) return state.observations;
   const evidence = state.data.days.flatMap((day) =>
-    day.evidence_items.map((item) => ({
+    (day.evidence_items || []).map((item) => ({
       ...item,
       recommended:
         item.recommended ??
@@ -7895,10 +7977,13 @@ function renderTrendMap() {
   if (!state.data) return;
   const corpus = state.data.corpus;
   if (!corpus) return;
-  const entityById = new Map(corpus.entities.map((entity) => [entity.id, entity]));
-  const selectedFromUrl = entityById.get(state.entity);
   const explorer = byId("relationship-explorer");
   const entityTypes = corpus.aggregates?.entity_types || {};
+  const hasGraph = Array.isArray(corpus.entities);
+  const entityById = hasGraph
+    ? new Map(corpus.entities.map((entity) => [entity.id, entity]))
+    : new Map();
+  const selectedFromUrl = entityById.get(state.entity);
 
   renderMapInsights(corpus);
   byId("map-summary").textContent =
@@ -7914,11 +7999,24 @@ function renderTrendMap() {
   if (!explorer.dataset.renderBound) {
     explorer.dataset.renderBound = "true";
     explorer.addEventListener("toggle", () => {
-      if (explorer.open) renderTrendMap();
-      else replaceChildren(byId("map-canvas"), []);
+      if (explorer.open) {
+        if (!state.fullDataLoaded) {
+          ensureFullData()
+            .then(() => {
+              if (state.view === "map") renderTrendMap();
+            })
+            .catch((error) => console.error(error));
+          return;
+        }
+        renderTrendMap();
+      } else replaceChildren(byId("map-canvas"), []);
     });
   }
   if (!explorer.open) {
+    replaceChildren(byId("map-canvas"), []);
+    return;
+  }
+  if (!hasGraph) {
     replaceChildren(byId("map-canvas"), []);
     return;
   }
@@ -8490,8 +8588,27 @@ function bindEvents() {
         return;
       }
       if (anchor) event.preventDefault();
+      // The Today tab is the latest scan. A Trends column writes ?date= into
+      // the URL for a historical day; clicking Today must not keep that date
+      // or the list looks empty / stuck on an old scan.
+      if (view === "today" && state.todayDate !== "all") {
+        state.todayDate = state.data.latest_date || "";
+      }
+      setView(view);
+      if (view === "today") renderToday();
+      if (view === "leaderboard") renderLeaderboard();
+      if (view === "saturation") renderSaturation();
+      if (view === "trends") renderTrends();
+      if (view === "map") renderTrendMap();
       try {
-        if (["trends", "map"].includes(view)) await ensureFullData();
+        if (view === "trends") await ensureTrendsData();
+        // A trends response can supersede an in-flight /data/radar.json fetch
+        // while the relationship explorer is open. The <details> element never
+        // closed, so no toggle event fires again and the explorer would stay
+        // empty on return. Re-run the state gate here: it re-requests the full
+        // corpus when the open disclosure still needs it and does nothing when
+        // Explore is entered with the canvas collapsed, keeping lazy loading.
+        else if (view === "map") await ensureDataForState();
       } catch (error) {
         console.error(error);
         if (navigationSequence !== viewNavigationSequence) return;
@@ -8499,10 +8616,6 @@ function bindEvents() {
         return;
       }
       if (navigationSequence !== viewNavigationSequence) return;
-      setView(view);
-      if (view === "today") renderToday();
-      if (view === "leaderboard") renderLeaderboard();
-      if (view === "saturation") renderSaturation();
       if (view === "trends") renderTrends();
       if (view === "map") renderTrendMap();
     });
@@ -8565,6 +8678,8 @@ function bindEvents() {
     writeUrl("push");
   });
   byId("today-date").addEventListener("change", async (event) => {
+    // A newer date or range must also supersede a pending Trends-day load.
+    viewNavigationSequence += 1;
     const previousDate = state.todayRenderedDate || state.todayDate;
     const selectedDate = event.target.value;
     state.todayDate = selectedDate;
@@ -8657,6 +8772,7 @@ function bindEvents() {
     // its default scope is the full archive. Once a query exists, a reader can
     // still narrow it with the date select or the banner's "today" link.
     if (!hadQuery && state.q.trim() && !todayIsMultiDate()) {
+      viewNavigationSequence += 1;
       state.todayDate = "all";
       state.todayPage = 1;
       ensureFullData()
@@ -8674,6 +8790,7 @@ function bindEvents() {
     form.addEventListener("submit", (event) => event.preventDefault());
   });
   byId("clear-filters").addEventListener("click", async () => {
+    viewNavigationSequence += 1;
     state.todayDate = "all";
     state.q = "";
     state.kind = "";
@@ -8915,11 +9032,50 @@ function compatibleDashboard(data) {
 
 function stateNeedsFullData() {
   if (state.fullDataLoaded) return false;
-  if (["trends", "map"].includes(state.view)) return true;
+  if (state.view === "map" && (byId("relationship-explorer")?.open || state.entity)) return true;
   return state.view === "today" && Boolean(
     state.todayDate === "all" ||
     (state.todayDate && state.todayDate !== state.data?.latest_date)
   );
+}
+
+function stateNeedsTrendsData() {
+  if (state.trendsDataLoaded || state.fullDataLoaded) return false;
+  return state.view === "trends";
+}
+
+async function fetchDashboardPayload(path, cache, requestSequence, fullPayload) {
+  const response = await fetch(path, { cache });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const data = await response.json();
+  if (!compatibleDashboard(data)) throw new Error("No compatible snapshots");
+  const applied = applyDashboardData(data, requestSequence, fullPayload);
+  if (!applied && fullPayload && !state.fullDataLoaded) {
+    // A later bootstrap refresh won the response race. It cannot satisfy the
+    // caller that requested history, so fail visibly and let route navigation
+    // load the generated page instead of rendering a full-data view from one
+    // bootstrap day.
+    throw new Error("Full data request was superseded by a bootstrap response");
+  }
+  if (!applied && !fullPayload && stateNeedsTrendsData() && !state.trendsDataLoaded) {
+    throw new Error("Trends data request was superseded by a bootstrap response");
+  }
+  if (applied) renderTodayDateOptions();
+  return state.data;
+}
+
+async function ensureTrendsData(cache = "default") {
+  if (state.fullDataLoaded || state.trendsDataLoaded) return state.data;
+  if (state.trendsDataPromise) return state.trendsDataPromise;
+  const requestSequence = ++nextDashboardRequestSequence;
+  state.trendsDataPromise = (async () => {
+    return fetchDashboardPayload("/data/radar-trends.json", cache, requestSequence, false);
+  })();
+  try {
+    return await state.trendsDataPromise;
+  } finally {
+    state.trendsDataPromise = null;
+  }
 }
 
 async function ensureFullData(cache = "default") {
@@ -8927,20 +9083,7 @@ async function ensureFullData(cache = "default") {
   if (state.fullDataPromise) return state.fullDataPromise;
   const requestSequence = ++nextDashboardRequestSequence;
   state.fullDataPromise = (async () => {
-    const response = await fetch("/data/radar.json", { cache });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
-    if (!compatibleDashboard(data)) throw new Error("No compatible snapshots");
-    const applied = applyDashboardData(data, requestSequence, true);
-    if (!applied && !state.fullDataLoaded) {
-      // A later bootstrap refresh won the response race. It cannot satisfy the
-      // caller that requested history, so fail visibly and let route navigation
-      // load the generated page instead of rendering a full-data view from one
-      // bootstrap day.
-      throw new Error("Full data request was superseded by a bootstrap response");
-    }
-    if (applied) renderTodayDateOptions();
-    return state.data;
+    return fetchDashboardPayload("/data/radar.json", cache, requestSequence, true);
   })();
   try {
     return await state.fullDataPromise;
@@ -8951,6 +9094,7 @@ async function ensureFullData(cache = "default") {
 
 async function ensureDataForState() {
   if (stateNeedsFullData()) await ensureFullData();
+  else if (stateNeedsTrendsData()) await ensureTrendsData();
 }
 
 // The refresh control revalidates the payload the current route requires. A
@@ -8961,7 +9105,12 @@ async function refreshData() {
   const requestSequence = ++nextDashboardRequestSequence;
   try {
     const needsFullPayload = state.fullDataLoaded || stateNeedsFullData();
-    const path = needsFullPayload ? "/data/radar.json" : "/data/radar-bootstrap.json";
+    const needsTrendsPayload = !needsFullPayload && state.view === "trends";
+    const path = needsFullPayload
+      ? "/data/radar.json"
+      : needsTrendsPayload
+        ? "/data/radar-trends.json"
+        : "/data/radar-bootstrap.json";
     const response = await fetch(path, { cache: "reload" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
@@ -8974,6 +9123,7 @@ async function refreshData() {
     // but guarantees the error is not retired if a future bootstrap shape lacks
     // data a URL-backed state needs.
     if (stateNeedsFullData()) await ensureFullData("reload");
+    else if (stateNeedsTrendsData()) await ensureTrendsData("reload");
     closeFiltersDrawer();
     syncLeaderboardNav();
     setView(state.view, false);
