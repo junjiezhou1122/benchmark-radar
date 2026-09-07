@@ -51,6 +51,7 @@ from __future__ import annotations
 import json
 import math
 import re
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -285,6 +286,42 @@ def _observation(
     }
 
 
+def first_score_report(observations: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Earliest numeric score publication, excluding model/crawl timestamps."""
+    reports = []
+    for row in observations:
+        value = row.get("value")
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or not math.isfinite(value)
+            or row.get("date_precision")
+            not in {
+                "day",
+                "document_publication",
+                "score_publication",
+            }
+        ):
+            continue
+        reported = row.get("reported_at") or row.get("reported_date")
+        try:
+            if (
+                not isinstance(reported, str)
+                or date.fromisoformat(reported).isoformat() != reported
+            ):
+                continue
+        except ValueError:
+            continue
+        reports.append(
+            {
+                "reported_at": reported,
+                "obs_id": row.get("obs_id"),
+                "source_url": row.get("source_url"),
+            }
+        )
+    return min(reports, key=lambda row: (row["reported_at"], row["obs_id"] or ""), default=None)
+
+
 def _series(
     row: dict[str, str],
     *,
@@ -314,6 +351,7 @@ def _series(
         # No scale means no percentage bar. See the module docstring.
         "display_scale": None,
         "observation_count": len(observations),
+        "first_score_report": first_score_report(observations),
         "score_summary": score_summary(
             observations,
             fractional_display=True,
@@ -542,10 +580,13 @@ def build_benchmark_index(
                 "source": record["source"],
                 "publisher": publisher["name"] if publisher else None,
                 "released": record.get("released"),
-                # A missing benchmark release date is not a model announcement
-                # date. Carry the actual crawl evidence into the compact view
-                # so unscored records remain inspectable without loading shards.
-                "first_observed": (record.get("provenance") or {}).get("crawled_at"),
+                # Collection is provenance, never benchmark introduction. A
+                # score fallback must carry actual score-publication evidence.
+                "collected_at": (record.get("provenance") or {}).get("crawled_at"),
+                "first_score_reported_at": (series.get("first_score_report") or {}).get(
+                    "reported_at"
+                ),
+                "first_score_source_reference": series.get("first_score_report"),
                 "source_url": (record.get("provenance") or {}).get("source_url"),
                 "openness": openness.get("status", "unknown"),
                 "modality": record.get("modality"),

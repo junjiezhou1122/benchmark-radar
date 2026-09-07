@@ -350,12 +350,54 @@ def test_index_has_one_row_per_source_record(normalized: dict) -> None:
     by_key = {record["key"]: record for record in records}
     for row in index:
         provenance = by_key[row["key"]].get("provenance") or {}
-        assert row["first_observed"] == provenance.get("crawled_at")
+        assert row["collected_at"] == provenance.get("crawled_at")
+        assert "first_observed" not in row
+        assert row["first_score_reported_at"] is None
         assert row["source_url"] == provenance.get("source_url")
-    # A record needs neither scores nor adoption to carry its own date/source.
+    # Unscored records carry collection provenance, not a fabricated score date.
     unscored = next(row for row in index if row["source"] == "opencompass_hub")
-    assert unscored["first_observed"]
+    assert unscored["collected_at"]
+    assert unscored["first_score_source_reference"] is None
     assert unscored["score_summary"] is None
+
+
+def test_first_score_report_uses_publication_evidence_not_model_or_crawl_dates():
+    from benchmark_radar.external_catalog import first_score_report
+
+    rows = [
+        {
+            "value": 20,
+            "reported_date": "2024-03-01",
+            "date_precision": "score_publication",
+            "obs_id": "later",
+        },
+        {
+            "value": 10,
+            "reported_date": "2023-12-31",
+            "date_precision": "document_publication",
+            "obs_id": "first",
+            "source_url": "https://example.org/report",
+        },
+        {"value": 50, "reported_date": "2018-01-01", "date_precision": "model_announcement"},
+        {"value": 30, "reported_date": "2020-01-01", "date_precision": "crawl"},
+        {"value": None, "reported_date": "2020-01-01", "date_precision": "day"},
+        {"value": True, "reported_date": "2020-01-01", "date_precision": "day"},
+        {"value": 0, "reported_date": "2023-02-29", "date_precision": "day"},
+    ]
+    expected = {
+        "reported_at": "2023-12-31",
+        "obs_id": "first",
+        "source_url": "https://example.org/report",
+    }
+    assert first_score_report(rows) == expected
+    assert first_score_report(list(reversed(rows))) == expected
+    assert first_score_report(rows[2:]) is None
+    assert (
+        first_score_report([{"value": 0, "reported_date": "2024-02-29", "date_precision": "day"}])[
+            "reported_at"
+        ]
+        == "2024-02-29"
+    )
 
 
 @pytest.fixture(scope="module")

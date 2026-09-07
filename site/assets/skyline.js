@@ -7,11 +7,25 @@ export const SKYLINE_DOMAINS = {
   Multimodal: ["multimodal", "vision", "image", "video", "audio", "spatial_reasoning", "vlm"],
   Other: [],
 };
+export const SKYLINE_START_DATE = "2024-01-01";
 
 function validDate(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const time = Date.parse(`${value}T00:00:00Z`);
   return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value;
+}
+
+export function benchmarkDate(record, entry = {}) {
+  const released = [entry?.released, record.released].find(validDate);
+  if (released) return { date: released, dateBasis: "released" };
+  // Only dates attached to an actual numeric LLM score qualify. A model-card
+  // mention, model announcement, or batch crawl does not date a benchmark.
+  const dates = [record.first_reported_at, record.first_score_reported_at,
+    ...(record.observations || []).filter((row) => Number.isFinite(row.value)
+      && !["model_announcement", "crawl"].includes(row.date_precision))
+      .map((row) => row.reported_at || row.reported_date)]
+    .filter(validDate).sort();
+  return { date: dates[0] || null, dateBasis: dates.length ? "first_score" : null };
 }
 
 // This is the population used by BOTH the chart and the browser. Keeping a
@@ -34,10 +48,12 @@ export function scorePopulation(benchmarks = {}, entries = [], catalog = []) {
     ...Object.entries(benchmarks).map(([id, record]) => ({
       id, name: named.get(id)?.name || id, source: "curated",
       curated: named.get(id), record, summary: scoreBrowserSummary(record),
+      ...benchmarkDate(record, named.get(id)),
     })),
     ...catalog.map((record) => ({
       id: record.slug, name: record.name, source: record.source,
       external: record, record, summary: record.score_summary,
+      ...benchmarkDate(record),
     })),
   ];
 }
@@ -65,16 +81,15 @@ export function skylineModel(benchmarks = {}, entries = [], catalog = [], cutoff
       && observations.every((row) => row.value >= 0 && row.value <= 100)
       && displayScore >= 0 && displayScore <= 100
       ? best ? normalized(best) : displayScore : null;
+    // Browsing a source's reported number does not certify its scale. Keep it
+    // spatially visible, but only `score` can enter the Pareto calculation.
+    const plotScore = score ?? (unit == null && direction === "higher_is_better"
+      && Number.isFinite(displayScore) && displayScore >= 0 && displayScore <= 100 ? displayScore : null);
     const adopters = entry?.adopters;
     const adoption = Array.isArray(adopters)
       && adopters.every((card) => typeof card.model_card_id === "string" && card.model_card_id)
       ? new Set(adopters.map((card) => card.model_card_id)).size : null;
-    const released = entry?.released || record.released;
-    const releaseKnown = validDate(released);
-    const observed = [record.first_reported_at, record.first_observed?.slice(0, 10),
-      ...observations.map((row) => row.reported_at), ...(adopters || []).map((card) => card.published)]
-      .filter(validDate).sort()[0];
-    const date = releaseKnown ? released : observed || null;
+    const { date, dateBasis } = item;
     const domainValues = [entry?.domain, ...(record.categories || []), record.modality]
       .filter(Boolean).map((value) => value.toLowerCase());
     const card = adopters?.find((card) => card.model_card_id === best?.source_id);
@@ -84,53 +99,117 @@ export function skylineModel(benchmarks = {}, entries = [], catalog = [], cutoff
     if (adoption === null) missing.push("adoption");
     if (!date) missing.push("date");
     return {
-      id, name, source, summary, date, dateBasis: date ? releaseKnown ? "released" : "observed" : null,
+      id, name, source, summary, date, dateBasis,
       time: date ? Date.parse(`${date}T00:00:00Z`) : null,
-      score, displayScore, rawScore, inverted, adoption, missing,
+      score, plotScore, displayScore, rawScore, inverted, adoption, missing,
       domain: Object.keys(SKYLINE_DOMAINS).find((domain) => SKYLINE_DOMAINS[domain].some((value) => domainValues.includes(value))) || "Other",
       sourceUrl: card?.url || record.source_url || summary?.source_reference?.source_url,
       sourceId: best?.source_id, reportedAt: best?.reported_at,
       metric: record.metric, protocol: best?.protocol, instrument: best?.instrument,
     };
   });
-  // Missing time changes where a mark is drawn, never whether it can dominate
-  // another benchmark on the score/adoption wall.
-  const comparable = (row) => row.score !== null && row.adoption !== null;
-  const eligible = all.filter(comparable);
+  // The requested cohort starts on 2024-01-01. Within that cohort, only score
+  // and raw adoption determine dominance, before the score or search slice.
+  const comparable = (row) => row.date >= SKYLINE_START_DATE && row.score !== null && row.adoption !== null;
+  const cohort = all.filter((row) => row.date >= SKYLINE_START_DATE);
+  const eligible = cohort.filter(comparable);
   for (const row of all) {
     row.pareto = !comparable(row) ? null : !eligible.some((other) => other.score <= row.score && other.adoption >= row.adoption
       && (other.score < row.score || other.adoption > row.adoption));
   }
   // Cutoff membership is shared with score browsing. Normalized reversed
   // metrics remain explicit in the tooltip; they never change source scores.
-  const visible = all.filter((row) => (!matchingIds || matchingIds.has(row.id)) && matchesScoreCutoff(row.summary, cutoff));
+  const visible = all.filter((row) => (row.date === null || row.date >= SKYLINE_START_DATE)
+    && (!matchingIds || matchingIds.has(row.id)) && matchesScoreCutoff(row.summary, cutoff));
+  const dated = visible.filter((row) => row.date !== null);
   return {
-    all, visible, eligible, comparable: visible.filter(comparable),
-    rows: visible.filter((row) => !row.missing.length),
-    pending: visible.filter((row) => row.missing.length),
+    all, visible, dated, cohort, eligible, comparable: dated.filter(comparable),
+    rows: visible.filter((row) => row.plotScore !== null),
+    pending: visible.filter((row) => row.plotScore === null),
+    undated: visible.filter((row) => row.date === null),
+    beforeStart: all.filter((row) => row.date !== null && row.date < SKYLINE_START_DATE).length,
     population: all.length, sources: new Set(all.map((row) => row.source)).size,
     hidden: all.length - visible.length,
     unscored: visible.filter((row) => !Number.isFinite(row.displayScore)).length,
   };
 }
 
-export function skylineGeometry(eligible) {
-  const times = eligible.map((row) => row.time).filter(Number.isFinite);
-  const first = times.length ? Math.min(...times) : Date.UTC(2020, 0, 1);
-  const last = times.length ? Math.max(...times) : first;
-  const startYear = new Date(first).getUTCFullYear();
-  const endYear = new Date(last).getUTCFullYear() + 1;
+export function skylineGeometry(all) {
+  const startYear = 2024;
   const start = Date.UTC(startYear, 0, 1);
-  const end = Date.UTC(endYear, 0, 1);
-  const maximum = Math.max(1, ...eligible.map((row) => row.adoption).filter(Number.isFinite));
+  const times = all.map((row) => row.time).filter((time) => Number.isFinite(time) && time >= start);
+  const last = times.length ? Math.max(...times) : start;
+  const endYear = new Date(last).getUTCFullYear();
+  const end = Date.UTC(endYear, Math.floor(new Date(last).getUTCMonth() / 3) * 3 + 3, 1);
+  const maximum = Math.max(1, ...all.map((row) => row.adoption).filter(Number.isFinite));
   // Oblique projection: time to the right, low scores at the front, adoption up.
   // Fixed domains across cutoffs prevent filtering from moving the surviving points.
   const project = (timeFraction, score, adoption = 0) => [
-    320 + timeFraction * 660 - score * 2.3,
-    475 - score * 1.5 - 265 * Math.log1p(adoption) / Math.log1p(maximum),
+    250 + timeFraction * 730 - score * 1.15,
+    405 - score * 1.25 - 230 * Math.log1p(adoption) / Math.log1p(maximum),
   ];
-  const timeFraction = (time) => (time - start) / (end - start);
-  return { width: 1110, height: 570, startYear, endYear, maximum, project, timeFraction };
+  const timeFraction = (time) => !Number.isFinite(time) || time < start ? null : (time - start) / (end - start);
+  const years = Array.from({ length: endYear - startYear + 1 }, (_, index) => startYear + index);
+  const quarters = [];
+  for (let year = startYear; year <= endYear; year++) {
+    for (let month = 0; month < 12; month += 3) {
+      const time = Date.UTC(year, month, 1);
+      if (time < end) quarters.push({ time, year, quarter: month / 3 + 1 });
+    }
+  }
+  return { width: 1110, height: 510, startYear, endYear, years, quarters, start, end, maximum, project, timeFraction };
+}
+
+// Separate nearby marks vertically while preserving each exact date on X.
+// This is an individual-record timeline, not a year bin or histogram.
+export function skylineDateLanes(rows, dateX, gap = 12) {
+  const ends = [];
+  const points = [...rows].sort((a, b) => a.time - b.time || a.id.localeCompare(b.id)).map((row) => {
+    const x = dateX(row.time);
+    let lane = ends.findIndex((end) => x - end >= gap);
+    if (lane < 0) lane = ends.length;
+    ends[lane] = x;
+    return { row, x, lane };
+  });
+  return { points, lanes: ends.length };
+}
+
+// Unknown dates still have scores. Preserve the exact score vertically and
+// spread neighboring records horizontally in an explicitly undated panel.
+export function skylineScoreLanes(rows, scoreY, gap = 9) {
+  const ends = [];
+  const points = [...rows].sort((a, b) => b.plotScore - a.plotScore || a.id.localeCompare(b.id)).map((row) => {
+    const y = scoreY(row.plotScore);
+    let lane = ends.findIndex((end) => y - end >= gap);
+    if (lane < 0) lane = ends.length;
+    ends[lane] = y;
+    return { row, y, lane };
+  });
+  return { points, lanes: ends.length };
+}
+
+// Coincident stem tips keep their measured coordinates. Only their interactive
+// caps fan out, with a connector back to the true tip, so none hides another.
+export function skylineCapPositions(rows, position, gap = 13) {
+  const placed = new Map();
+  for (const row of [...rows].sort((a, b) => Number(b.pareto) - Number(a.pareto)
+    || a.time - b.time || a.plotScore - b.plotScore || a.id.localeCompare(b.id))) {
+    const actual = position(row);
+    let cap = actual;
+    const clear = ([x, y]) => x >= 135 && x <= 1040 && y >= 30 && y <= 420
+      && [...placed.values()].every((other) => Math.hypot(x - other[0], y - other[1]) >= gap);
+    if (!clear(cap)) {
+      search: for (let radius = gap; radius <= 130; radius += gap) {
+        for (let step = 0; step < 16; step++) {
+          const angle = -Math.PI / 2 + step * Math.PI / 8;
+          const candidate = [actual[0] + radius * Math.cos(angle), actual[1] + radius * Math.sin(angle)];
+          if (clear(candidate)) { cap = candidate; break search; }
+        }
+      }
+    }
+    placed.set(row.id, cap);
+  }
+  return placed;
 }
 
 export function skylineFrontierSteps(rows) {

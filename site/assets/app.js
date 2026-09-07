@@ -1,4 +1,4 @@
-import { SKYLINE_DOMAINS, skylineModel, skylineGeometry, skylineFrontierSteps, scorePopulation, matchesScoreCutoff, scoreBrowserSummary } from "./skyline.js";
+import { SKYLINE_DOMAINS, SKYLINE_START_DATE, skylineModel, skylineGeometry, skylineDateLanes, skylineScoreLanes, skylineCapPositions, skylineFrontierSteps, scorePopulation, matchesScoreCutoff, scoreBrowserSummary } from "./skyline.js";
 import {
   CATEGORY_COLORS,
   FALLBACK_COLORS,
@@ -364,6 +364,13 @@ function toggleLang() {
 const I18N = {
   en: {},
   zh: {
+    "Benchmark Frontier: {n} individual benchmarks from all sources. Dated benchmarks run left to right from 2024. Undated benchmarks remain visible by score. Gold rings mark the measured Pareto frontier.": "Benchmark 前沿：全部来源的 {n} 个独立标记。日期从 2024 年起向右排列，日期未知的仍按分数显示。金色环标出有测量依据的 Pareto 前沿。",
+    "{scored} with scores · {unscored} without scores · {older} before 2024 · {hidden} hidden by score or search": "{scored} 个有成绩 · {unscored} 个未报告成绩 · {older} 个早于 2024 年 · 分数或搜索筛选隐藏 {hidden} 个",
+    "No comparable score": "没有可比较的分数",
+    "Benchmark date": "Benchmark 日期",
+    "Highest reported score · 0–100": "最高报告分数 · 0–100",
+    "Each dot is a benchmark; scores keep their position": "每个点是一个 benchmark，按实际分数排列",
+    "Date unknown · {n} benchmarks": "日期未知 · {n} 个 benchmark",
     "Full benchmark catalog could not be loaded.": "未能加载完整的 benchmark 目录。",
     "Loading all benchmark sources…": "正在加载全部 benchmark 来源…",
     "Pareto: {p} of {n} benchmarks with comparable score scales and recorded adoption.": "{n} 个 benchmark 的分数刻度可比较且采用量已记录，其中 {p} 个位于 Pareto 前沿。",
@@ -375,17 +382,27 @@ const I18N = {
     "No benchmarks match these filters.": "没有 benchmark 符合这些筛选条件。",
     "No score reported": "未报告成绩",
     "Incomplete measurements": "测量信息不完整",
+    "Other score scales": "其他分数刻度",
+    "Date unknown": "日期未知",
+    "Reported score": "报告分数",
+    "Source-reported score": "来源报告分数",
+    "Adoption not recorded": "采用量未记录",
+    "Hollow marks: adoption or scale unverified": "空心点：采用量未知或分数刻度未核实",
+    "Adoption or scale unverified": "采用量或刻度未核实",
+    "{visible} of {n} benchmarks shown · {s} sources": "显示 {visible} / {n} 个 benchmark · {s} 个来源",
     "Browse all benchmarks": "查找全部 benchmark",
     "Benchmark Frontier": "Benchmark 前沿",
     "Benchmark Frontier chart": "Benchmark 前沿图",
     "Where difficult benchmarks earn adoption": "哪些难题，正在被更多模型卡采用",
     "Show benchmarks with highest reported score below:": "只看最高报告分数低于此值的 benchmark：",
     "How to read the frontier": "怎样读这张前沿图",
-    "skyline.reading": "每个 benchmark 都有一个标记。测量完整的 benchmark 按时间、分数和独立模型卡采用量绘成细柱。金色圆环标出 Pareto 前沿，侧墙投影展示分数与采用量。下方圆点保留测量不完整的 benchmark。悬停或聚焦可查看证据，方向键可切换标记。",
-    "skyline.pareto": "如果没有另一个 benchmark 的分数不高于它、采用量不低于它，且至少一项严格占优，它就位于 Pareto 前沿。时间不参与判断。拖动分数上限，也不会把原本被支配的点变成前沿点。",
-    "skyline.scope": "采用量按独立文档计数。只有明确采用百分比指标、且采用量已知的 benchmark 才进入数值坐标；越低越好的百分比换算为 100 减去原值。柱高用 log1p(count)，标签和 Pareto 计算用原始数量。未知值保留为未知；没有成绩的 benchmark 在任何分数上限下都可见。刻度一致不代表测试条件相同，也不能据此认定 benchmark 已被解决。",
-    "skyline.regions": "“难题前沿”“新兴评测”和“趋于饱和”只是读图提示，并非给 benchmark 自动分类。时间优先采用发布日期；没有发布日期时，使用登记册中最早的有日期证据，并标为“首次观测”。",
-    "Released / first observed →": "发布／首次观测时间 →",
+    "skyline.reading": "每个符合筛选条件的 benchmark 都有一个可见标记。有日期的成绩进入天际线，日期未知的成绩按分数排在右侧；没有成绩的各自在下方保留圆点。细柱表示独立模型卡采用量，空心点表示采用量未知或分数刻度未核实。靠得太近的柱顶圆点用细线错开，日期和实际柱高不变。悬停或聚焦可查看名称和证据，方向键可切换 benchmark。",
+    "skyline.pareto": "在日期不早于 2024 年的 benchmark 中，如果没有另一个可比较的 benchmark 分数不高于它、采用量不低于它，且至少一项严格占优，它就位于 Pareto 前沿。日期只用于筛选范围，支配关系只看分数和采用量。拖动分数上限，不会把原本被支配的点变成前沿点。",
+    "skyline.scope": "采用量按独立文档计数。只有明确采用百分比指标、且采用量已记录的 benchmark 才参与 Pareto 计算和侧墙投影；越低越好的百分比换算为 100 减去原值。其他成绩保留列表中的显示单位，不能直接比较，原始数值可在悬浮说明中查看。柱高用 log1p(count)，标签和 Pareto 计算用原始数量。采用量未知不等于零。刻度一致不代表测试条件相同，也不能据此认定 benchmark 已被解决。",
+    "skyline.regions": "时间轴从 2024 年 1 月 1 日开始，包含当天。优先使用 benchmark 发布日期；缺失时，使用现有证据中最早的 LLM 数值成绩报告日期，并明确标注。这不一定是历史上第一份成绩。抓取日期、模型发布日期和只有采用记录的文档不能代替成绩日期。已知日期早于 2024 年的排除，日期未知的仍按成绩显示在右侧，该区域的横向间距不代表时间。底面的文字只是读图提示。",
+    "Release date / first LLM score →": "发布日期／首次 LLM 成绩日期 →",
+    "First LLM score reported": "首次 LLM 成绩报告日期",
+    "Exact dates; nearby benchmarks stack vertically": "按实际日期排列，日期相近的点上下错开",
     "Lower scores at the front": "低分在前方",
     "Score × adoption": "分数 × 采用量",
     "Unique model cards": "独立模型卡数量",
@@ -407,7 +424,7 @@ const I18N = {
     "Model-card measurements are unavailable.": "模型卡测量数据暂时不可用。",
     "Catalog coverage unavailable.": "暂时无法读取目录覆盖范围。",
     "Checking catalog coverage…": "正在读取目录覆盖范围…",
-    "3D skyline of {n} benchmarks. Time runs left to right, lower scores sit at the front, and height is unique model-card adoption. Gold rings mark the Pareto frontier; the side wall projects score against adoption.": "{n} 个 benchmark 的三维天际线。时间从左向右，低分在前，高度表示独立模型卡采用量。金色圆环标出 Pareto 前沿，侧墙展示分数与采用量的投影。",
+    "3D skyline of {n} benchmarks. Time runs left to right from 2022. Earlier dates have a separate segment. Stems show recorded model-card adoption; hollow marks show unknown adoption or score scales. Gold rings mark the measured Pareto frontier.": "{n} 个 benchmark 的三维天际线。时间从 2022 年起向右延伸，更早的日期单独保留。细柱表示已记录的模型卡采用量；空心点表示采用量或分数刻度未知。金色圆环标出有测量依据的 Pareto 前沿。",
     // --- Brackets and chrome -------------------------------------------------
     "Skip to content": "跳到主要内容",
     "Benchmark Radar": "Benchmark 雷达日报",
@@ -4641,7 +4658,7 @@ function matchesScoreFilter(summary) {
 
 function scoreBrowseRows(board = state.data?.model_card_leaderboard) {
   return scorePopulation(state.data?.benchmark_score_progression?.benchmarks, board?.entries, state.benchmarkIndex || [])
-    .filter((row) => matchesScoreFilter(row.summary))
+    .filter((row) => (row.date === null || row.date >= SKYLINE_START_DATE) && matchesScoreFilter(row.summary))
     .sort((a, b) => (b.summary?.numeric_count || 0) - (a.summary?.numeric_count || 0)
       || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .map((row, index) => ({ ...row, rank: index + 1 }));
@@ -4660,6 +4677,8 @@ function scoreBrowseResultRow(row) {
     attrs: { type: "button", "aria-pressed": row.id === state.lfrontier ? "true" : "false" },
   }, [
     element("span", { className: "benchmark-result-name", text: `${row.rank}. ${row.name}` }),
+    element("span", { className: "benchmark-result-facts", text: `${scoreSourceLabel(row.source)} · ${row.date
+      ? `${t(row.dateBasis === "released" ? "Released" : "First LLM score reported")} ${formatDate(row.date, { dateStyle: "medium" })}` : t("Date unknown")}` }),
   ]);
   button.addEventListener("click", () => {
     selectFrontier(row.id);
@@ -4685,7 +4704,10 @@ function renderScoreSelectionNote() {
   const summary = curated ? scoreBrowserSummary(curated) : external?.score_summary;
   const known = curated || external || (state.data?.model_card_leaderboard?.entries || [])
     .some((entry) => entry.benchmark_id === state.lfrontier);
-  const outside = Boolean(state.lfrontierExplicit && known && !matchesScoreFilter(summary));
+  const item = scorePopulation(state.data?.benchmark_score_progression?.benchmarks,
+    state.data?.model_card_leaderboard?.entries, state.benchmarkIndex || []).find((row) => row.id === state.lfrontier);
+  const outside = Boolean(state.lfrontierExplicit && known && (!matchesScoreFilter(summary)
+    || (item?.date && item.date < SKYLINE_START_DATE)));
   const note = byId("frontier-filter-note");
   note.hidden = !outside;
   note.textContent = outside ? t("Outside current filter") : "";
@@ -4767,14 +4789,37 @@ function renderBenchmarkSearch() {
 }
 
 function skylineChart(model, cutoff) {
-  const geometry = skylineGeometry(model.all);
-  const { width, maximum, project, timeFraction, startYear, endYear } = geometry;
+  const geometry = skylineGeometry(model.cohort);
+  const { maximum, project, timeFraction, quarters } = geometry;
+  const datedRows = model.rows.filter((row) => row.date !== null);
+  const datedPending = model.pending.filter((row) => row.date !== null);
+  const scoreY = (score) => 580 - score * 5;
+  const scoreLayout = skylineScoreLanes(model.all.filter((row) => row.date === null && row.plotScore !== null), scoreY);
+  const undatedLeft = 1130;
+  const undatedWidth = Math.max(400, scoreLayout.lanes * 9 + 30);
+  const width = model.undated.length ? undatedLeft + undatedWidth + 30 : geometry.width;
+  const mainHeight = model.undated.length ? 640 : geometry.height;
+  const dateX = (time) => project(timeFraction(time), 0)[0];
   const pendingGroups = [
-    ["Incomplete measurements", model.pending.filter((row) => Number.isFinite(row.displayScore))],
-    ["No score reported", model.pending.filter((row) => !Number.isFinite(row.displayScore))],
+    ["Other score scales", datedPending.filter((row) => Number.isFinite(row.displayScore))],
+    ["No score reported", datedPending.filter((row) => !Number.isFinite(row.displayScore))],
+  ].filter(([, rows]) => rows.length).map(([heading, records]) => {
+    // Allocate against the unsliced cohort, so dragging the cutoff cannot move
+    // surviving benchmarks. Only Y is stacked; X always remains the exact date.
+    const candidates = model.cohort.filter((row) => row.plotScore === null
+      && Number.isFinite(row.displayScore) === Number.isFinite(records[0].displayScore));
+    const layout = skylineDateLanes(candidates, dateX);
+    const ids = new Set(records.map((row) => row.id));
+    return { heading, records, points: layout.points.filter(({ row }) => ids.has(row.id)),
+      height: 92 + layout.lanes * 12 };
+  });
+  const undatedPending = [
+    ["Other score scales", model.undated.filter((row) => row.plotScore === null && Number.isFinite(row.displayScore))],
+    ["No score reported", model.undated.filter((row) => !Number.isFinite(row.displayScore))],
   ].filter(([, rows]) => rows.length);
-  const columns = 100;
-  const height = 570 + pendingGroups.reduce((sum, [, rows]) => sum + 56 + Math.ceil(rows.length / columns) * 12, 0);
+  const unknownColumns = Math.floor(undatedWidth / 12);
+  const height = Math.max(mainHeight + pendingGroups.reduce((sum, group) => sum + group.height, 0),
+    mainHeight + undatedPending.reduce((sum, [, rows]) => sum + 70 + Math.ceil(rows.length / unknownColumns) * 12, 0));
   const points = (vertices) => vertices.map((point) => point.map((v) => v.toFixed(2)).join(",")).join(" ");
   const line = (a, b, className) => svgElement("line", {
     x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: className,
@@ -4784,13 +4829,27 @@ function skylineChart(model, cutoff) {
   }, text);
   const svg = svgElement("svg", {
     viewBox: `0 0 ${width} ${height}`, role: "group",
-    "aria-label": t("3D skyline of {n} benchmarks. Time runs left to right, lower scores sit at the front, and height is unique model-card adoption. Gold rings mark the Pareto frontier; the side wall projects score against adoption.", { n: model.visible.length }),
+    class: model.undated.length ? "skyline-has-undated" : "",
+    "aria-label": t("Benchmark Frontier: {n} individual benchmarks from all sources. Dated benchmarks run left to right from 2024. Undated benchmarks remain visible by score. Gold rings mark the measured Pareto frontier.", { n: model.visible.length }),
   });
   svg.append(svgElement("polygon", {
     class: "skyline-floor", points: points([project(0, 0), project(1, 0), project(1, 100), project(0, 100)]),
   }), svgElement("polygon", {
     class: "skyline-wall", points: points([project(0, 0), project(0, 100), project(0, 100, maximum), project(0, 0, maximum)]),
   }));
+  const adoptionUnknown = (fraction, score) => {
+    const base = project(fraction, score);
+    return [base[0], base[1] + 18];
+  };
+  if (datedRows.some((row) => row.adoption === null)) {
+    svg.append(svgElement("polygon", {
+      class: "skyline-unknown-plane", points: points([adoptionUnknown(0, 0), adoptionUnknown(1, 0),
+        adoptionUnknown(1, 100), adoptionUnknown(0, 100)]),
+    }));
+  }
+  const actualTip = (row) => row.adoption === null ? adoptionUnknown(timeFraction(row.time), row.plotScore)
+    : project(timeFraction(row.time), row.plotScore, row.adoption);
+  const caps = skylineCapPositions(model.cohort.filter((row) => row.plotScore !== null), actualTip);
   // A translucent cutting plane stays on the full 0–100 score axis.
   if (cutoff < 100) {
     svg.append(svgElement("polygon", {
@@ -4821,20 +4880,23 @@ function skylineChart(model, cutoff) {
   svg.append(line(project(0, 100), project(0, 100, maximum), "skyline-axis"),
     line(project(0, 0), project(1, 0), "skyline-axis"),
     line(project(1, 0), project(1, 100), "skyline-axis"));
-  const yearStep = Math.max(1, Math.ceil((endYear - startYear) / 7));
-  for (let year = startYear; year <= endYear; year += yearStep) {
-    const fraction = timeFraction(Date.UTC(year, 0, 1));
+  for (const { time, year, quarter } of quarters) {
+    const fraction = timeFraction(time);
     const front = project(fraction, 0);
     svg.append(line(front, project(fraction, 100), "skyline-grid"),
-      textAt([front[0], front[1] + 28], String(year)));
+      textAt([front[0], front[1] + 28], quarter === 1 ? String(year) : `Q${quarter}`,
+        quarter === 1 ? "skyline-tick skyline-year" : "skyline-quarter"));
   }
-  svg.append(textAt([650, 547], t("Released / first observed →"), "skyline-axis-title"),
-    textAt([1018, 346], t("Highest score"), "skyline-axis-title"),
-    textAt([1027, 365], t("0–100")),
-    textAt([980, 517], t("Lower scores at the front"), "skyline-tick", "end"),
+  svg.append(textAt([650, 489], t("Release date / first LLM score →"), "skyline-axis-title"),
+    textAt([1018, 290], t("Reported score"), "skyline-axis-title"),
+    textAt([1027, 310], t("0–100")),
+    textAt([980, 452], t("Lower scores at the front"), "skyline-tick", "end"),
     textAt([95, 36], t("Score × adoption"), "skyline-axis-title", "start"),
-    svgElement("text", { x: 25, y: 195, transform: "rotate(-90 25 195)",
+    svgElement("text", { x: 25, y: 175, transform: "rotate(-90 25 175)",
       class: "skyline-axis-title", "text-anchor": "middle" }, t("Unique model cards")));
+  if (datedRows.some((row) => row.adoption === null)) {
+    svg.append(textAt([555, 461], t("Hollow marks: adoption or scale unverified"), "skyline-measurement-note"));
+  }
   for (const [fraction, score, label] of [[0.28, 14, "Hard frontier"], [0.82, 12, "Emerging"], [0.72, 85, "Saturated"]]) {
     svg.append(textAt(project(fraction, score), t(label), "skyline-region"));
   }
@@ -4852,74 +4914,155 @@ function skylineChart(model, cutoff) {
   }
   const labels = [];
   const labelPositions = new Map();
-  for (const row of model.rows.filter((row) => row.pareto).sort((a, b) => a.score - b.score || a.id.localeCompare(b.id))) {
-    const tip = project(timeFraction(row.time), row.score, row.adoption);
+  for (const row of datedRows.filter((row) => row.pareto).sort((a, b) => a.score - b.score || a.id.localeCompare(b.id))) {
+    const tip = caps.get(row.id);
     const labelWidth = Math.min(245, row.name.length * 7.4);
-    const left = Math.min(width - labelWidth - 12, tip[0] + 12);
+    const left = Math.min(geometry.width - labelWidth - 12, tip[0] + 12);
     let top = tip[1] - 14;
     while (labels.some((box) => left < box.right && left + labelWidth > box.left && Math.abs(top - box.top) < 20)) top -= 22;
     labels.push({ left, right: left + labelWidth, top });
     labelPositions.set(row.id, [left, top]);
   }
   // Paint distant stems first. Identical positions retain distinct focus targets.
-  const rows = [...model.rows].sort((a, b) => b.score - a.score || a.time - b.time || a.id.localeCompare(b.id));
+  const rows = [...datedRows].sort((a, b) => b.plotScore - a.plotScore || a.time - b.time || a.id.localeCompare(b.id));
   const labelLayer = svgElement("g", { class: "skyline-labels", "aria-hidden": "true" });
   for (const row of rows) {
     const x = timeFraction(row.time);
-    const foot = project(x, row.score);
-    const tip = project(x, row.score, row.adoption);
-    const wall = project(0, row.score, row.adoption);
-    const label = labelPositions.get(row.id) || [Math.min(width - 255, tip[0] + 12), tip[1] - 14];
+    const foot = project(x, row.plotScore);
+    const measured = row.adoption !== null;
+    const tip = actualTip(row);
+    const cap = caps.get(row.id);
+    const comparable = row.score !== null && measured;
+    const scoreLabel = row.score === null ? t("Source-reported score") : t("Highest score");
+    const label = labelPositions.get(row.id) || [Math.min(geometry.width - 255, cap[0] + 12), cap[1] - 14];
     const group = svgElement("g", {
-      class: `skyline-point skyline-domain-${row.domain.toLowerCase()}${row.pareto ? " is-pareto" : ""}`,
+      class: `skyline-point skyline-domain-${row.domain.toLowerCase()}${row.pareto ? " is-pareto" : ""}${!measured || row.score === null ? " is-unverified" : ""}`,
       tabindex: "0", role: "button", "aria-pressed": "false", "data-frontier-point": "", "data-benchmark-id": row.id,
-      "aria-label": `${row.name}. ${t("Highest score")}: ${row.score.toLocaleString("en", { maximumFractionDigits: 2 })}. ${metricLabel(row.adoption, "model card")}. ${t(row.dateBasis === "released" ? "Released" : "First observed")}: ${row.date}. ${row.pareto ? t("Pareto frontier") : ""}`,
+      "data-score-basis": row.score === null ? "source-reported" : "normalized",
+      "data-adoption": measured ? row.adoption : "unknown",
+      "data-benchmark-date": row.date, "data-date-basis": row.dateBasis,
+      "aria-label": `${row.name}. ${scoreLabel}: ${row.plotScore.toLocaleString("en", { maximumFractionDigits: 2 })}. ${measured ? metricLabel(row.adoption, "model card") : t("Adoption not recorded")}. ${t(row.dateBasis === "released" ? "Released" : "First LLM score reported")}: ${row.date}. ${row.pareto ? t("Pareto frontier") : ""}`,
     });
-    group.append(line(tip, wall, "skyline-guide"),
-      svgElement("circle", { cx: wall[0], cy: wall[1], r: 6, class: "skyline-guide-tip" }),
-      line(foot, tip, "skyline-stem skyline-mark"),
-      svgElement("circle", { cx: foot[0], cy: foot[1], r: 2, class: "skyline-foot skyline-mark" }),
-      svgElement("circle", { cx: tip[0], cy: tip[1], r: 5, class: "skyline-cap skyline-mark", "data-frontier-anchor": "" }),
-      svgElement("circle", { cx: tip[0], cy: tip[1], r: 10, class: "skyline-ring" }));
+    const dateFoot = project(x, 0);
+    group.append(line(tip, foot, "skyline-date-guide"), line(foot, dateFoot, "skyline-date-guide"),
+      textAt([dateFoot[0], dateFoot[1] + 48], row.date, "skyline-date-label"));
+    if (comparable) {
+      const wall = project(0, row.score, row.adoption);
+      group.append(line(tip, wall, "skyline-guide"),
+        svgElement("circle", { cx: wall[0], cy: wall[1], r: 6, class: "skyline-guide-tip" }));
+    }
+    if (measured) group.append(line(foot, tip, "skyline-stem skyline-mark"),
+      svgElement("circle", { cx: foot[0], cy: foot[1], r: 2, class: "skyline-foot skyline-mark" }));
+    if (Math.hypot(cap[0] - tip[0], cap[1] - tip[1]) > .01) group.append(
+      line(tip, cap, "skyline-cap-connector skyline-mark"),
+      svgElement("circle", { cx: tip[0], cy: tip[1], r: 1.8, class: "skyline-foot skyline-mark" }));
+    group.append(svgElement("circle", { cx: cap[0], cy: cap[1], r: measured ? 5 : 3.6, class: "skyline-cap skyline-mark", "data-frontier-anchor": "" }),
+      svgElement("circle", { cx: cap[0], cy: cap[1], r: 10, class: "skyline-ring" }));
     const name = textAt(label, shorten(row.name, 34), "skyline-label", "start");
-    const leader = line(tip, [label[0] - 3, label[1] - 4], "skyline-label-leader");
+    const leader = line(cap, [label[0] - 3, label[1] - 4], "skyline-label-leader");
     if (row.pareto) labelLayer.append(leader, name);
     else group.append(name);
     makeFrontierPointInteractive(group, {
-      kind: row.pareto ? t("Pareto frontier") : t("Benchmark"), title: row.name,
+      kind: row.pareto ? t("Pareto frontier") : scoreSourceLabel(row.source), title: row.name,
       rows: [
-        { label: t("Highest score"), value: `${row.score.toLocaleString("en", { maximumFractionDigits: 2 })} / 100` },
+        { label: scoreLabel, value: `${row.plotScore.toLocaleString("en", { maximumFractionDigits: 2 })}${row.score === null ? "" : " / 100"}` },
+        ...(row.score === null ? [
+          { label: t("Score scale"), value: t("Not verified for comparison") },
+          { label: t("Original score"), value: String(row.rawScore) },
+        ] : []),
         ...(row.inverted ? [{ label: t("Original score"), value: `${row.rawScore}% · ${t("lower is better")}` }] : []),
-        { label: t("Unique model cards"), value: String(row.adoption) },
-        { label: t(row.dateBasis === "released" ? "Released" : "First observed"), value: formatDate(row.date) },
+        { label: t("Unique model cards"), value: measured ? String(row.adoption) : t("Not recorded") },
+        { label: t(row.dateBasis === "released" ? "Released" : "First LLM score reported"), value: formatDate(row.date) },
         { label: t("Domain"), value: t(row.domain) },
-        { label: t("Metric"), value: row.metric || t("Unknown") },
-        { label: t("Instrument"), value: row.instrument || t("Unknown") },
-        { label: t("Protocol"), value: row.protocol || t("Unknown") },
-        { label: t("Score reported"), value: row.reportedAt ? formatDate(row.reportedAt) : t("Unknown") },
-        { label: t("Source"), value: row.sourceId || t("Unknown") },
+        ...(comparable ? [
+          { label: t("Metric"), value: row.metric || t("Unknown") },
+          { label: t("Instrument"), value: row.instrument || t("Unknown") },
+          { label: t("Protocol"), value: row.protocol || t("Unknown") },
+          { label: t("Score reported"), value: row.reportedAt ? formatDate(row.reportedAt) : t("Unknown") },
+        ] : []),
+        { label: t("Source"), value: row.sourceId || scoreSourceLabel(row.source) },
       ], url: row.sourceUrl,
     });
     svg.append(group);
   }
   svg.append(labelLayer);
-  // Every record that cannot occupy the numeric axes gets its own mark here.
-  // These are not bars of height zero: adoption and score stay null in data.
-  let pendingY = 582;
-  for (const [heading, records] of pendingGroups) {
+  // Missing dates never hide a scored benchmark. This score profile is part
+  // of the main SVG, visible by default; horizontal spacing makes no date claim.
+  const undatedMark = (row, x, y, scored) => {
+    const group = svgElement("g", {
+      class: `${scored ? "skyline-point is-unverified" : "skyline-pending-point"} skyline-undated-point skyline-domain-${row.domain.toLowerCase()}`,
+      tabindex: "0", role: "button", "aria-pressed": "false", "data-frontier-point": "", "data-benchmark-id": row.id,
+      "data-date-basis": "unknown", "data-score-basis": row.score === null ? "source-reported" : "normalized",
+      "data-adoption": row.adoption === null ? "unknown" : row.adoption,
+      "aria-label": `${row.name}. ${t("Date unknown")}. ${scoreSourceLabel(row.source)}. ${scored ? `${t("Highest score")}: ${row.plotScore}` : t("No comparable score")}.`,
+    });
+    group.append(svgElement("circle", { cx: x, cy: y, r: 3.5,
+      class: scored ? "skyline-cap skyline-mark" : "skyline-pending-cap", "data-frontier-anchor": "" }),
+    textAt([Math.min(width - 245, x + 10), y - 12], shorten(row.name, 34), "skyline-label", "start"));
+    makeFrontierPointInteractive(group, {
+      kind: scoreSourceLabel(row.source), title: row.name,
+      rows: [
+        { label: t("Highest score"), value: Number.isFinite(row.displayScore)
+          ? `${row.displayScore.toLocaleString("en", { maximumFractionDigits: 2 })}${row.summary?.unit === "percent" ? "%" : ""}` : t("No score reported") },
+        { label: t("Benchmark date"), value: t("Not recorded") },
+        { label: t("Unique model cards"), value: row.adoption === null ? t("Not recorded") : String(row.adoption) },
+        { label: t("Score scale"), value: row.score === null ? t("Not verified for comparison") : "0–100" },
+        ...(Number.isFinite(row.rawScore) ? [{ label: t("Original score"), value: String(row.rawScore) }] : []),
+        { label: t("Domain"), value: t(row.domain) },
+      ], url: row.sourceUrl,
+    });
+    return group;
+  };
+  if (model.undated.length) {
+    svg.append(line([undatedLeft - 40, 22], [undatedLeft - 40, height - 20], "skyline-panel-divider"),
+      textAt([undatedLeft, 34], t("Date unknown · {n} benchmarks", { n: model.undated.length.toLocaleString() }), "skyline-axis-title", "start"),
+      textAt([undatedLeft, 57], t("Each dot is a benchmark; scores keep their position"), "skyline-measurement-note", "start"));
+    for (let score = 0; score <= 100; score += 20) {
+      svg.append(line([undatedLeft, scoreY(score)], [undatedLeft + undatedWidth, scoreY(score)], "skyline-grid"),
+        textAt([undatedLeft - 10, scoreY(score) + 4], String(score), "skyline-quarter", "end"));
+    }
+    if (cutoff < 100) svg.append(line([undatedLeft, scoreY(cutoff)], [undatedLeft + undatedWidth, scoreY(cutoff)], "skyline-slice-edge"),
+      textAt([undatedLeft + undatedWidth, scoreY(cutoff) - 9], `< ${cutoff}`, "skyline-slice-label", "end"));
+    const ids = new Set(model.undated.map((row) => row.id));
+    for (const { row, y, lane } of scoreLayout.points) {
+      if (!ids.has(row.id)) continue;
+      const offset = lane === 0 ? 0 : Math.ceil(lane / 2) * (lane % 2 ? 1 : -1) * 9;
+      svg.append(undatedMark(row, undatedLeft + undatedWidth / 2 + offset, y, true));
+    }
+    svg.append(textAt([undatedLeft + undatedWidth / 2, 613], t("Highest reported score · 0–100"), "skyline-axis-title"));
+    let unknownY = mainHeight;
+    for (const [heading, records] of undatedPending) {
+      svg.append(textAt([undatedLeft, unknownY], `${t(heading)} · ${records.length.toLocaleString()}`, "skyline-axis-title", "start"));
+      records.sort((a, b) => a.id.localeCompare(b.id)).forEach((row, index) =>
+        svg.append(undatedMark(row, undatedLeft + 6 + index % unknownColumns * 12,
+          unknownY + 25 + Math.floor(index / unknownColumns) * 12, false)));
+      unknownY += 70 + Math.ceil(records.length / unknownColumns) * 12;
+    }
+  }
+  // One dot per benchmark at its exact date; stacked dots share nearby dates,
+  // never a fabricated score. No alphabetical packing into calendar bins.
+  let pendingY = mainHeight;
+  for (const { heading, records, points: datedPoints, height: groupHeight } of pendingGroups) {
     svg.append(textAt([45, pendingY], `${t(heading)} · ${records.length.toLocaleString()}`, "skyline-axis-title", "start"));
-    svg.append(line([45, pendingY + 12], [1060, pendingY + 12], "skyline-grid"));
-    records.forEach((row, index) => {
-      const cx = 50 + (index % columns) * 10.1;
-      const cy = pendingY + 28 + Math.floor(index / columns) * 12;
+    svg.append(textAt([45, pendingY + 22], t("Exact dates; nearby benchmarks stack vertically"), "skyline-measurement-note", "start"));
+    for (const { time, year, quarter } of quarters) {
+      const x = dateX(time);
+      svg.append(line([x, pendingY + 57], [x, pendingY + groupHeight - 28], "skyline-grid"),
+        textAt([x, pendingY + 49], quarter === 1 ? String(year) : `Q${quarter}`,
+          quarter === 1 ? "skyline-tick skyline-year" : "skyline-quarter"));
+    }
+    for (const { row, x: cx, lane } of datedPoints) {
+      const cy = pendingY + 67 + lane * 12;
       const group = svgElement("g", {
         class: `skyline-pending-point skyline-domain-${row.domain.toLowerCase()}${row.pareto ? " is-pareto" : ""}`,
         tabindex: "0", role: "button", "aria-pressed": "false", "data-frontier-point": "", "data-benchmark-id": row.id,
-        "aria-label": `${row.name}. ${scoreSourceLabel(row.source)}. ${t(heading)}.`,
+        "data-benchmark-date": row.date, "data-date-basis": row.dateBasis,
+        "aria-label": `${row.name}. ${row.date}. ${scoreSourceLabel(row.source)}. ${t(heading)}.`,
       });
       group.append(svgElement("circle", {
-        cx, cy, r: 3.7, class: "skyline-pending-cap", "data-frontier-anchor": "",
-      }));
+        cx, cy, r: 4, class: "skyline-pending-cap", "data-frontier-anchor": "",
+      }), line([cx, cy], [cx, pendingY + 55], "skyline-date-guide"),
+      textAt([Math.min(width - 255, cx + 12), cy - 10], shorten(row.name, 34), "skyline-label", "start"));
       if (row.pareto) group.append(svgElement("circle", { cx, cy, r: 6, class: "skyline-ring" }));
       makeFrontierPointInteractive(group, {
         kind: scoreSourceLabel(row.source), title: row.name,
@@ -4928,13 +5071,13 @@ function skylineChart(model, cutoff) {
             ? `${row.displayScore.toLocaleString("en", { maximumFractionDigits: 2 })}${row.summary?.unit === "percent" ? "%" : ""}` : t("No score reported") },
           { label: t("Unique model cards"), value: row.adoption === null ? t("Not recorded") : String(row.adoption) },
           { label: t("Score scale"), value: row.score === null ? t("Not verified for comparison") : "0–100" },
-          { label: t(row.dateBasis === "released" ? "Released" : "First observed"), value: row.date ? formatDate(row.date) : t("Not recorded") },
+          { label: t(row.dateBasis === "released" ? "Released" : "First LLM score reported"), value: formatDate(row.date) },
           { label: t("Domain"), value: t(row.domain) },
         ], url: row.sourceUrl,
       });
       svg.append(group);
-    });
-    pendingY += 56 + Math.ceil(records.length / columns) * 12;
+    }
+    pendingY += groupHeight;
   }
   return svg;
 }
@@ -4945,11 +5088,14 @@ function skylineLegend() {
       className: `skyline-domain-${domain.toLowerCase()}`,
     }, [element("span", { className: "skyline-swatch", attrs: { "aria-hidden": "true" } }), element("span", { text: t(domain) })])),
     element("li", {}, [element("span", { className: "skyline-swatch skyline-swatch-pareto", attrs: { "aria-hidden": "true" } }), element("span", { text: t("Pareto frontier") })]),
+    element("li", {}, [element("span", { className: "skyline-swatch skyline-swatch-unknown", attrs: { "aria-hidden": "true" } }), element("span", { text: t("Adoption or scale unverified") })]),
   ]);
 }
 
 function enableSkylineKeyboard(svg) {
-  const points = [...svg.querySelectorAll("[data-frontier-point]")];
+  const points = [...svg.querySelectorAll("[data-frontier-point]")].sort((a, b) =>
+    (a.getAttribute("data-benchmark-date") || "9999").localeCompare(b.getAttribute("data-benchmark-date") || "9999")
+    || a.getAttribute("data-benchmark-id").localeCompare(b.getAttribute("data-benchmark-id")));
   points.forEach((point, index) => point.setAttribute("tabindex", index === 0 ? "0" : "-1"));
   svg.addEventListener("focusin", (event) => {
     const active = event.target.closest("[data-frontier-point]");
@@ -4994,20 +5140,23 @@ function renderBenchmarkSkyline(cutoff = state.lscore) {
   const model = skylineModel(benchmarks, entries, state.benchmarkIndex || [], cutoff,
     benchmarkQueryIds(state.data.model_card_leaderboard));
   const svg = skylineChart(model, cutoff);
-  const contents = [svg, skylineLegend()];
+  const sourceCounts = [...new Set(model.all.map((row) => row.source))].map((source) =>
+    `${scoreSourceLabel(source)}: ${model.visible.filter((row) => row.source === source).length.toLocaleString()}`);
+  const contents = [skylineLegend(), element("p", { className: "skyline-source-coverage", text: sourceCounts.join(" · ") }), svg];
   if (!model.visible.length) contents.push(element("p", { className: "empty-state skyline-empty", text: t("No benchmarks match these filters.") }));
+  contents.push(element("p", { className: "skyline-source-coverage", text: t("Pareto: {p} of {n} benchmarks with comparable score scales and recorded adoption.", {
+    p: model.comparable.filter((row) => row.pareto).length, n: model.comparable.length,
+  }) }));
   contents.push(frontierTooltip());
   replaceChildren(host, contents);
   enableFrontierTouchTargets(svg);
   enableSkylineKeyboard(svg);
-  byId("benchmark-skyline-count").textContent = t("{n} benchmarks · {s} sources", {
-    n: model.population.toLocaleString(), s: model.sources,
+  byId("benchmark-skyline-count").textContent = t("{visible} of {n} benchmarks shown · {s} sources", {
+    visible: model.visible.length.toLocaleString(), n: model.population.toLocaleString(), s: model.sources,
   });
-  const coverage = [t("{visible} visible · {scored} with scores · {unknown} without scores · {hidden} hidden by filters", {
-    visible: model.visible.length.toLocaleString(), scored: (model.visible.length - model.unscored).toLocaleString(),
-    unknown: model.unscored.toLocaleString(), hidden: model.hidden.toLocaleString(),
-  }), t("Pareto: {p} of {n} benchmarks with comparable score scales and recorded adoption.", {
-    p: model.comparable.filter((row) => row.pareto).length, n: model.comparable.length,
+  const coverage = [t("{scored} with scores · {unscored} without scores · {older} before 2024 · {hidden} hidden by score or search", {
+    scored: (model.visible.length - model.unscored).toLocaleString(), unscored: model.unscored.toLocaleString(),
+    older: model.beforeStart.toLocaleString(), hidden: (model.hidden - model.beforeStart).toLocaleString(),
   })];
   byId("benchmark-skyline-note").textContent = coverage.join(". ");
 }

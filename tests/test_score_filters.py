@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from benchmark_radar.app_seeds import _display_value, _score_browser_seed
+from benchmark_radar.app_seeds import _benchmark_date, _display_value, _score_browser_seed
 from benchmark_radar.score_summary import score_summary
 
 
@@ -170,3 +170,66 @@ def test_seed_and_browser_format_scores_identically():
     )
     result = subprocess.run([node, "-e", script], check=True, capture_output=True, text=True)
     assert json.loads(result.stdout) == [_display_value(value) for value in values]
+
+
+def test_seed_uses_release_then_earliest_score_and_applies_inclusive_2024_cutoff():
+    assert _benchmark_date({"released": "2025-01-01", "first_reported_at": "2023-01-01"}) == (
+        "2025-01-01",
+        "Released",
+    )
+    assert _benchmark_date(
+        {
+            "released": "2025-02-29",
+            "observations": [
+                {"value": 40, "reported_at": "2025-03-01"},
+                {"value": 30, "reported_at": "2024-01-01"},
+                {
+                    "value": 30,
+                    "reported_date": "2019-01-01",
+                    "date_precision": "model_announcement",
+                },
+                {"value": None, "reported_at": "2020-01-01"},
+            ],
+        }
+    ) == ("2024-01-01", "First LLM score reported")
+    assert _benchmark_date(
+        {"collected_at": "2026-08-17", "first_observed": "2026-08-17"},
+        {"adopters": [{"published": "2025-01-01"}]},
+    ) == (None, None)
+    index = [
+        {
+            "slug": "old",
+            "name": "Old release",
+            "source": "llm_stats",
+            "released": "2023-12-31",
+            "first_score_reported_at": "2025-01-01",
+        },
+        {
+            "slug": "old-score",
+            "name": "Old score",
+            "source": "llm_stats",
+            "first_score_reported_at": "2023-12-31",
+        },
+        {
+            "slug": "boundary",
+            "name": "Boundary release",
+            "source": "llm_stats",
+            "released": "2024-01-01",
+        },
+        {
+            "slug": "fallback",
+            "name": "Dated score",
+            "source": "llm_stats",
+            "first_score_reported_at": "2024-01-01",
+        },
+        {"slug": "unknown", "name": "Undated evidence", "source": "llm_stats"},
+    ]
+    markup = "".join(_score_browser_seed({}, index).values())
+    assert "Old release" not in markup
+    assert "Old score" not in markup
+    assert "Boundary release" in markup
+    assert "Dated score" in markup
+    assert "First LLM score reported Jan 1, 2024" in markup
+    assert "Undated evidence" in markup
+    assert "Date unknown" in markup
+    assert "3 of 3 matches" in markup

@@ -5092,7 +5092,9 @@ dialog {
 .skyline-subtitle { margin: .15rem 0 0; color: var(--muted); font-size: 1rem; }
 .skyline-count { color: #876014; font-size: .9rem; font-weight: 600; white-space: nowrap; }
 .skyline-chart { overflow-x: auto; margin-top: .5rem; }
-.skyline-chart svg { display: block; width: 100%; min-width: 960px; max-width: none; }
+.skyline-chart svg { display: block; width: 100%; min-width: 960px; max-width: 1110px; margin: 0 auto; }
+.skyline-chart svg.skyline-has-undated { min-width: 1320px; max-width: 1660px; }
+.skyline-panel-divider { stroke: var(--edge); stroke-width: 1; }
 .skyline-chart:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 .skyline-note { font-size: .875rem; color: var(--muted); margin: .65rem 0; max-width: 95ch; }
 .skyline-method { font-size: .875rem; color: var(--muted); max-width: 95ch; }
@@ -5103,11 +5105,15 @@ dialog {
 .skyline-grid { stroke: #b7c6ce; stroke-width: .7; opacity: .5; }
 .skyline-axis { stroke: var(--muted); stroke-width: 1; }
 .skyline-tick { fill: var(--muted); font-size: 16px; }
+.skyline-year { font-weight: 600; fill: var(--ink); }
+.skyline-quarter { fill: var(--muted); font-size: 12px; }
+.skyline-measurement-note { fill: var(--muted); font-size: 13px; }
 .skyline-axis-title { fill: var(--ink); font-size: 16px; font-weight: 500; }
 .skyline-region { fill: var(--muted); opacity: .5; font-size: 17px; font-style: italic; pointer-events: none; }
 .skyline-slice { fill: var(--blue); fill-opacity: .025; stroke: var(--blue); stroke-opacity: .18; stroke-dasharray: 4 6; }
 .skyline-slice-edge { stroke: var(--blue); stroke-width: 1; stroke-dasharray: 4 6; opacity: .6; }
 .skyline-slice-label { fill: var(--blue); font-size: 16px; }
+.skyline-unknown-plane { fill: #f7f9fa; fill-opacity: .4; stroke: #879ca9; stroke-width: 1; stroke-dasharray: 3 5; }
 .skyline-domain-code { --skyline-color: #255ea8; }
 .skyline-domain-science { --skyline-color: #28796d; }
 .skyline-domain-agent { --skyline-color: #c95532; }
@@ -5123,8 +5129,10 @@ dialog {
 .skyline-point:focus { outline: none; }
 .skyline-mark { opacity: .3; }
 .skyline-stem { stroke: var(--skyline-color); stroke-width: 2.5; stroke-linecap: round; }
+.skyline-cap-connector { stroke: var(--skyline-color); stroke-width: 1; }
 .skyline-cap, .skyline-foot { fill: var(--skyline-color); }
 .skyline-cap { stroke: var(--panel); stroke-width: 1; }
+.skyline-point.is-unverified .skyline-cap { fill: var(--panel); stroke: var(--skyline-color); stroke-width: 1.5; opacity: .75; }
 .skyline-point.is-pareto .skyline-mark,
 .skyline-point:hover .skyline-mark,
 .skyline-point:focus .skyline-mark,
@@ -5144,7 +5152,11 @@ dialog {
 .skyline-labels { pointer-events: none; }
 .skyline-label { font-size: 16px; font-weight: 600; fill: var(--ink); stroke: var(--panel); stroke-width: 4; paint-order: stroke; pointer-events: none; }
 .skyline-label-leader { stroke: #b57d18; stroke-width: 1; opacity: .6; }
-.skyline-point .skyline-label { display: none; }
+.skyline-point .skyline-label, .skyline-pending-point .skyline-label { display: none; }
+.skyline-date-guide { display: none; stroke: var(--skyline-color); stroke-width: 1; stroke-dasharray: 3 4; pointer-events: none; }
+.skyline-date-label { display: none; fill: var(--ink); font-size: 13px; font-weight: 600; }
+.skyline-point:is(:hover, :focus, .is-selected) :is(.skyline-date-guide, .skyline-date-label),
+.skyline-pending-point:is(:hover, :focus, .is-selected) :is(.skyline-date-guide, .skyline-label) { display: inline; }
 .skyline-point:hover .skyline-label,
 .skyline-point:focus .skyline-label,
 .skyline-point.is-selected .skyline-label,
@@ -5158,6 +5170,8 @@ dialog {
 .skyline-legend li { display: flex; align-items: center; gap: .4rem; }
 .skyline-swatch { width: .6rem; height: .6rem; border-radius: 50%; background: var(--skyline-color); }
 .skyline-swatch-pareto { background: transparent; border: 2px solid #b57d18; width: .8rem; height: .8rem; }
+.skyline-swatch-unknown { background: var(--panel); border: 1.5px solid var(--muted); }
+.skyline-source-coverage { margin: .25rem 0 .7rem; color: var(--muted); font-size: .8rem; }
 .skyline-empty { margin: .5rem 0; }
 @media (max-width: 640px) {
   .skyline-heading { align-items: flex-start; flex-direction: column; gap: .2rem; }

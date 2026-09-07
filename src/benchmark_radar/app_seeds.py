@@ -18,6 +18,7 @@ one side has an obvious counterpart on the other.
 from __future__ import annotations
 
 import math
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -193,6 +194,33 @@ def _browser_score_summary(record: dict[str, Any]) -> dict[str, Any] | None:
     return summary
 
 
+def _benchmark_date(
+    record: dict[str, Any], entry: dict[str, Any] | None = None
+) -> tuple[str | None, str | None]:
+    """Mirror skyline.js benchmarkDate: release, then first numeric LLM report."""
+
+    def valid(value: Any) -> bool:
+        try:
+            return isinstance(value, str) and date.fromisoformat(value).isoformat() == value
+        except ValueError:
+            return False
+
+    for released in [(entry or {}).get("released"), record.get("released")]:
+        if valid(released):
+            return released, "Released"
+    reports = [record.get("first_reported_at"), record.get("first_score_reported_at")]
+    reports += [
+        row.get("reported_at") or row.get("reported_date")
+        for row in record.get("observations") or []
+        if isinstance(row.get("value"), (int, float))
+        and not isinstance(row["value"], bool)
+        and math.isfinite(row["value"])
+        and row.get("date_precision") not in {"model_announcement", "crawl"}
+    ]
+    first = min((value for value in reports if valid(value)), default=None)
+    return first, "First LLM score reported" if first else None
+
+
 def _score_browser_seed(
     dashboard: dict[str, Any], external_index: list[dict[str, Any]]
 ) -> dict[str, str]:
@@ -210,6 +238,7 @@ def _score_browser_seed(
             "name": named.get(benchmark_id, {}).get("name") or benchmark_id,
             "source": "curated",
             "summary": _browser_score_summary(record),
+            "date": _benchmark_date(record, named.get(benchmark_id)),
         }
         for benchmark_id, record in progression.items()
     ] + [
@@ -218,15 +247,19 @@ def _score_browser_seed(
             "name": record["name"],
             "source": record["source"],
             "summary": record.get("score_summary"),
+            "date": _benchmark_date(record),
         }
         for record in external_index
     ]
     rows = [
         row
         for row in rows
-        if not (row["summary"] or {}).get("numeric_count")
-        or (row["summary"] or {}).get("display_max") is None
-        or row["summary"]["display_max"] < DEFAULT_SCORE_CUTOFF
+        if (row["date"][0] is None or row["date"][0] >= "2024-01-01")
+        and (
+            not (row["summary"] or {}).get("numeric_count")
+            or (row["summary"] or {}).get("display_max") is None
+            or row["summary"]["display_max"] < DEFAULT_SCORE_CUTOFF
+        )
     ]
     rows.sort(key=lambda row: (-(row["summary"] or {}).get("numeric_count", 0), row["id"]))
     shown = rows[:50]
@@ -252,6 +285,8 @@ def _score_browser_seed(
         factor = " · raw score ×100" if summary.get("display_multiplier") == 100 else ""
         highest = f"Highest {value}{suffix}{factor}" if value is not None else "No score reported"
         label = names.get(row["source"], row["source"])
+        dated, basis = row["date"]
+        date_label = f"{basis} {_medium_date(dated)}" if dated else "Date unknown"
         count = (
             _metric_label(summary["numeric_count"], "data point")
             if summary.get("numeric_count")
@@ -262,8 +297,8 @@ def _score_browser_seed(
             '<button class="benchmark-result score-browse-result" '
             f'type="button" aria-pressed="{pressed}">'
             f'<span class="benchmark-result-name">{rank}. {esc(row["name"])}</span>'
-            f'<span class="benchmark-result-facts">{esc(count + " · " + label)}</span>'
-            f'<span class="benchmark-result-facts">{esc(highest)}</span></button>'
+            f'<span class="benchmark-result-facts">{esc(label + " · " + date_label)}</span>'
+            "</button>"
         )
         if rank <= 5:
             maximum = (shown[0]["summary"] or {}).get("numeric_count") or 1
