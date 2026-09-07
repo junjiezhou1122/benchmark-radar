@@ -35,6 +35,7 @@ crawler is lying to one of them.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -335,7 +336,13 @@ def write_app_pages(
     seo = load_view_seo(app_js)
     utility_seo = load_utility_seo(app_js)
     palette = load_category_colors(site_dir / "assets" / "glyphs.js")
-    seeds = view_seeds(dashboard, palette)
+    index_path = site_dir / "data" / "benchmark-index.json"
+    external_index = (
+        json.loads(index_path.read_text(encoding="utf-8"))["benchmarks"]
+        if index_path.exists()
+        else []
+    )
+    seeds = view_seeds(dashboard, palette, external_index)
     dialog_seeds = utility_seeds(dashboard)
     written: list[Path] = []
     published: list[str] = []

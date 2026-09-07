@@ -400,12 +400,14 @@
         <div class="content-grid">
           <div>
             <div class="section-title">
-              <h1 class="today-heading" data-i18n="Today's radar">Today's radar</h1>
+              <h1 id="today-heading" class="today-heading" data-i18n="Today's radar">Today's radar</h1>
               <div class="results-meta" aria-live="polite">
                 <span id="today-breakdown"></span>
                 <span id="today-sort"></span>
               </div>
             </div>
+            <p id="today-range" class="section-note" hidden></p>
+            <p id="today-load-error" class="empty-state" role="status" hidden></p>
             <!-- Search is archive-wide by default even though browsing opens
                  on the newest scan. This first result row makes that scope
                  explicit and gives large result sets a practical export path. -->
@@ -469,32 +471,29 @@
       </section>
 
       <section class="view" id="leaderboard-view" aria-labelledby="leaderboard-heading" hidden>
-        <!-- One title, not three. "Which benchmarks do model cards report?",
-             "How many curated model cards report each benchmark..." and "Most
-             reported in model cards" were the same sentence written three ways,
-             stacked above the figure. This heading is the view's accessible
-             name, and the (i) beside it carries the caveat. -->
-        <section class="leaderboard-top" aria-labelledby="leaderboard-heading">
-          <div class="leaderboard-top-heading">
-            <h1 id="leaderboard-heading" data-i18n="Most reported benchmarks in model cards">Most reported benchmarks in model cards</h1>
-            <span id="leaderboard-top-info"></span>
-            <!-- Written but not shown: the visible copy is in the (i). A screen
-                 reader announces it with the heading. -->
-            <p class="leaderboard-deck visually-hidden" id="leaderboard-measures"></p>
-          </div>
+        <div class="score-browse-header">
+          <h1 id="leaderboard-heading" data-i18n="Reported benchmark scores">Reported benchmark scores</h1>
+          <label class="score-filter">
+            <span data-i18n="Show">Show</span>
+            <select id="leaderboard-score-filter" name="lscore">
+              <option value="under70" data-i18n="Highest reported score <70">Highest reported score &lt;70</option>
+              <option value="under100" data-i18n="Highest reported score <100">Highest reported score &lt;100</option>
+              <option value="all" data-i18n="All scored">All scored</option>
+            </select>
+          </label>
+        </div>
+        <p id="leaderboard-score-note" class="section-note score-filter-note" data-i18n="Below 70 on the displayed scale; scoring systems and test conditions differ.">Below 70 on the displayed scale; scoring systems and test conditions differ.</p>
+
+        <section class="score-ranking leaderboard-top" aria-label="Ranked by data points" data-i18n-aria="Ranked by data points">
+          <p class="section-note" data-i18n="Ranked by the number of recorded numeric scores, regardless of source. Counts describe evidence coverage, not benchmark quality.">Ranked by the number of recorded numeric scores, regardless of source. Counts describe evidence coverage, not benchmark quality.</p>
           <div class="leaderboard-top-columns" aria-hidden="true">
             <span class="leaderboard-top-columns-rank" data-i18n="Rank">Rank</span>
             <span class="leaderboard-top-columns-name" data-i18n="Benchmark">Benchmark</span>
-            <span class="leaderboard-top-columns-count" data-i18n="leaderboard.column.model_cards">Model cards</span>
+            <span class="leaderboard-top-columns-count" data-i18n="Data points">Data points</span>
           </div>
-          <ol class="leaderboard-top-list" id="leaderboard-top-list"></ol>
-          <button
-            class="leaderboard-top-more"
-            id="leaderboard-top-more"
-            type="button"
-            aria-label="Show more ranked benchmarks"
-            hidden
-          >Show more ranked benchmarks</button>
+          <ol class="leaderboard-top-list" id="score-ranking-list"></ol>
+          <p id="score-ranking-empty" class="empty-state" data-i18n="No scored benchmarks match these filters." hidden>No scored benchmarks match these filters.</p>
+          <button id="score-ranking-more" class="leaderboard-top-more" type="button" data-i18n="Show more" hidden>Show more</button>
         </section>
 
         <div class="benchmark-workbench">
@@ -506,7 +505,7 @@
             <div class="benchmark-search">
               <h2 class="benchmark-search-label" id="benchmark-search-heading">
                 <label for="benchmark-search-input"
-                       data-i18n="Search every benchmark">Search every benchmark</label>
+                       data-i18n="Browse scored benchmarks">Browse scored benchmarks</label>
               </h2>
               <input id="benchmark-search-input" type="search" autocomplete="off"
                      class="benchmark-search-input"
@@ -514,17 +513,12 @@
                      placeholder="Search benchmarks, tasks, domains…" />
               <p id="benchmark-search-status" class="benchmark-search-status"></p>
               <div id="benchmark-search-results"></div>
-              <!-- "Most reported" alone invited the reading that AIME 2025 with 115
-                   crawled scores should outrank GPQA Diamond with 26 model cards
-                   (issue #269). They are different measures: this list ranks by
-                   how many curated model cards report a benchmark, which is the
-                   reading this registry is built to make, and a crawled score
-                   count answers a different question entirely. -->
-              <div class="benchmark-example-heading">
+              <button id="benchmark-search-more" class="clear-button" type="button" data-i18n="Show more" hidden>Show more</button>
+              <div class="benchmark-example-heading" hidden>
                 <p class="benchmark-example-lead" data-i18n="Jump to a benchmark">Jump to a benchmark</p>
                 <span id="benchmark-example-info"></span>
               </div>
-              <div id="benchmark-shortlist" class="benchmark-shortlist"></div>
+              <div id="benchmark-shortlist" class="benchmark-shortlist" hidden></div>
             </div>
           </aside>
 
@@ -562,6 +556,8 @@
                 </label>
               </div>
             </div>
+            <p id="frontier-filter-note" class="section-note" role="status" hidden></p>
+            <p id="frontier-highest-score" class="section-note" hidden></p>
             <div class="frontier-external" id="frontier-external" hidden></div>
             <div class="frontier-chart" id="frontier-chart"></div>
             <!-- Legend below the figure it explains: above it, it pushed the
@@ -595,6 +591,30 @@
           </section>
         </div>
 
+        <section class="leaderboard-top" aria-labelledby="leaderboard-adoption-heading">
+          <div class="leaderboard-top-heading">
+            <h2 id="leaderboard-adoption-heading" data-i18n="Most reported benchmarks in model cards">Most reported benchmarks in model cards</h2>
+            <span id="leaderboard-top-info"></span>
+            <!-- Written but not shown: the visible copy is in the (i). A screen
+                 reader announces it with the heading. -->
+            <p class="leaderboard-deck visually-hidden" id="leaderboard-measures"></p>
+          </div>
+          <div class="leaderboard-top-columns" aria-hidden="true">
+            <span class="leaderboard-top-columns-rank" data-i18n="Rank">Rank</span>
+            <span class="leaderboard-top-columns-name" data-i18n="Benchmark">Benchmark</span>
+            <span class="leaderboard-top-columns-count" data-i18n="leaderboard.column.model_cards">Model cards</span>
+          </div>
+          <ol class="leaderboard-top-list" id="leaderboard-top-list"></ol>
+          <button
+            class="leaderboard-top-more"
+            id="leaderboard-top-more"
+            type="button"
+            aria-label="Show more ranked benchmarks"
+            hidden
+          >Show more ranked benchmarks</button>
+        </section>
+
+
         <div class="evidence-strip" id="leaderboard-insights" aria-label="Registry overview" data-i18n-aria="Registry overview"></div>
 
         <details class="findings-panel" id="benchmark-findings" aria-labelledby="findings-heading" hidden>
@@ -610,11 +630,7 @@
           <p class="section-note findings-limits" id="findings-limits"></p>
         </details>
 
-        <!-- The ranking leads the page it is named after (issue #256). Five
-             lines, one measure: how many curated model cards report each
-             benchmark. Everything that explains how the number was computed
-             stays below, and the full 80-row table with its filters is the
-             expandable underneath. -->
+        <!-- Adoption counts are a separate, cumulative evidence view. -->
         <details class="trend-panel adoption-table" id="adoption-table">
           <summary class="section-title adoption-table-summary">
             <span>

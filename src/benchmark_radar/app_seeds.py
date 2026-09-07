@@ -82,13 +82,16 @@ def _info_disclosure(text: str) -> str:
     )
 
 
-def _leaderboard_seed(dashboard: dict[str, Any]) -> dict[str, str]:
+def _leaderboard_seed(
+    dashboard: dict[str, Any], external_index: list[dict[str, Any]]
+) -> dict[str, str]:
     """The top rows, the measures note and the caveat renderLeaderboardTop emits."""
     board = dashboard.get("model_card_leaderboard") or {}
     ranked = [entry for entry in (board.get("entries") or []) if (entry.get("card_count") or 0) > 0]
     entries = ranked[:LEADERBOARD_TOP_LIMIT]
+    browse_seed = _score_browser_seed(dashboard, external_index)
     if not entries:
-        return {}
+        return browse_seed
     # Scaled against the top row on screen rather than the top row overall,
     # because that is what the renderer scales against.
     top = max(int(entry["card_count"]) for entry in entries)
@@ -141,7 +144,106 @@ def _leaderboard_seed(dashboard: dict[str, Any]) -> dict[str, str]:
             '<p class="leaderboard-deck visually-hidden" id="leaderboard-measures" data-seed>'
             f"{esc(measures)}</p>"
         )
-    return seed
+    return {**seed, **browse_seed}
+
+
+def _score_browser_seed(
+    dashboard: dict[str, Any], external_index: list[dict[str, Any]]
+) -> dict[str, str]:
+    """The default under-70 list rendered by renderBenchmarkSearch."""
+    board = dashboard.get("model_card_leaderboard") or {}
+    progression = (dashboard.get("benchmark_score_progression") or {}).get("benchmarks") or {}
+    rows = [
+        {
+            "id": entry["benchmark_id"],
+            "name": entry["name"],
+            "source": "curated",
+            "summary": progression.get(entry["benchmark_id"], {}).get("score_summary"),
+        }
+        for entry in board.get("entries", [])
+        if entry.get("benchmark_id") in progression
+    ] + [
+        {
+            "id": record["slug"],
+            "name": record["name"],
+            "source": record["source"],
+            "summary": record.get("score_summary"),
+        }
+        for record in external_index
+    ]
+    rows = [
+        row
+        for row in rows
+        if row["summary"]
+        and row["summary"]["numeric_count"] > 0
+        and row["summary"]["display_max"] < 70
+    ]
+    rows.sort(key=lambda row: (-row["summary"]["numeric_count"], row["id"]))
+    shown = rows[:50]
+    if not shown:
+        return {}
+    names = {
+        "curated": "Curated registry",
+        "llm_stats": "LLM Stats",
+        "artificial_analysis": "Artificial Analysis",
+    }
+    content = ""
+    ranking = ""
+    for rank, row in enumerate(shown, 1):
+        summary = row["summary"]
+        value = f"{summary['display_max']:,.6f}".rstrip("0").rstrip(".")
+        unit = summary.get("unit")
+        suffix = "%" if unit == "percent" else f" {unit}" if unit else ""
+        factor = " · raw score ×100" if summary["display_multiplier"] == 100 else ""
+        highest = f"Highest {value}{suffix}{factor}"
+        label = names.get(row["source"], row["source"])
+        count = _metric_label(summary["numeric_count"], "data point")
+        pressed = "true" if rank == 1 else "false"
+        content += (
+            '<button class="benchmark-result score-browse-result" '
+            f'type="button" aria-pressed="{pressed}">'
+            f'<span class="benchmark-result-name">{rank}. {esc(row["name"])}</span>'
+            f'<span class="benchmark-result-facts">{esc(count + " · " + label)}</span>'
+            f'<span class="benchmark-result-facts">{esc(highest)}</span></button>'
+        )
+        if rank <= 5:
+            width = summary["numeric_count"] / shown[0]["summary"]["numeric_count"] * 100
+            ranking += (
+                '<li class="leaderboard-top-row">'
+                f'<span class="leaderboard-top-rank">{rank:02}</span>'
+                '<span class="leaderboard-top-name">'
+                f'<button class="score-ranking-link" type="button" aria-pressed="{pressed}">'
+                f"<span>{esc(row['name'])}</span>"
+                f"<small>{esc(label + ' · ' + highest)}</small></button></span>"
+                '<span class="leaderboard-top-bar"><span class="leaderboard-top-bar-fill" '
+                f'style="width:{width:.1f}%"></span></span>'
+                f'<span class="leaderboard-top-count">{esc(count)}</span></li>'
+            )
+    seeds = {
+        '<ol class="leaderboard-top-list" id="score-ranking-list"></ol>': (
+            f'<ol class="leaderboard-top-list" id="score-ranking-list" data-seed>{ranking}</ol>'
+        ),
+        '<div id="benchmark-search-results"></div>': (
+            f'<div id="benchmark-search-results" data-seed>{content}</div>'
+        ),
+        '<p id="benchmark-search-status" class="benchmark-search-status"></p>': (
+            '<p id="benchmark-search-status" class="benchmark-search-status" data-seed>'
+            f"{len(shown):,} of {len(rows):,} matches</p>"
+        ),
+    }
+    if len(rows) > 5:
+        button = (
+            '<button id="score-ranking-more" class="leaderboard-top-more" type="button" '
+            'data-i18n="Show more" hidden>Show more</button>'
+        )
+        seeds[button] = button.replace(" hidden>", " data-seed>")
+    if len(rows) > 50:
+        button = (
+            '<button id="benchmark-search-more" class="clear-button" type="button" '
+            'data-i18n="Show more" hidden>Show more</button>'
+        )
+        seeds[button] = button.replace(" hidden>", " data-seed>")
+    return seeds
 
 
 # --- Trends -------------------------------------------------------------------
@@ -344,11 +446,13 @@ def _map_seed(dashboard: dict[str, Any]) -> dict[str, str]:
 
 
 def view_seeds(
-    dashboard: dict[str, Any], palette: tuple[dict[str, str], list[str]]
+    dashboard: dict[str, Any],
+    palette: tuple[dict[str, str], list[str]],
+    external_index: list[dict[str, Any]] | None = None,
 ) -> dict[str, dict[str, str]]:
     """Every view's seed, keyed by view. An empty dict means nothing to publish."""
     return {
-        "leaderboard": _leaderboard_seed(dashboard),
+        "leaderboard": _leaderboard_seed(dashboard, external_index or []),
         "trends": _trends_seed(dashboard, palette),
         "map": _map_seed(dashboard),
     }

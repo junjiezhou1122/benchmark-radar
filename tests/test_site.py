@@ -303,7 +303,7 @@ def test_scan_date_can_be_reset_to_all_dates():
     html = Path("site/index.html").read_text(encoding="utf-8")
 
     assert 'option("all", t("All dates"), state.todayDate === "all")' in script
-    assert 'state.todayDate === "all" || item.snapshot_date === state.todayDate' in script
+    assert "item.snapshot_date >= range.start && item.snapshot_date <= range.end" in script
     assert 'state.todayDate = "all";' in script
     assert 'params.set("date", "all")' in script
     # The list is bounded by explicit pages (issue #322), so reaching the
@@ -572,6 +572,7 @@ def test_clean_route_model_migrates_legacy_urls_and_preserves_utility_background
     )
     program = f"""
 const state = {{}};
+const BENCHMARK_SEARCH_LIMIT = 50;
 {route_source}
 function install(url, historyState = null) {{
   const parsed = new URL(url, "https://benchmark-radar.org");
@@ -623,7 +624,7 @@ console.log(JSON.stringify(results));
     )
     routes = json.loads(result.stdout)
 
-    assert routes["legacyView"] == "/leaderboard/?lq=agent"
+    assert routes["legacyView"] == "/leaderboard/?lscore=under70&lq=agent"
     assert routes["legacyRubric"] == "/rubric/?version=2"
     assert routes["legacyReturns"] is False
     assert routes["openCli"] == "/cli/"
@@ -930,7 +931,7 @@ def test_all_dates_keeps_only_the_latest_matching_sighting_per_source_record():
     import pytest
 
     script = Path("site/assets/app.js").read_text(encoding="utf-8")
-    assert 'state.todayDate === "all" ? latestObservationsByRecord(matches) : matches' in script
+    assert "todayIsMultiDate() ? latestObservationsByRecord(matches) : matches" in script
 
     node = shutil.which("node")
     if not node:
@@ -2457,8 +2458,7 @@ def test_a_benchmark_name_search_reaches_the_registry_not_only_the_daily_feed():
     # test: renderAdoptionFrontier() gives up unless an adopted entry has a
     # readable score record and a default entry resolves.
     assert "inert: !navigate" in section
-    assert "scoreRecord(item.benchmark_id)" in section
-    assert "frontierDefaultEntry(board)" in section
+    assert "const navigate = Boolean(board)" in section
 
     # A truncated list says so. Presenting 50 of 383 as "the matches" invites
     # the reader to conclude a benchmark past row 50 is absent, which is the
@@ -2487,7 +2487,7 @@ def test_a_benchmark_name_search_reaches_the_registry_not_only_the_daily_feed():
 
     # "on this date" is false in All dates mode, where the search already
     # covered the whole archive, so that mode gets its own sentence.
-    assert 'state.todayDate === "all"' in helper
+    assert "todayIsMultiDate()" in helper
     assert "No collected observation mentions" in helper
 
     # A t() string needs both halves in app.js: the English key the call site
@@ -2643,7 +2643,7 @@ def test_heading_outline_and_scale_stay_quiet():
     visible = [name for name, attrs, _ in sections if " hidden" not in attrs]
     assert visible == ["today"], visible
 
-    assert '<h1 class="today-heading" data-i18n="Today\'s radar">' in html
+    assert '<h1 id="today-heading" class="today-heading" data-i18n="Today\'s radar">' in html
     for heading_id in ("leaderboard-heading", "map-heading", "trends-heading"):
         assert f'<h1 id="{heading_id}"' in html
 

@@ -181,52 +181,27 @@ def test_lower_is_better_headroom_is_described_against_zero():
     assert "points to zero, the floor of this metric" in script
 
 
-def test_only_a_benchmark_with_a_readable_score_can_be_selected():
-    # The panel is the score track now, so a benchmark with no readable value has
-    # nothing to draw. It is filtered out of the picker rather than opening an
-    # empty chart, which would read as "scores went to zero here". 20 of the 79
-    # adopted registry benchmarks take this path.
+def test_only_numeric_scored_records_enter_the_filtered_picker():
     script = source("site/assets/app.js")
-    render = script.split("function renderAdoptionFrontier(board)", 1)[1].split("\nfunction ", 1)[0]
-
-    assert "const scored = adopted.filter((entry) => scoreRecord(entry.benchmark_id));" in render
-    # The <select>, the resolution of a ?lfrontier= permalink, and the empty
-    # state all read from `scored`, so none of them can surface an unscored one.
-    assert "renderFrontierPicker(scored, state.lfrontier);" in render
-    # And the picker itself applies the same rule to the crawled layer.
+    membership = script.split("function matchesScoreFilter(summary)", 1)[1].split("\n}", 1)[0]
+    assert "Number.isFinite(summary?.display_max)" in membership
+    assert "summary.numeric_count > 0" in membership
     picker = script.split("function frontierPickerGroups(scored)", 1)[1].split("\n}", 1)[0]
-    assert "record.score_count > 0" in picker
-    assert "scored.find((candidate) => candidate.benchmark_id === state.lfrontier)" in render
-    assert "if (!scored.length || !defaultEntry)" in render
-    # The default selection is drawn from the same set.
-    default_entry = script.split("function frontierDefaultEntry(board)", 1)[1].split("\n}", 1)[0]
-    assert "scoreRecord(entry.benchmark_id)" in default_entry
+    assert "scoreBrowseRows()" in picker
+    assert "renderFrontierPicker(scored, state.lfrontier);" in script
 
 
 def test_the_picker_and_the_search_both_cover_both_layers():
-    # The two layers used to have opposite blind spots: the <select> held only
-    # the 59 curated benchmarks, while the search box read only the crawled
-    # index, so typing "GPQA" surfaced crawled rows but not the curated GPQA
-    # Diamond record the panel actually charts. Both entry points now reach
-    # both layers.
     script = source("site/assets/app.js")
-
-    picker = script.split("function frontierPickerGroups(scored)", 1)[1].split("\n}", 1)[0]
-    assert 't("Curated registry")' in picker
-    assert "state.benchmarkIndex || []" in picker
-    # Grouped, never interleaved: only the curated layer carries an instrument,
-    # a protocol and a publication date, so a reader must be able to tell which
-    # layer a row is from before selecting it.
-    assert '"optgroup"' in script
-    assert "externalSourceMeta(source).name" in picker
-
+    rows = script.split("function scoreBrowseRows(", 1)[1].split("\n}", 1)[0]
+    assert "board?.entries" in rows
+    assert "state.benchmarkIndex" in rows
+    assert "b.summary.numeric_count - a.summary.numeric_count" in rows
+    assert "a.source.localeCompare" not in rows
     render = script.split("function renderBenchmarkSearch()", 1)[1].split("\nfunction ", 1)[0]
     assert "searchCuratedEntries(board, state.benchmarkQuery)" in render
-    assert "searchBenchmarkIndex(records, state.benchmarkQuery)" in render
-    # Curated results come first, and the cap spans both lists so a common name
-    # cannot push every curated hit off the end.
-    assert render.index("shownCurated") < render.index("shownExternal")
-    assert "BENCHMARK_SEARCH_LIMIT - shownCurated.length" in render
+    assert "searchBenchmarkIndex(state.benchmarkIndex || [], state.benchmarkQuery)" in render
+    assert "rows.slice(0, state.benchmarkVisibleLimit)" in render
 
 
 def test_curated_search_matches_aliases_and_ranks_the_exact_one_first():
@@ -248,14 +223,12 @@ def test_curated_search_matches_aliases_and_ranks_the_exact_one_first():
 
 
 def test_search_still_works_when_the_crawled_index_is_unavailable():
-    # The curated layer lives in the dashboard payload, which is already loaded,
-    # so a failed or pending index fetch must degrade only the crawled half
-    # rather than blanking search entirely.
     script = source("site/assets/app.js")
     render = script.split("function renderBenchmarkSearch()", 1)[1].split("\nfunction ", 1)[0]
-
-    assert "if (!records && !curatedCount)" in render
-    assert "records\n    ? searchBenchmarkIndex(records, state.benchmarkQuery)\n    : []" in render
+    assert "let rows = scoreBrowseRows(board);" in render
+    assert "state.benchmarkIndex || []" in render
+    assert "const failed = state.benchmarkIndexLoaded && !state.benchmarkIndex" in render
+    assert "these results may be incomplete" in render
 
 
 def test_the_navigator_is_a_tool_region_not_a_content_section():
@@ -275,7 +248,7 @@ def test_the_navigator_is_a_tool_region_not_a_content_section():
         assert gone not in navigator, f"{gone} still occupies the navigator"
     # The search label is the only heading, so it is the panel's one anchor.
     assert navigator.count("<h2") == 1
-    assert 'data-i18n="Search every benchmark"' in navigator
+    assert 'data-i18n="Browse scored benchmarks"' in navigator
     # And the examples label is not `.eyebrow`, whose accent blue would plant a
     # second anchor competing with the field.
     assert 'class="eyebrow"' not in navigator
@@ -309,29 +282,13 @@ def test_the_search_field_carries_the_panel_weight_through_affordance():
     assert "opacity: 0.75" in status
 
 
-def test_the_examples_are_ranked_by_how_many_cards_report_them():
-    # No editorial list and no computed subheadings: "most reported" is both the
-    # rank and the reason a name is worth trying, which is the one reading this
-    # registry exists to make. Curated only, because `card_count` is a curated
-    # fact; the crawled layer is reached from the field and the picker instead.
+def test_shortcuts_use_the_same_score_ranking_as_the_picker():
     script = source("site/assets/app.js")
-    styles = source("site/assets/styles.css")
-
     navigator = script.split("function renderBenchmarkNavigator(board)", 1)[1].split(
         "\nfunction ", 1
     )[0]
-    assert "b.card_count - a.card_count || a.name.localeCompare(b.name)" in navigator
-    assert "entry.card_count > 0 && scoreRecord(entry.benchmark_id)" in navigator
-    assert "BENCHMARK_EXAMPLE_LIMIT" in navigator
-    assert 'metricLabel(entry.card_count, "model card")' in navigator
-    # Every example is on the page: an inner scroller hid ranks 8-20 behind a
-    # scrollbar that read as the end of the list. The sticky aside is what gets
-    # bounded to the viewport instead.
-    shortlist = styles.split(".benchmark-shortlist {", 1)[1].split("}", 1)[0]
-    assert "max-height" not in shortlist
-    aside = styles.split(".benchmark-navigator {", 1)[1].split("}", 1)[0]
-    assert "max-height: calc(100vh - 2rem)" in aside
-    assert "overflow-y: auto" in aside
+    assert "scoreBrowseRows(board).slice(0, 3).map(scoreBrowseResultRow)" in navigator
+    assert "card_count" not in navigator
 
 
 def test_the_navigator_still_starts_the_crawled_index_fetch():
@@ -350,19 +307,12 @@ def test_the_navigator_still_starts_the_crawled_index_fetch():
 
 
 def test_the_search_reach_line_counts_only_what_it_can_return():
-    # A count that advertised records the box cannot return would be a boast
-    # rather than a statement of reach, so it is derived from the loaded layers
-    # and drops when the crawled index fails. "Sources" counts those layers, not
-    # the radar's discovery connectors, which contribute no benchmark here.
     script = source("site/assets/app.js")
     render = script.split("function renderBenchmarkSearch()", 1)[1].split("\nfunction ", 1)[0]
-
-    assert 't("{n} benchmarks")' in render
-    assert 'metricLabel(sources.size, "source")' in render
-    assert "const sources = new Set((records || []).map((record) => record.source));" in render
-    assert 'if (curatedCount) sources.add("curated");' in render
-    # No literal totals anywhere: the numbers are computed, never written down.
-    assert "4,861" not in script and "4861" not in script
+    assert 't("{shown} of {total} matches")' in render
+    assert "shown.length.toLocaleString()" in render
+    assert "rows.length.toLocaleString()" in render
+    assert "Still checking the benchmark registry" in render
 
 
 def test_search_matches_the_fields_the_placeholder_promises():
@@ -397,8 +347,8 @@ def test_a_link_to_an_unscored_benchmark_says_so_instead_of_swapping():
     assert "&& !scoreRecord(candidate.benchmark_id)" in render
     assert "so there is no track to draw" in render
     # It resolves before the default-entry fallback, or the fallback wins.
-    fallback = "state.lfrontier = defaultEntry.benchmark_id"
-    assert render.index("const unscoredEntry") < render.index(fallback)
+    fallback = "state.lfrontier = defaultEntry?.id"
+    assert render.index("const unscoredEntry") < render.rindex(fallback)
     # And the reader's URL is left alone: the panel names the benchmark they
     # asked for rather than rewriting the address to one they did not.
     assert "heading: unscoredEntry.name" in render

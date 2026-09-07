@@ -175,7 +175,7 @@ function emptyTodayMessage(day, benchmarkMatches = 0) {
   }
   if (queryOnly && benchmarkMatches) {
     return t(
-      state.todayDate === "all"
+      todayIsMultiDate()
         ? "No collected observation mentions \u201c{q}\u201d, but it is in the benchmark registry. The matches are listed above."
         : "Nothing was collected about \u201c{q}\u201d on this date, but it is in the benchmark registry. The matches are listed above.",
     ).replace("{q}", state.q.trim());
@@ -185,6 +185,7 @@ function emptyTodayMessage(day, benchmarkMatches = 0) {
     // Generic case: emptyTodayNodes() renders the recovery checklist (#386).
     return null;
   }
+  if (todayIsMultiDate()) return null;
   const wanted = state.source.trim().toLowerCase();
   const gap = zeroItemSources(day).find((entry) => entry.name.toLowerCase() === wanted);
   if (!gap) {
@@ -418,6 +419,31 @@ const I18N = {
     "Search benchmarks…": "搜索benchmark…",
     "Refresh data": "刷新数据",
     "Today's radar": "今日雷达",
+    "Past 30 days": "近 30 天",
+    "Past 60 days": "近 60 天",
+    "Data through": "数据截至",
+    "Reported benchmark scores": "Benchmark 已报告成绩",
+    "Browse scored benchmarks": "查找已有成绩的 benchmark",
+    "Highest reported score <70": "已报告的最高分低于 70",
+    "All scored": "全部有成绩的 benchmark",
+    "Highest": "最高分",
+    "raw score ×100": "原始分数 ×100",
+    "Scores use each chart's displayed scale; scoring systems and test conditions differ.": "分数沿用各自图表的刻度，各项评测的计分方式和测试条件不同。",
+    "Highest reported score <100": "已报告的最高分低于 100",
+    "Below 100 on the displayed scale; scoring systems and test conditions differ.": "按图表刻度筛选低于 100 的最高分，各项评测的计分方式和测试条件不同。",
+    "Ranked by data points": "按成绩记录数排名",
+    "data point": "条成绩记录",
+    "data points": "条成绩记录",
+    "Data points": "成绩记录数",
+    "Show top 5": "只看前 5 名",
+    "Ranked by the number of recorded numeric scores, regardless of source. Counts describe evidence coverage, not benchmark quality.": "按收录的数值成绩条数排名，不区分来源优先级。记录多表示收录的成绩多，不代表 benchmark 质量更高。",
+    "No numeric score": "暂无数值成绩",
+    "Outside current filter": "当前筛选范围外",
+    "Below 70 on the displayed scale; scoring systems and test conditions differ.": "按图表刻度筛选低于 70 的最高分，各项评测的计分方式和测试条件不同。",
+    "No scored benchmarks match these filters.": "没有符合筛选条件的 benchmark。",
+    "Loading observations…": "正在加载记录……",
+    "Historical data could not be loaded. Select the range again to retry.": "历史记录加载失败，请重新选择时间范围再试。",
+
     "Matching observations": "匹配结果",
     Sources: "来源",
     "All-time totals": "全部统计",
@@ -1055,6 +1081,9 @@ const state = {
   ldomain: "",
   lorg: "",
   lera: "",
+  lscore: "under70",
+  benchmarkVisibleLimit: 50,
+  scoreRankingExpanded: false,
   lfrontier: "",
   lfrontierExplicit: false,
   benchmarkIndex: null,
@@ -1066,6 +1095,7 @@ const state = {
   leaderboardShowAll: false,
   leaderboardTopExpanded: false,
   todayResultsKey: "",
+  todayRenderedDate: "",
   todayPage: 1,
   observations: null,
   fullDataLoaded: false,
@@ -1245,6 +1275,8 @@ function readUrl() {
   state.ldomain = params.get("ldomain") || "";
   state.lorg = params.get("lorg") || "";
   state.lera = params.get("lera") || "";
+  state.lscore = ["all", "under100"].includes(params.get("lscore")) ? params.get("lscore") : "under70";
+  state.benchmarkVisibleLimit = BENCHMARK_SEARCH_LIMIT;
   state.lfrontier = params.get("lfrontier") || "";
   state.lfrontierExplicit = Boolean(state.lfrontier);
   const rawHash = window.location.hash.slice(1);
@@ -1311,6 +1343,7 @@ function writeUrl(mode = "replace") {
   }
   if (!utility && state.view === "map" && state.entity) params.set("entity", state.entity);
   if (!utility && state.view === "leaderboard") {
+    params.set("lscore", state.lscore);
     if (state.lq) params.set("lq", state.lq);
     if (state.ldomain) params.set("ldomain", state.ldomain);
     if (state.lorg) params.set("lorg", state.lorg);
@@ -1413,8 +1446,7 @@ async function onPopState() {
   // filtered every observation against snapshot_date === "" and Today rendered
   // its empty state (issue #503). Normalize the restored date the same way.
   if (
-    state.todayDate !== "all"
-    && !state.data.facets.dates.includes(state.todayDate)
+    !validTodayDate()
   ) {
     state.todayDate = state.data.latest_date;
   }
@@ -1456,9 +1488,9 @@ const VIEW_SEO = {
     canonical: "/",
   },
   leaderboard: {
-    title: "Most reported AI benchmarks in frontier model cards | Benchmark Radar",
+    title: "AI benchmarks by highest reported score | Benchmark Radar",
     description:
-      "Which benchmarks frontier labs actually report: a live Model Card Adoption Rank computed from curated model cards and system cards, plus reported score progression over time.",
+      "Browse curated and crawled AI benchmark scores. Start with highest reported scores below 70 on the chart scale, inspect their sources, or browse all scored benchmarks.",
     canonical: "/leaderboard/",
   },
   trends: {
@@ -2256,12 +2288,33 @@ function renderDailyQuestions(day) {
   );
 }
 
+const TODAY_WINDOWS = { "30d": 30, "60d": 60 };
+
+function todayDateRange(date = state.todayDate) {
+  const days = TODAY_WINDOWS[date];
+  if (!days || !state.data?.latest_date) return null;
+  const end = state.data.latest_date;
+  const start = new Date(`${end}T00:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - days + 1);
+  return { start: start.toISOString().slice(0, 10), end };
+}
+
+function todayIsMultiDate() {
+  return state.todayDate === "all" || Boolean(TODAY_WINDOWS[state.todayDate]);
+}
+
+function validTodayDate() {
+  return todayIsMultiDate() || state.data.facets.dates.includes(state.todayDate);
+}
+
 function renderTodayDateOptions() {
   if (!state.data) return;
   replaceChildren(
     byId("today-date"),
     [
       option("all", t("All dates"), state.todayDate === "all"),
+      option("30d", t("Past 30 days"), state.todayDate === "30d"),
+      option("60d", t("Past 60 days"), state.todayDate === "60d"),
       ...[...state.data.facets.dates].reverse().map((date) =>
         option(date, formatDate(date, { dateStyle: "medium" }), date === state.todayDate),
       ),
@@ -2324,25 +2377,10 @@ function renderTodayBenchmarks() {
   const board = state.data?.model_card_leaderboard;
   const curated = searchCuratedEntries(board, query, { includeUnscored: true });
   const external = searchBenchmarkIndex(state.benchmarkIndex || [], query);
-  // A row is only worth clicking if the panel it leads to can draw. That needs
-  // more than a non-empty board: renderAdoptionFrontier() gives up unless some
-  // adopted entry has a readable score record and a default entry resolves, so
-  // a registry of card mentions with no scores yet renders the same empty panel
-  // as no registry at all. A button that goes nowhere is worse than no button,
-  // so those rows render as plain records instead.
-  const navigate = Boolean(
-    (board?.entries || []).some(
-      (item) => item.card_count > 0 && scoreRecord(item.benchmark_id),
-    ) && frontierDefaultEntry(board),
-  );
-  // loadBenchmarkIndex() resolves null only on failure. That is a different
-  // answer from a search that matched nothing, and it stays true whether or
-  // not the curated layer had a hit: reporting it only on an empty result
-  // would present half a registry search as a whole one.
+  // An explicit registry link remains useful even outside the score filter:
+  // its detail panel either shows the recorded scores or explains their absence.
+  const navigate = Boolean(board);
   const indexFailed = state.benchmarkIndexLoaded && state.benchmarkIndex === null;
-  // Sliced before the rows are built, not after. "bench" matches 355 of the
-  // 1,148 crawled records, and building every one of them into a DOM subtree
-  // with a listener to then discard all but 50 is work done on each keystroke.
   const curatedShown = curated.slice(0, BENCHMARK_SEARCH_LIMIT);
   const externalShown = external.slice(
     0,
@@ -2460,10 +2498,20 @@ function renderToday({ resultsOnly = false } = {}) {
   // Events are bound before the data file resolves (initialize), so a nav
   // click or filter keystroke in the load window must no-op, not throw.
   if (!state.data) return;
-  const showingAllDates = state.todayDate === "all";
+  const showingAllDates = todayIsMultiDate();
   const day = dailySnapshot(showingAllDates ? state.data.latest_date : state.todayDate);
   if (!day) return;
+  state.todayRenderedDate = state.todayDate;
   byId("today-date").value = state.todayDate;
+  const range = todayDateRange();
+  const heading = range ? `Past ${TODAY_WINDOWS[state.todayDate]} days`
+    : showingAllDates ? "All dates" : "Today's radar";
+  byId("today-heading").textContent = t(heading);
+  byId("today-heading").setAttribute("data-i18n", heading);
+  byId("today-range").hidden = !range;
+  byId("today-range").textContent = range
+    ? `${formatDate(range.start)} – ${formatDate(range.end)} · ${t("Data through")} ${formatDate(range.end)} UTC`
+    : "";
 
   if (!resultsOnly) {
     // The briefing and connector health describe one scan, not an archive-wide
@@ -3428,10 +3476,13 @@ function closeFiltersDrawer() {
 function filteredObservations() {
   const query = state.q.trim().toLowerCase();
   const sourceLower = state.source.trim().toLowerCase();
+  const range = todayDateRange();
   const matches = allObservations().filter((item) => {
     const haystack = `${item.title} ${item.summary} ${item.source}`.toLowerCase();
     return (
-      (state.todayDate === "all" || item.snapshot_date === state.todayDate) &&
+      (state.todayDate === "all" || (range
+        ? item.snapshot_date >= range.start && item.snapshot_date <= range.end
+        : item.snapshot_date === state.todayDate)) &&
       (!state.kind || item.observation_kind === state.kind) &&
       (!state.category || (item.categories || []).includes(state.category)) &&
       (!state.source || item.source.toLowerCase() === sourceLower) &&
@@ -3440,7 +3491,7 @@ function filteredObservations() {
       (!query || haystack.includes(query))
     );
   });
-  return state.todayDate === "all" ? latestObservationsByRecord(matches) : matches;
+  return todayIsMultiDate() ? latestObservationsByRecord(matches) : matches;
 }
 
 // Generated utility pages ship their sheet already open so it is useful before
@@ -4105,25 +4156,7 @@ function frontierAdvances(entry) {
 }
 
 function frontierDefaultEntry(board) {
-  const scored = (board.entries || []).filter(
-    (entry) => entry.card_count > 0 && scoreRecord(entry.benchmark_id),
-  );
-  const datedCount = (entry) => scoreRecord(entry.benchmark_id)?.dated_observation_count || 0;
-  // The page opens on the benchmark it ranks first, so the figure answers the
-  // question the ranking above it just raised. It used to open on the NEWEST
-  // scored instrument, which put AutomationBench under a page headed "most
-  // reported in model cards" -- a benchmark the reader had not seen named
-  // anywhere above the figure.
-  //
-  // `scored` is already in adoption_rank order (rank 1 first), so the ranking
-  // and the default agree by construction rather than by a second sort that
-  // could drift from it.
-  //
-  // A one-point plot says nothing visually, so a benchmark with fewer than two
-  // dated readings is passed over even if it ranks higher; the picker still
-  // reaches every scored benchmark.
-  const drawable = scored.filter((entry) => datedCount(entry) >= 2);
-  return (drawable.length ? drawable : scored)[0];
+  return scoreBrowseRows(board)[0];
 }
 
 const BENCHMARK_TASK_SHAPES = {
@@ -4520,60 +4553,158 @@ function curatedResultRow(entry, { navigate = false, inert = false } = {}) {
   return button;
 }
 
+// Each row keeps its source identity. The score cutoff decides membership;
+// recorded numeric observations determine rank, without a source preference.
+function scoreSourceLabel(source) {
+  return source === "curated" ? t("Curated registry") : externalSourceMeta(source).name;
+}
+
+function matchesScoreFilter(summary) {
+  return Number.isFinite(summary?.display_max)
+    && summary.numeric_count > 0
+    && (state.lscore === "all" || summary.display_max < (state.lscore === "under100" ? 100 : 70));
+}
+
+function scoreBrowseRows(board = state.data?.model_card_leaderboard) {
+  const curated = (board?.entries || []).map((entry) => ({
+    id: entry.benchmark_id, name: entry.name, source: "curated", curated: entry,
+    summary: scoreRecord(entry.benchmark_id)?.score_summary,
+  }));
+  const external = (state.benchmarkIndex || []).map((record) => ({
+    id: record.slug, name: record.name, source: record.source, external: record,
+    summary: record.score_summary,
+  }));
+  return [...curated, ...external]
+    .filter((row) => matchesScoreFilter(row.summary))
+    .sort((a, b) => b.summary.numeric_count - a.summary.numeric_count
+      || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map((row, index) => ({ ...row, rank: index + 1 }));
+}
+
+function scoreSummaryLabel(summary) {
+  if (!Number.isFinite(summary?.display_max)) return t("No numeric score");
+  const value = summary.display_max.toLocaleString("en", { maximumFractionDigits: 6 });
+  const unit = summary.unit === "percent" ? "%" : summary.unit ? ` ${summary.unit}` : "";
+  const factor = summary.display_multiplier === 100 ? ` · ${t("raw score ×100")}` : "";
+  return `${t("Highest")} ${value}${unit}${factor}`;
+}
+
+function scoreBrowseResultRow(row) {
+  const button = element("button", {
+    className: "benchmark-result score-browse-result",
+    attrs: { type: "button", "aria-pressed": row.id === state.lfrontier ? "true" : "false" },
+  }, [
+    element("span", { className: "benchmark-result-name", text: `${row.rank}. ${row.name}` }),
+    element("span", { className: "benchmark-result-facts", text: `${metricLabel(row.summary.numeric_count, "data point")} · ${scoreSourceLabel(row.source)}` }),
+    element("span", { className: "benchmark-result-facts", text: scoreSummaryLabel(row.summary) }),
+  ]);
+  button.addEventListener("click", () => {
+    selectFrontier(row.id);
+    renderAdoptionFrontier(state.data.model_card_leaderboard);
+    writeUrl("push");
+  });
+  return button;
+}
+
+function setScoreFilter(value) {
+  state.lscore = ["all", "under100"].includes(value) ? value : "under70";
+  state.benchmarkVisibleLimit = BENCHMARK_SEARCH_LIMIT;
+  // An intentional permalink stays visible outside the filtered list.
+  // Only the automatic opening selection follows a filter change.
+  if (!state.lfrontierExplicit) state.lfrontier = "";
+  renderAdoptionFrontier(state.data.model_card_leaderboard);
+  writeUrl();
+}
+
+function renderScoreSelectionNote() {
+  const curated = scoreRecord(state.lfrontier);
+  const external = (state.benchmarkIndex || []).find((row) => row.slug === state.lfrontier);
+  const summary = curated?.score_summary || external?.score_summary;
+  const known = curated || external || (state.data?.model_card_leaderboard?.entries || [])
+    .some((entry) => entry.benchmark_id === state.lfrontier);
+  const outside = Boolean(state.lfrontierExplicit && known && !matchesScoreFilter(summary));
+  const note = byId("frontier-filter-note");
+  note.hidden = !outside;
+  note.textContent = outside ? t("Outside current filter") : "";
+  const highest = byId("frontier-highest-score");
+  highest.hidden = !summary?.numeric_count;
+  highest.textContent = summary?.numeric_count ? scoreSummaryLabel(summary) : "";
+}
+
+function renderScoreRanking(rows) {
+  const visible = state.scoreRankingExpanded ? rows.slice(0, state.benchmarkVisibleLimit) : rows.slice(0, 5);
+  const maximum = rows[0]?.summary.numeric_count || 1;
+  replaceChildren(byId("score-ranking-list"), visible.map((row) => {
+    const button = element("button", {
+      className: "score-ranking-link",
+      attrs: { type: "button", "aria-pressed": row.id === state.lfrontier ? "true" : "false" },
+    }, [
+      element("span", { text: row.name }),
+      element("small", { text: `${scoreSourceLabel(row.source)} · ${scoreSummaryLabel(row.summary)}` }),
+    ]);
+    button.addEventListener("click", () => {
+      selectFrontier(row.id);
+      renderAdoptionFrontier(state.data.model_card_leaderboard);
+      writeUrl("push");
+    });
+    return element("li", { className: "leaderboard-top-row" }, [
+      element("span", { className: "leaderboard-top-rank", text: String(row.rank).padStart(2, "0") }),
+      element("span", { className: "leaderboard-top-name" }, [button]),
+      element("span", { className: "leaderboard-top-bar" }, [
+        element("span", { className: "leaderboard-top-bar-fill", attrs: { style: `width:${(row.summary.numeric_count / maximum * 100).toFixed(1)}%` } }),
+      ]),
+      element("span", { className: "leaderboard-top-count", text: metricLabel(row.summary.numeric_count, "data point") }),
+    ]);
+  }));
+  const more = byId("score-ranking-more");
+  more.hidden = rows.length <= 5;
+  more.textContent = t(state.scoreRankingExpanded ? "Show top 5" : "Show more");
+  byId("score-ranking-empty").hidden = rows.length > 0;
+}
+
 function renderBenchmarkSearch() {
   const container = byId("benchmark-search-results");
   const status = byId("benchmark-search-status");
-  if (!container || !status) return;
-  const records = state.benchmarkIndex;
-  const board = state.data?.model_card_leaderboard;
-  // The curated layer is in the dashboard payload, which is already loaded, so
-  // search still works over it while the crawled index is on the wire or after
-  // that fetch has failed. Only the crawled half degrades.
-  const curatedCount = (board?.entries || []).filter((entry) =>
-    scoreRecord(entry.benchmark_id),
-  ).length;
-  if (!records && !curatedCount) {
-    replaceChildren(container, []);
-    status.textContent = "";
-    return;
+  if (!container || !status || !state.data) return;
+  const board = state.data.model_card_leaderboard;
+  let rows = scoreBrowseRows(board);
+  if (state.benchmarkQuery) {
+    const matches = new Set([
+      ...searchCuratedEntries(board, state.benchmarkQuery).map((entry) => entry.benchmark_id),
+      ...searchBenchmarkIndex(state.benchmarkIndex || [], state.benchmarkQuery).map((record) => record.slug),
+    ]);
+    rows = rows.filter((row) => matches.has(row.id));
   }
-  if (!state.benchmarkQuery) {
-    replaceChildren(container, []);
-    // Stated as reach, not as a boast: the number is what this box searches
-    // right now, so it drops when the crawled index fails to load rather than
-    // advertising records that cannot be returned. "Sources" counts the layers
-    // behind those records (the curated registry plus each crawl), not the
-    // radar's discovery connectors, which supply no benchmark to this index.
-    const sources = new Set((records || []).map((record) => record.source));
-    if (curatedCount) sources.add("curated");
-    status.textContent = `${t("{n} benchmarks").replace(
-      "{n}",
-      (curatedCount + (records?.length || 0)).toLocaleString(),
-    )} \u00b7 ${metricLabel(sources.size, "source")}`;
-    return;
+  const shown = rows.slice(0, state.benchmarkVisibleLimit);
+  replaceChildren(container, shown.map(scoreBrowseResultRow));
+  renderScoreRanking(rows);
+  const loading = !state.benchmarkIndexLoaded;
+  const failed = state.benchmarkIndexLoaded && !state.benchmarkIndex;
+  const coverage = loading ? t("Still checking the benchmark registry…")
+    : failed ? t("The crawled benchmark catalog could not be loaded, so these results may be incomplete.") : "";
+  status.textContent = [t("{shown} of {total} matches")
+    .replace("{shown}", shown.length.toLocaleString())
+    .replace("{total}", rows.length.toLocaleString()), coverage].filter(Boolean).join(" · ");
+  if (!rows.length) {
+    container.append(element("p", { className: "empty-state", text: loading
+      ? t("Loading benchmark details…") : t("No scored benchmarks match these filters.") }));
+    if (state.lscore !== "all") {
+      const all = element("button", { className: "clear-button", text: t("All scored"), attrs: { type: "button" } });
+      all.addEventListener("click", () => setScoreFilter("all"));
+      container.append(all);
+    }
   }
-  const curatedMatches = searchCuratedEntries(board, state.benchmarkQuery);
-  const externalMatches = records
-    ? searchBenchmarkIndex(records, state.benchmarkQuery)
-    : [];
-  // Curated first, then crawled, and the cap applies across both so a common
-  // name cannot push every curated hit off the end of the list.
-  const shownCurated = curatedMatches.slice(0, BENCHMARK_SEARCH_LIMIT);
-  const shownExternal = externalMatches.slice(
-    0,
-    Math.max(0, BENCHMARK_SEARCH_LIMIT - shownCurated.length),
-  );
-  const total = curatedMatches.length + externalMatches.length;
-  const curatedNames = curatedNameSet(shownCurated);
-  replaceChildren(container, [
-    ...shownCurated.map(curatedResultRow),
-    ...shownExternal.map((record) => benchmarkResultRow(record, { curatedNames })),
-  ]);
-  status.textContent = total
-    ? t("{shown} of {total} matches")
-        .replace("{shown}", String(shownCurated.length + shownExternal.length))
-        .replace("{total}", String(total))
-    : t("No benchmark matches that name");
+  const more = byId("benchmark-search-more");
+  more.hidden = shown.length >= rows.length;
+  byId("leaderboard-score-filter").value = state.lscore;
+  const note = byId("leaderboard-score-note");
+  const message = state.lscore === "all"
+    ? "Scores use each chart's displayed scale; scoring systems and test conditions differ."
+    : state.lscore === "under100"
+      ? "Below 100 on the displayed scale; scoring systems and test conditions differ."
+      : "Below 70 on the displayed scale; scoring systems and test conditions differ.";
+  note.textContent = t(message);
+  note.setAttribute("data-i18n", message);
 }
 
 function initBenchmarkSearch() {
@@ -4582,6 +4713,7 @@ function initBenchmarkSearch() {
   input.dataset.bound = "1";
   const onInput = debounce(() => {
     state.benchmarkQuery = input.value.trim();
+    state.benchmarkVisibleLimit = BENCHMARK_SEARCH_LIMIT;
     renderBenchmarkSearch();
   });
   input.addEventListener("input", onInput);
@@ -4590,15 +4722,7 @@ function initBenchmarkSearch() {
     // Search is additive, so its failure must not take the navigator with it.
     state.benchmarkIndex = records;
     state.benchmarkIndexLoaded = true;
-    const status = byId("benchmark-search-status");
-    if (!records && status) {
-      status.textContent = t("Benchmark search is unavailable right now");
-      input.disabled = true;
-    } else {
-      // Skipped on failure: renderBenchmarkSearch() would blank the
-      // unavailability notice just written into the status line.
-      renderBenchmarkSearch();
-    }
+    renderBenchmarkSearch();
     // A ?lfrontier=<slug> permalink can only resolve once the index fetch has
     // settled either way: a resolved index confirms the slug, a failed one
     // turns the panel's loading state into an explicit unavailability note
@@ -4968,12 +5092,10 @@ function externalPlottedRows(payload) {
     .sort((a, b) => dateValue(a.reported_date) - dateValue(b.reported_date) || a.value - b.value);
 }
 
-function externalDisplayFactor(values, series) {
-  if (!values.length) return 1;
-  if (series?.max_score_contradicted) return 1;
-  const declaredMax = Number(series?.declared_max);
-  if (Number.isFinite(declaredMax) && declaredMax > 1) return 1;
-  return values.every((value) => value >= 0 && value <= 1) ? 100 : 1;
+function externalDisplayFactor(series) {
+  // Generated from every numeric observation, including undated rows. The
+  // browser never infers a second scale from just the points it can plot.
+  return series?.score_summary?.display_multiplier ?? 1;
 }
 
 function externalScoreChart(source, payload) {
@@ -5015,7 +5137,7 @@ function externalScoreChart(source, payload) {
   const bestValue = bestRow.value;
   // Display only: `scoreY` and every geometry below still take raw values, so
   // the plotted shape is identical whether or not the factor applies.
-  const factor = externalDisplayFactor(values, payload.series);
+  const factor = externalDisplayFactor(payload.series);
   const shown = (value) => Number((value * factor).toFixed(2));
   const recordSetters = externalRecordSetters(plotted, recordDirection);
   const hasRecordPath = recordSetters.length >= 2;
@@ -5345,8 +5467,7 @@ function externalSourceTable(source, payload) {
   }
   // Stated, not assumed. A reader comparing a tick against the source's own
   // page has to be told the axis was multiplied, and by what (issue #341).
-  const plottedValues = externalPlottedRows(payload).map((row) => row.value);
-  if (externalDisplayFactor(plottedValues, series) !== 1) {
+  if (externalDisplayFactor(series) !== 1) {
     notes.push(
       t(
         "Every score in this series falls between 0 and 1, so the chart multiplies them by 100 to read as 0 to 100. That is a change of units only: it asserts no maximum, and each point's pinned card shows the number the source published.",
@@ -5486,25 +5607,9 @@ function setCanonicalFrontierChrome(visible) {
 // A crawled record with no readable score is omitted for the same reason its
 // curated counterpart is: the panel would have nothing to show it.
 function frontierPickerGroups(scored) {
-  const groups = [
-    [
-      t("Curated registry"),
-      [...scored]
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .map((entry) => [entry.benchmark_id, entry.name]),
-    ],
-  ];
-  const external = (state.benchmarkIndex || []).filter((record) => record.score_count > 0);
-  for (const source of [...new Set(external.map((record) => record.source))].sort()) {
-    groups.push([
-      externalSourceMeta(source).name,
-      external
-        .filter((record) => record.source === source)
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .map((record) => [record.slug, record.name]),
-    ]);
-  }
-  return groups.filter(([, rows]) => rows.length);
+  return [[t("Ranked by data points"), scoreBrowseRows().map((row) => [
+    row.id, `${row.rank}. ${row.name} · ${scoreSourceLabel(row.source)}`,
+  ])]];
 }
 
 function renderFrontierPicker(scored, selectedValue) {
@@ -5521,6 +5626,13 @@ function renderFrontierPicker(scored, selectedValue) {
       ),
     ),
   );
+  const picker = byId("frontier-benchmark");
+  if (selectedValue && ![...picker.options].some((row) => row.value === selectedValue)) {
+    const entry = state.data?.model_card_leaderboard?.entries?.find((row) => row.benchmark_id === selectedValue);
+    const record = (state.benchmarkIndex || []).find((row) => row.slug === selectedValue);
+    picker.prepend(option(selectedValue, entry?.name || record?.name || selectedValue, true));
+  }
+  renderScoreSelectionNote();
 }
 
 // "External benchmark · 115 reported scores · LLM Stats": what the eyebrow, the
@@ -5646,74 +5758,12 @@ function renderExternalBenchmark(board, scored, record) {
 const BENCHMARK_EXAMPLE_LIMIT = 20;
 
 function renderBenchmarkNavigator(board) {
-  // What this list ranks by, behind the same (i) toggle the crawled source
-  // blocks use. "Most reported" alone invited the reading that AIME 2025 with
-  // 115 crawled scores should outrank GPQA Diamond with 26 model cards (issue
-  // #269); they answer different questions, and a reader cannot know that from
-  // the heading alone.
-  const infoHost = byId("benchmark-example-info");
-  if (infoHost && !infoHost.firstChild) {
-    const disclosure = infoDisclosure(
-        t(
-          "Ranked by how many curated model cards report each benchmark, which measures vendor reporting convention rather than benchmark quality. A crawled score count answers a different question: AIME 2025 carries 115 crawled scores and GPQA Diamond 26 model cards, and those are different measures rather than competing ones.",
-      ),
-    );
-    // The panel is fixed (see styles.css: the navigator scrolls and would clip
-    // it), so it carries no automatic anchor. Placed under the toggle each
-    // time it opens, and clamped to the viewport so it never runs off-screen.
-    const place = () => {
-      const body = disclosure.querySelector(".info-disclosure-body");
-      const box = disclosure.getBoundingClientRect();
-      body.style.top = `${box.bottom + 6}px`;
-      body.style.left = `${Math.max(8, Math.min(box.left, window.innerWidth - body.offsetWidth - 8))}px`;
-    };
-    disclosure.addEventListener("toggle", place);
-    disclosure.addEventListener("pointerenter", place);
-    disclosure.addEventListener("focusin", place);
-    infoHost.append(disclosure);
-  }
-  const host = byId("benchmark-shortlist");
-  if (host) {
-    const examples = (board.entries || [])
-      // Scored only, same rule as every other route into the panel: an example
-      // that opens the no-score refusal is not an example.
-      .filter((entry) => entry.card_count > 0 && scoreRecord(entry.benchmark_id))
-      .sort((a, b) => b.card_count - a.card_count || a.name.localeCompare(b.name))
-      .slice(0, BENCHMARK_EXAMPLE_LIMIT);
-    replaceChildren(
-      host,
-      examples.map((entry) => {
-        const card = element("button", {
-          className: "benchmark-example",
-          attrs: {
-            type: "button",
-            "aria-pressed": entry.benchmark_id === state.lfrontier ? "true" : "false",
-          },
-        }, [
-          element("span", { className: "benchmark-example-name", text: entry.name }),
-          // One count, and it is a fact about the world rather than about this
-          // pipeline: how many vendors chose to report the benchmark. How many
-          // of those mentions we could read a number out of is a statement
-          // about our own collection, which is noise beside a figure.
-          element("small", {
-            className: "benchmark-example-meta",
-            text: metricLabel(entry.card_count, "model card"),
-          }),
-        ]);
-        card.addEventListener("click", () => {
-          selectFrontier(entry.benchmark_id);
-          renderAdoptionFrontier(board);
-          writeUrl("push");
-        });
-        return card;
-      }),
-    );
-  }
-  // Binds the input and kicks off the crawled-index fetch on first call; a
-  // no-op afterwards. Without it the box searches the curated layer only and
-  // the reach line undercounts, which is how it read "59 benchmarks, 1 source".
   initBenchmarkSearch();
   renderBenchmarkSearch();
+  const host = byId("benchmark-shortlist");
+  const info = byId("benchmark-example-info");
+  if (info) replaceChildren(info, []);
+  if (host) replaceChildren(host, scoreBrowseRows(board).slice(0, 3).map(scoreBrowseResultRow));
 }
 
 function renderFrontierTaskPreview(entry) {
@@ -6821,16 +6871,15 @@ function clearAdoptionFrontier(message) {
 }
 
 function renderAdoptionFrontier(board) {
-  const adopted = (board.entries || []).filter((entry) => entry.card_count > 0);
-  // The panel is the saturation curve now, so a benchmark enters the picker
-  // only when a score could be read verbatim from a cited document. 20 of the
-  // 79 adopted benchmarks carry card mentions without a single readable score;
-  // with the adoption staircase retired they would render an empty panel, so
-  // they are absent here and a permalink to one falls back to the default.
-  const scored = adopted.filter((entry) => scoreRecord(entry.benchmark_id));
+  const scored = (board.entries || []).filter((entry) => scoreRecord(entry.benchmark_id));
   const defaultEntry = frontierDefaultEntry(board);
-  if (!scored.length || !defaultEntry) {
-    clearAdoptionFrontier(t("No benchmark in this registry has a score read from a document yet."));
+  if (!state.lfrontierExplicit) state.lfrontier = defaultEntry?.id || "";
+  renderBenchmarkNavigator(board);
+  if (!state.lfrontier) {
+    renderExternalShell(board, scored, {
+      eyebrow: "", heading: t("Reported benchmark scores"), badge: "",
+      message: t(!state.benchmarkIndexLoaded ? "Loading benchmark details…" : "No scored benchmarks match these filters."),
+    });
     return;
   }
   // Resolution order is the permalink contract (display plan step 6): an exact
@@ -6921,22 +6970,12 @@ function renderAdoptionFrontier(board) {
     return;
   }
   if (!entry) {
-    // The requested benchmark does not exist. Falling back to the default is
-    // right -- an empty panel is worse -- but the URL must stop naming a
-    // benchmark the panel is not showing, or a shared link reads as evidence
-    // about the wrong thing (the defect issue #287 fixed for canonical ids,
-    // which crawled slugs could still reach).
-    //
-    // Repaired here rather than at the call sites because this is the one
-    // place the substitution happens, and it happens on three different paths:
-    // first load, the re-render after the crawled index settles, and Back.
-    const substituted = Boolean(state.lfrontier);
-    state.lfrontier = defaultEntry.benchmark_id;
+    // An unresolved URL is repaired only after catalog loading succeeds.
+    state.lfrontier = defaultEntry?.id || "";
     state.lfrontierExplicit = false;
-    entry = defaultEntry;
-    // replaceState, never push: the reader did not navigate, an address that
-    // was already wrong got corrected.
-    if (substituted && state.view === "leaderboard") writeUrl();
+    if (state.view === "leaderboard") writeUrl();
+    renderAdoptionFrontier(board);
+    return;
   }
   setCanonicalFrontierChrome(true);
   // The stage badge is an adoption reading ("Saturated reporting" is a judgement
@@ -8279,19 +8318,40 @@ function bindEvents() {
     renderLeaderboard();
     byId("leaderboard-table-heading").scrollIntoView({ behavior: "smooth", block: "start" });
   });
+  byId("score-ranking-more").addEventListener("click", () => {
+    state.scoreRankingExpanded = !state.scoreRankingExpanded;
+    renderBenchmarkSearch();
+  });
+  byId("leaderboard-score-filter").addEventListener("change", (event) => setScoreFilter(event.target.value));
+  byId("benchmark-search-more").addEventListener("click", () => {
+    state.benchmarkVisibleLimit += BENCHMARK_SEARCH_LIMIT;
+    renderBenchmarkSearch();
+  });
   byId("frontier-benchmark").addEventListener("change", (event) => {
     selectFrontier(event.target.value);
     renderAdoptionFrontier(state.data.model_card_leaderboard);
     writeUrl("push");
   });
   byId("today-date").addEventListener("change", async (event) => {
-    state.todayDate = event.target.value;
+    const previousDate = state.todayRenderedDate || state.todayDate;
+    const selectedDate = event.target.value;
+    state.todayDate = selectedDate;
+    const notice = byId("today-load-error");
+    notice.hidden = false;
+    notice.textContent = t("Loading observations…");
     try {
       await ensureDataForState();
     } catch (error) {
       console.error(error);
+      if (state.todayDate === selectedDate) {
+        state.todayDate = previousDate;
+        byId("today-date").value = previousDate;
+        notice.textContent = t("Historical data could not be loaded. Select the range again to retry.");
+      }
       return;
     }
+    if (state.todayDate !== selectedDate) return;
+    notice.hidden = true;
     renderToday();
   });
   byId("today-page-prev").addEventListener("click", () => {
@@ -8364,7 +8424,7 @@ function bindEvents() {
     // The homepage is a newest-scan browser, but a query is a retrieval action:
     // its default scope is the full archive. Once a query exists, a reader can
     // still narrow it with the date select or the banner's "today" link.
-    if (!hadQuery && state.q.trim() && state.todayDate !== "all") {
+    if (!hadQuery && state.q.trim() && !todayIsMultiDate()) {
       state.todayDate = "all";
       state.todayPage = 1;
       ensureFullData()
@@ -8675,7 +8735,7 @@ async function refreshData() {
     const data = await response.json();
     if (!compatibleDashboard(data)) throw new Error("No compatible snapshots");
     if (!applyDashboardData(data, requestSequence, path === "/data/radar.json")) return;
-    if (state.todayDate !== "all" && !state.data.facets.dates.includes(state.todayDate)) {
+    if (!validTodayDate()) {
       state.todayDate = state.data.latest_date;
     }
     // Re-evaluate against the payload just received. This is normally a no-op,
@@ -8746,7 +8806,7 @@ async function initialize() {
     if (!compatibleDashboard(data)) throw new Error("No compatible snapshots");
     if (!applyDashboardData(data, requestSequence, false)) return;
     await ensureDataForState();
-    if (state.todayDate !== "all" && !state.data.facets.dates.includes(state.todayDate)) {
+    if (!validTodayDate()) {
       state.todayDate = state.data.latest_date;
     }
     renderTodayDateOptions();

@@ -5063,3 +5063,63 @@ dialog {
 .domain-card {
   border-radius: var(--radius);
 }
+
+/* Score browsing leads the page; adoption remains a separate view below it. */
+.score-browse-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: .5rem;
+}
+.score-browse-header h1 {
+  margin: 0;
+  font-size: clamp(1.25rem, 2vw, 1.5rem);
+  max-width: none;
+}
+.score-filter { display: flex; align-items: center; gap: .5rem; }
+.score-filter select { max-width: 100%; }
+.score-filter-note { margin-bottom: 1.25rem; }
+.score-source-heading { font-size: .8rem; margin: 1rem 0 .4rem; color: var(--muted); }
+.score-browse-result { align-items: flex-start; flex-direction: column; gap: .25rem; }
+.score-browse-result .benchmark-result-facts { white-space: normal; }
+#benchmark-search-results { max-height: 62vh; overflow-y: auto; }
+#frontier-highest-score { font-weight: 600; }
+#frontier-filter-note { color: var(--muted); }
+@media (max-width: 640px) {
+  .score-filter { width: 100%; }
+  #benchmark-search-results { max-height: 36vh; }
+}
+
+.score-ranking-link {
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+  padding: .35rem 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.score-ranking-link small { font-size: .7rem; font-weight: 400; color: var(--muted); }
+.score-ranking-link:hover > span { text-decoration: underline; }
+
+/* The contact tooltip can overhang even when the final badge is clamped. */
+#badge-contact::after {
+  right: 0;
+  left: auto;
+  transform: translate(0, -0.2rem);
+}
+#badge-contact:hover::after,
+#badge-contact:focus-visible::after {
+  transform: translate(0, 0);
+}
+@media (min-width: 761px) {
+  .score-ranking .leaderboard-top-row,
+  .score-ranking .leaderboard-top-columns {
+    grid-template-columns: 2rem minmax(0, 26rem) minmax(0, 1fr) 7rem;
+  }
+}

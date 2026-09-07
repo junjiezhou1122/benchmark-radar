@@ -54,6 +54,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .score_summary import score_summary
+
 CATALOG_SCHEMA_VERSION = 1
 
 DEFAULT_OUTPUT_DIR = Path("data/external")
@@ -312,6 +314,12 @@ def _series(
         # No scale means no percentage bar. See the module docstring.
         "display_scale": None,
         "observation_count": len(observations),
+        "score_summary": score_summary(
+            observations,
+            fractional_display=True,
+            declared_max=declared_max,
+            max_score_contradicted=contradicted,
+        ),
     }
 
 
@@ -537,6 +545,7 @@ def build_benchmark_index(
                 "openness": openness.get("status", "unknown"),
                 "modality": record.get("modality"),
                 "score_count": series.get("observation_count", 0),
+                "score_summary": series.get("score_summary"),
                 "has_paper": any(item["kind"] == "paper" for item in artifacts),
                 "has_repo": any(item["kind"] == "repo" for item in artifacts),
                 "repo_kind": repository.get("kind"),

@@ -46,30 +46,11 @@ def test_external_aime_2025_has_a_source_ranked_record_sequence():
 
 
 def test_the_frontier_opens_on_the_benchmark_the_page_ranks_first():
-    """The figure answers the question the ranking above it just raised.
-
-    It used to open on the NEWEST scored instrument, which put AutomationBench
-    under a page headed "most reported in model cards" -- a benchmark the
-    reader had not seen named anywhere above the figure. The ranking and the
-    default now agree by construction: `scored` is already in adoption_rank
-    order, so the first drawable entry is rank 1.
-    """
+    """The highest observation-count candidate is both rank 1 and the default chart."""
     script = source("site/assets/app.js")
-
-    default_entry = script.split("function frontierDefaultEntry(board)", 1)[1].split(
-        "\nconst BENCHMARK_TASK_SHAPES", 1
-    )[0]
-    # Read in rank order, never re-sorted -- a second sort here could drift
-    # from the ranking the page prints five lines of.
-    assert "(drawable.length ? drawable : scored)[0]" in default_entry
-    assert ".sort(" not in default_entry
-    assert "isNewBenchmark" not in default_entry
-    # A one-point plot says nothing visually, so a higher-ranked benchmark with
-    # a single dated reading is still passed over.
-    assert "datedCount(entry) >= 2" in default_entry
-    # And every candidate has a score record, so the default can never be a
-    # benchmark the panel cannot draw.
-    assert "entry.card_count > 0 && scoreRecord(entry.benchmark_id)" in default_entry
+    default = script.split("function frontierDefaultEntry(board)", 1)[1].split("\n}", 1)[0]
+    assert "scoreBrowseRows(board)[0]" in default
+    assert "if (!state.lfrontierExplicit) state.lfrontier = defaultEntry?.id" in script
 
 
 def test_a_thin_history_no_longer_falls_back_to_an_adoption_stepper():
@@ -276,7 +257,7 @@ def test_lfrontier_resolves_slug_first_then_canonical_id_then_default():
     )[0]
     slug_check = dispatch.index("record.slug === state.lfrontier")
     canonical_check = dispatch.index("candidate.benchmark_id === state.lfrontier")
-    default_pick = dispatch.index("state.lfrontier = defaultEntry.benchmark_id")
+    default_pick = dispatch.rindex("state.lfrontier = defaultEntry?.id")
     assert slug_check < canonical_check < default_pick
     # Only the default pick clears the reader's explicitness flag: the flag is
     # cleared exactly once in the dispatch, and only after the default is taken.
@@ -703,35 +684,15 @@ def test_the_crawled_chart_ticks_label_real_values_not_padded_bounds():
     assert "band = { low: low - pad, high: high + pad }" in chart
 
 
-def test_the_shortlist_says_what_it_ranks_by_behind_an_info_toggle():
-    """Issue #269: "Most reported" invited a comparison it does not make.
-
-    The list ranks by how many curated model cards report a benchmark. A
-    crawled score count answers a different question, so AIME 2025's 115
-    crawled scores losing to GPQA Diamond's 26 model cards is two measures
-    being confused, not a ranking bug. The heading now says so, and the
-    explanation sits behind the same (i) toggle the crawled source blocks use.
-    """
+def test_score_ranking_and_adoption_state_their_distinct_measures():
     html = source("site/index.html")
-    script = source("site/assets/app.js")
-    styles = source("site/assets/styles.css")
-
+    assert "Ranked by the number of recorded numeric scores, regardless of source." in html
     assert 'data-i18n="Most reported benchmarks in model cards"' in html
-    assert 'id="benchmark-example-info"' in html
-    # Reuses infoDisclosure rather than inventing a second (i) pattern.
-    assert "infoDisclosure(" in script.split("function renderBenchmarkNavigator", 1)[1][:1200]
-    assert "measures vendor reporting convention" in script
-
-    # Hover opens it as well as click. A closed <details> hides its body by not
-    # generating a box, so any `display` on that body pins the panel open --
-    # the reveal runs on visibility/opacity instead.
-    assert ".info-disclosure:hover > .info-disclosure-body" in styles
-    body = styles.split(".info-disclosure > .info-disclosure-body", 1)[1][:200]
-    assert "visibility: hidden" in body
-
-    # And it escapes the navigator's scroll container rather than being clipped.
-    pinned = styles.split(".benchmark-example-heading .info-disclosure-body", 1)[1][:200]
-    assert "position: fixed" in pinned
+    assert html.index('id="score-ranking-list"') < html.index('id="leaderboard-top-list"')
+    script = source("site/assets/app.js")
+    adoption = script.split("function renderLeaderboardTop(board)", 1)[1].split("\nfunction ", 1)[0]
+    assert "board.measures" in adoption
+    assert "infoDisclosure(" in adoption
 
 
 def test_a_benchmark_with_no_adopters_answers_for_itself():
@@ -760,7 +721,7 @@ def test_a_benchmark_with_no_adopters_answers_for_itself():
     assert "prependOption" in body
 
 
-def test_issue_256_the_ranking_leads_the_page_it_names():
+def test_score_ranking_leads_the_workbench_and_adoption_follows():
     """The tab is called Leaderboard and the ranking was the sixth block on it.
 
     A reader opening it passed a method note, an evidence strip, a findings
@@ -780,8 +741,9 @@ def test_issue_256_the_ranking_leads_the_page_it_names():
     # laptop, entirely below the fold, behind ~1180px of KPI cards, a findings
     # accordion and the full 80-row table. It now begins at y=824.
     order = [
-        'class="leaderboard-top"',
+        'id="score-ranking-list"',
         'class="benchmark-workbench"',
+        'class="leaderboard-top"',
         'id="leaderboard-insights"',
         'id="benchmark-findings"',
         'id="adoption-table"',
@@ -835,7 +797,7 @@ def test_issue_256_the_figure_region_carries_no_pipeline_coverage_count():
     navigator = script.split("function renderBenchmarkNavigator(board)", 1)[1].split(
         "\nfunction ", 1
     )[0]
-    assert 'metricLabel(entry.card_count, "model card")' in navigator
+    assert "scoreBrowseRows(board)" in navigator
     assert "score read from a document" not in navigator
     # The keys the helper used are still live for the search rows and the score
     # readout, so removing the helper must not have taken them with it.
@@ -1057,9 +1019,8 @@ def test_issue_304_an_unresolved_slug_stops_naming_itself_in_the_url():
     # perform one without the other. Three paths reach it: first load, the
     # re-render after the crawled index settles, and Back.
     fallback = dispatch.split("if (!entry) {", 1)[1].split("}", 1)[0]
-    assert "const substituted = Boolean(state.lfrontier);" in fallback
-    assert "state.lfrontier = defaultEntry.benchmark_id;" in fallback
-    assert 'if (substituted && state.view === "leaderboard") writeUrl();' in fallback
+    assert 'state.lfrontier = defaultEntry?.id || "";' in fallback
+    assert 'if (state.view === "leaderboard") writeUrl();' in fallback
 
     # replaceState, never push: the reader did not navigate, an address that
     # was already wrong got corrected. A push would put the dead slug into
@@ -1104,7 +1065,7 @@ def test_issue_313_the_title_is_half_size_and_its_info_is_anchored():
 
     # The toggle stays a sibling of the heading inside one flex row.
     row = html.split('class="leaderboard-top-heading"', 1)[1].split("</div>", 1)[0]
-    assert row.index('id="leaderboard-heading"') < row.index('id="leaderboard-top-info"')
+    assert row.index('id="leaderboard-adoption-heading"') < row.index('id="leaderboard-top-info"')
 
 
 def test_issue_341_a_fractional_series_is_drawn_on_a_zero_to_hundred_axis():
@@ -1121,24 +1082,17 @@ def test_issue_341_a_fractional_series_is_drawn_on_a_zero_to_hundred_axis():
     and no "out of 100" here -- an Elo series stays in Elo.
     """
     script = source("site/assets/app.js")
-    helper = script.split("function externalDisplayFactor(values, series)", 1)[1].split(
-        "\nfunction ", 1
-    )[0]
+    helper = script.split("function externalDisplayFactor(series)", 1)[1].split("\nfunction ", 1)[0]
 
-    # A source that carries values above its own declared maximum has told us
-    # its bound is not a bound, which disqualifies the series outright.
-    assert "if (series?.max_score_contradicted) return 1;" in helper
-    # A declared ceiling above 1 means the series is not on a 0-1 scale, so a
-    # crawl that happens to hold only small values is left alone.
-    assert "if (Number.isFinite(declaredMax) && declaredMax > 1) return 1;" in helper
-    assert "values.every((value) => value >= 0 && value <= 1) ? 100 : 1" in helper
-
+    # Scale is now generated once from all numeric rows, including undated ones.
+    # Threshold and contradicted-bound cases are exercised in test_score_filters.
+    assert "series?.score_summary?.display_multiplier" in helper
     chart = script.split("function externalPlottedRows(payload)", 1)[1].split(
         "\nfunction externalSourceTable", 1
     )[0]
     # Display only. Geometry still takes raw values, so applying the factor
     # cannot move a single point.
-    assert "const factor = externalDisplayFactor(values, payload.series);" in chart
+    assert "const factor = externalDisplayFactor(payload.series);" in chart
     assert "const scoreY = (value) => {" in chart
     assert "scoreY(shown(" not in chart
     assert "shown(bestValue)" in chart
@@ -1150,7 +1104,7 @@ def test_issue_341_a_fractional_series_is_drawn_on_a_zero_to_hundred_axis():
         "\nfunction ", 1
     )[0]
     # Stated where the reader can see it, beside the other provenance notes.
-    assert "externalDisplayFactor(plottedValues, series) !== 1" in table
+    assert "externalDisplayFactor(series) !== 1" in table
     assert "multiplies them by 100" in table
     # And the number the source actually published stays one click away.
     assert 't("Score as reported"), value: String(row.raw_value ?? row.value)' in chart
