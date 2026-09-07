@@ -566,6 +566,8 @@ def test_clean_route_model_migrates_legacy_urls_and_preserves_utility_background
             section("const VIEW_SEO = {", "// These sheets are also indexable pages."),
             section("const UTILITY_SEO = {", "// One list, not two:"),
             section("const VIEW_PATHS =", "function applySeo("),
+            # readUrl parses the score cutoff through this helper.
+            section("function scoreCutoff(", "function matchesScoreFilter("),
             section("function readUrl()", "// `push` adds a history entry"),
             section("function writeUrl(", "// A pushed entry changes the URL"),
         )
@@ -624,7 +626,7 @@ console.log(JSON.stringify(results));
     )
     routes = json.loads(result.stdout)
 
-    assert routes["legacyView"] == "/leaderboard/?lscore=under70&lq=agent"
+    assert routes["legacyView"] == "/leaderboard/?lscore=70&lq=agent"
     assert routes["legacyRubric"] == "/rubric/?version=2"
     assert routes["legacyReturns"] is False
     assert routes["openCli"] == "/cli/"

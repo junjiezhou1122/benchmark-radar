@@ -5078,9 +5078,13 @@ dialog {
   font-size: clamp(1.25rem, 2vw, 1.5rem);
   max-width: none;
 }
-.score-filter { display: flex; align-items: center; gap: .5rem; }
-.score-filter select { max-width: 100%; }
-.score-filter-note { margin-bottom: 1.25rem; }
+.score-filter { display: flex; align-items: center; gap: .6rem; margin-bottom: 1.25rem; }
+.score-filter input[type="range"] { flex: 1 1 auto; max-width: 20rem; accent-color: var(--blue); }
+.score-filter output {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-width: 2.5rem;
+}
 .score-source-heading { font-size: .8rem; margin: 1rem 0 .4rem; color: var(--muted); }
 .score-browse-result { align-items: flex-start; flex-direction: column; gap: .25rem; }
 .score-browse-result .benchmark-result-facts { white-space: normal; }
@@ -5089,6 +5093,7 @@ dialog {
 #frontier-filter-note { color: var(--muted); }
 @media (max-width: 640px) {
   .score-filter { width: 100%; }
+  .score-filter input[type="range"] { max-width: none; }
   #benchmark-search-results { max-height: 36vh; }
 }
 

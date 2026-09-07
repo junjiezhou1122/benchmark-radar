@@ -686,7 +686,9 @@ def test_the_crawled_chart_ticks_label_real_values_not_padded_bounds():
 
 def test_score_ranking_and_adoption_state_their_distinct_measures():
     html = source("site/index.html")
-    assert "Ranked by the number of recorded numeric scores, regardless of source." in html
+    # The score ranking is labelled by its own column headers rather than a
+    # paragraph of prose, so the two rankings stay distinguishable by structure.
+    assert 'data-i18n="Data points"' in html
     assert 'data-i18n="Most reported benchmarks in model cards"' in html
     assert html.index('id="score-ranking-list"') < html.index('id="leaderboard-top-list"')
     script = source("site/assets/app.js")

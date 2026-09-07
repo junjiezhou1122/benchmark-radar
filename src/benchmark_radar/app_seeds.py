@@ -72,6 +72,11 @@ LEADERBOARD_TOP_NOTE = (
 )
 
 
+# The slider's default position in site/index.html. The seed must render the
+# same cutoff the browser starts on, or the first paint would change on hydrate.
+DEFAULT_SCORE_CUTOFF = 70
+
+
 def _display_value(value: float) -> str:
     """One decimal, matching scoreSummaryLabel in app.js so seeds and renders agree.
 
@@ -163,7 +168,7 @@ def _leaderboard_seed(
 def _score_browser_seed(
     dashboard: dict[str, Any], external_index: list[dict[str, Any]]
 ) -> dict[str, str]:
-    """The default under-70 list rendered by renderBenchmarkSearch."""
+    """The default list rendered by renderBenchmarkSearch, at DEFAULT_SCORE_CUTOFF."""
     board = dashboard.get("model_card_leaderboard") or {}
     progression = (dashboard.get("benchmark_score_progression") or {}).get("benchmarks") or {}
     rows = [
@@ -189,7 +194,7 @@ def _score_browser_seed(
         for row in rows
         if row["summary"]
         and row["summary"]["numeric_count"] > 0
-        and row["summary"]["display_max"] < 70
+        and row["summary"]["display_max"] < DEFAULT_SCORE_CUTOFF
     ]
     rows.sort(key=lambda row: (-row["summary"]["numeric_count"], row["id"]))
     shown = rows[:50]

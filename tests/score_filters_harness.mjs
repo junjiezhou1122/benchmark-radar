@@ -46,7 +46,7 @@ state.benchmarkIndex = [
   {slug:'at100',name:'At100',source:'llm_stats',score_summary:summary(100,30)},
   {slug:'missing',name:'Missing',source:'llm_stats',score_summary:summary(null,0)},
 ];
-state.lscore = 'under70';
+state.lscore = 70;
 const scoreNames = ['scoreRecord','matchesScoreFilter','scoreBrowseRows','frontierDefaultEntry','externalDisplayFactor'];
 const scores = new Function('state', `${scoreNames.map(fn).join('\n')}\nreturn {${scoreNames.join(',')}};`)(state);
 assert.deepEqual(scores.scoreBrowseRows().map(r=>[r.id,r.rank]), [['external',1],['curated',2]]);
@@ -54,12 +54,24 @@ assert.equal(scores.frontierDefaultEntry(state.data.model_card_leaderboard).id,'
 assert.equal(scores.matchesScoreFilter(summary(69.999)),true);
 assert.equal(scores.matchesScoreFilter(summary(70)),false);
 assert.equal(scores.matchesScoreFilter(summary(60,0)),false);
-state.lscore='under100';
-assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['over70','external','curated']);
-state.lscore='all';
+state.lscore=100;
 assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['at100','over70','external','curated']);
+state.lscore=90;
+assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['over70','external','curated']);
+// An intermediate step the old three-option filter could not express.
+state.lscore=40;
+assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), []);
+state.lscore=70;
 state.benchmarkIndex=null;
 assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['curated']);
 assert.equal(scores.externalDisplayFactor({score_summary:{display_multiplier:100}}),100);
 assert.equal(scores.externalDisplayFactor({score_summary:{display_multiplier:1}}),1);
+const cutoff = new Function(`${fn('scoreCutoff')}\nreturn scoreCutoff;`)();
+assert.equal(cutoff('40'), 40);
+assert.equal(cutoff('100'), 100);
+assert.equal(cutoff(null), 70, 'a missing cutoff falls back to the default');
+assert.equal(cutoff('under70'), 70, 'a stale token from an old link falls back');
+assert.equal(cutoff('5'), 70, 'below the slider minimum falls back');
+assert.equal(cutoff('999'), 70, 'above the slider maximum falls back');
+assert.equal(cutoff('44'), 40, 'an off-step value snaps to the nearest step');
 console.log('Date windows, deduplication, cutoff boundaries, source-neutral ranking, and shared scale passed.');

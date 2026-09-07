@@ -424,22 +424,17 @@ const I18N = {
     "Data through": "数据截至",
     "Reported benchmark scores": "Benchmark 已报告成绩",
     "Browse scored benchmarks": "查找已有成绩的 benchmark",
-    "Highest reported score <70": "已报告的最高分低于 70",
     "All scored": "全部有成绩的 benchmark",
     "Highest": "最高分",
     "raw score ×100": "原始分数 ×100",
     "Scores use each chart's displayed scale; scoring systems and test conditions differ.": "分数沿用各自图表的刻度，各项评测的计分方式和测试条件不同。",
-    "Highest reported score <100": "已报告的最高分低于 100",
-    "Below 100 on the displayed scale; scoring systems and test conditions differ.": "按图表刻度筛选低于 100 的最高分，各项评测的计分方式和测试条件不同。",
     "Ranked by data points": "按成绩记录数排名",
     "data point": "条成绩记录",
     "data points": "条成绩记录",
     "Data points": "成绩记录数",
     "Show top 5": "只看前 5 名",
-    "Ranked by the number of recorded numeric scores, regardless of source. Counts describe evidence coverage, not benchmark quality.": "按收录的数值成绩条数排名，不区分来源优先级。记录多表示收录的成绩多，不代表 benchmark 质量更高。",
     "No numeric score": "暂无数值成绩",
     "Outside current filter": "当前筛选范围外",
-    "Below 70 on the displayed scale; scoring systems and test conditions differ.": "按图表刻度筛选低于 70 的最高分，各项评测的计分方式和测试条件不同。",
     "No scored benchmarks match these filters.": "没有符合筛选条件的 benchmark。",
     "Loading observations…": "正在加载记录……",
     "Historical data could not be loaded. Select the range again to retry.": "历史记录加载失败，请重新选择时间范围再试。",
@@ -1081,7 +1076,7 @@ const state = {
   ldomain: "",
   lorg: "",
   lera: "",
-  lscore: "under70",
+  lscore: 70,
   benchmarkVisibleLimit: 50,
   scoreRankingExpanded: false,
   lfrontier: "",
@@ -1275,7 +1270,7 @@ function readUrl() {
   state.ldomain = params.get("ldomain") || "";
   state.lorg = params.get("lorg") || "";
   state.lera = params.get("lera") || "";
-  state.lscore = ["all", "under100"].includes(params.get("lscore")) ? params.get("lscore") : "under70";
+  state.lscore = scoreCutoff(params.get("lscore"));
   state.benchmarkVisibleLimit = BENCHMARK_SEARCH_LIMIT;
   state.lfrontier = params.get("lfrontier") || "";
   state.lfrontierExplicit = Boolean(state.lfrontier);
@@ -4559,10 +4554,19 @@ function scoreSourceLabel(source) {
   return source === "curated" ? t("Curated registry") : externalSourceMeta(source).name;
 }
 
+function scoreCutoff(value) {
+  // Steps of 10 from 10 to 100, where 100 keeps every scored benchmark.
+  // Range is checked before snapping, so an out-of-range value falls back
+  // rather than rounding itself into the valid band.
+  const raw = Number(value);
+  if (!Number.isFinite(raw) || raw < 10 || raw > 100) return 70;
+  return Math.round(raw / 10) * 10;
+}
+
 function matchesScoreFilter(summary) {
   return Number.isFinite(summary?.display_max)
     && summary.numeric_count > 0
-    && (state.lscore === "all" || summary.display_max < (state.lscore === "under100" ? 100 : 70));
+    && (state.lscore >= 100 || summary.display_max < state.lscore);
 }
 
 function scoreBrowseRows(board = state.data?.model_card_leaderboard) {
@@ -4607,7 +4611,7 @@ function scoreBrowseResultRow(row) {
 }
 
 function setScoreFilter(value) {
-  state.lscore = ["all", "under100"].includes(value) ? value : "under70";
+  state.lscore = scoreCutoff(value);
   state.benchmarkVisibleLimit = BENCHMARK_SEARCH_LIMIT;
   // An intentional permalink stays visible outside the filtered list.
   // Only the automatic opening selection follows a filter change.
@@ -4688,23 +4692,16 @@ function renderBenchmarkSearch() {
   if (!rows.length) {
     container.append(element("p", { className: "empty-state", text: loading
       ? t("Loading benchmark details…") : t("No scored benchmarks match these filters.") }));
-    if (state.lscore !== "all") {
+    if (state.lscore < 100) {
       const all = element("button", { className: "clear-button", text: t("All scored"), attrs: { type: "button" } });
-      all.addEventListener("click", () => setScoreFilter("all"));
+      all.addEventListener("click", () => setScoreFilter(100));
       container.append(all);
     }
   }
   const more = byId("benchmark-search-more");
   more.hidden = shown.length >= rows.length;
   byId("leaderboard-score-filter").value = state.lscore;
-  const note = byId("leaderboard-score-note");
-  const message = state.lscore === "all"
-    ? "Scores use each chart's displayed scale; scoring systems and test conditions differ."
-    : state.lscore === "under100"
-      ? "Below 100 on the displayed scale; scoring systems and test conditions differ."
-      : "Below 70 on the displayed scale; scoring systems and test conditions differ.";
-  note.textContent = t(message);
-  note.setAttribute("data-i18n", message);
+  byId("leaderboard-score-value").textContent = state.lscore >= 100 ? t("All") : state.lscore;
 }
 
 function initBenchmarkSearch() {
@@ -8322,7 +8319,13 @@ function bindEvents() {
     state.scoreRankingExpanded = !state.scoreRankingExpanded;
     renderBenchmarkSearch();
   });
-  byId("leaderboard-score-filter").addEventListener("change", (event) => setScoreFilter(event.target.value));
+  const scoreFilter = byId("leaderboard-score-filter");
+  // The readout tracks the thumb; the list re-filters once the drag settles.
+  scoreFilter.addEventListener("input", (event) => {
+    const value = scoreCutoff(event.target.value);
+    byId("leaderboard-score-value").textContent = value >= 100 ? t("All") : value;
+  });
+  scoreFilter.addEventListener("change", (event) => setScoreFilter(event.target.value));
   byId("benchmark-search-more").addEventListener("click", () => {
     state.benchmarkVisibleLimit += BENCHMARK_SEARCH_LIMIT;
     renderBenchmarkSearch();
