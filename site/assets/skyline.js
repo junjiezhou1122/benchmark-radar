@@ -48,7 +48,7 @@ export function benchmarkDateLabel(row) {
       : "First LLM score reported";
 }
 
-// This is the population used by BOTH the chart and the browser. Keeping a
+// This is the population used by the chart, rankings and browser. Keeping a
 // row does not require a score, date, adoption count, or join to another source.
 export function scoreBrowserSummary(record) {
   const summary = record.score_summary;
@@ -129,7 +129,7 @@ export function skylineModel(catalog = [], cutoff = 70, matchingIds = null, heig
     row.pareto = !comparable(row) ? null : !eligible.some((other) => other.score <= row.score && other.heightCount >= row.heightCount
       && (other.score < row.score || other.heightCount > row.heightCount));
   }
-  // Cutoff membership is shared with score browsing. Normalized reversed
+  // The figure's cutoff is independent of Saturation search. Normalized reversed
   // metrics remain explicit in the tooltip; they never change source scores.
   const visible = withinDates.filter((row) => (!matchingIds || matchingIds.has(row.id))
     && matchesScoreCutoff(row.summary, cutoff));

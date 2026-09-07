@@ -49,7 +49,7 @@ def test_the_frontier_opens_on_the_benchmark_the_page_ranks_first():
     """The highest observation-count candidate is both rank 1 and the default chart."""
     script = source("site/assets/app.js")
     default = script.split("function frontierDefaultEntry(board)", 1)[1].split("\n}", 1)[0]
-    assert "scoreBrowseRows(board)[0]" in default
+    assert "saturationRows()[0]" in default
     assert "if (!state.lfrontierExplicit) state.lfrontier = defaultEntry?.id" in script
 
 
@@ -120,7 +120,7 @@ def test_trajectory_points_expose_and_pin_record_details():
     assert 'record.unit === "percent" ? "%" : ` ${record.unit}`' in script
     assert 'role: "group"' in script
     assert 'event.key === "Escape" && selectedFrontierPoint' in script
-    assert 'view !== "leaderboard" && selectedFrontierPoint' in script
+    assert "if (selectedFrontierPoint || describedFrontierPoint)" in script
     assert 'pinned ? "dialog" : "tooltip"' in script
     assert 'details.urlLabel || t("Open source record ↗")' in script
     # Resolved from the point's own chart, not by a document-wide id: the
@@ -305,7 +305,7 @@ def test_search_selection_updates_the_detail_panel():
     # Issue #245 added a `navigate` path for rows rendered outside the
     # leaderboard, where updating the panel in place would look like the click
     # did nothing. It must not replace the in-place update the panel relies on.
-    assert 'setView("leaderboard")' in row
+    assert 'setView("saturation")' in row
 
 
 def test_crawled_scores_are_partitioned_by_source_with_no_merge_path():
@@ -707,7 +707,7 @@ def test_a_benchmark_without_documents_or_scores_uses_its_own_catalog_detail():
     assert "picker.prepend(option(record.slug" in detail
 
 
-def test_score_ranking_leads_the_workbench_and_adoption_follows():
+def test_leaderboard_keeps_its_rankings_and_saturation_owns_the_workbench():
     """The tab is called Leaderboard and the ranking was the sixth block on it.
 
     A reader opening it passed a method note, an evidence strip, a findings
@@ -728,13 +728,17 @@ def test_score_ranking_leads_the_workbench_and_adoption_follows():
     # accordion and the full 80-row table. It now begins at y=824.
     order = [
         'id="score-ranking-list"',
-        'class="benchmark-workbench"',
         'class="leaderboard-top"',
         'id="leaderboard-insights"',
         'id="benchmark-findings"',
         'id="adoption-table"',
         'aria-labelledby="leaderboard-cards-heading"',
     ]
+    leaderboard = html.split('id="leaderboard-view"', 1)[1].split('id="saturation-view"', 1)[0]
+    saturation = html.split('id="saturation-view"', 1)[1].split('id="trends-view"', 1)[0]
+    assert 'class="benchmark-workbench"' not in leaderboard
+    assert 'class="benchmark-workbench"' in saturation
+    assert 'id="score-ranking-list"' not in saturation
     positions = [html.index(marker) for marker in order]
     assert positions == sorted(positions), (
         "leaderboard blocks are out of order: "
@@ -783,7 +787,7 @@ def test_issue_256_the_figure_region_carries_no_pipeline_coverage_count():
     navigator = script.split("function renderBenchmarkNavigator(board)", 1)[1].split(
         "\nfunction ", 1
     )[0]
-    assert "scoreBrowseRows(board)" in navigator
+    assert "saturationRows()" in navigator
     assert "score read from a document" not in navigator
     # The keys the helper used are still live for the search rows and the score
     # readout, so removing the helper must not have taken them with it.

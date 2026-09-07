@@ -28,7 +28,7 @@ web. It pulls evidence from 37 public sources every day, and keeps updating.
 **Find a benchmark in seconds, then see how model scores change over time. Click
 the GIF below to watch SWE-bench Verified move toward saturation.**
 
-<a href="https://benchmark-radar.org/leaderboard/?lfrontier=swe_bench_verified">
+<a href="https://benchmark-radar.org/saturation/?lfrontier=swe_bench_verified">
   <img src="assets/swe-bench-verified.gif" alt="Animated demo of searching for SWE-bench Verified and viewing its model scores over time" width="720" />
 </a>
 

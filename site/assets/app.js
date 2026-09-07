@@ -346,6 +346,7 @@ function rerenderCurrentView() {
   renderTodayDateOptions();
   if (state.view === "today") renderToday();
   if (state.view === "leaderboard") renderLeaderboard();
+  if (state.view === "saturation") renderSaturation();
   if (state.view === "trends") renderTrends();
   if (state.view === "map") renderTrendMap();
   renderStaleBanner();
@@ -382,7 +383,9 @@ const I18N = {
     "Scores and citations from model reports. Each score keeps its document, test version, protocol and publication date.": "这些成绩和引用来自模型报告。每条成绩都保留来源文档、测试版本、测试条件和发布日期。",
     "No numeric scores recorded for this benchmark.": "这条 benchmark 尚未记录数值成绩。",
     "Benchmark Frontier: {n} individual benchmarks from all sources. Dated benchmarks run left to right from 2024. Undated benchmarks remain visible by score. Gold rings mark the measured Pareto frontier.": "Benchmark 前沿：全部来源的 {n} 个独立标记。日期从 2024 年起向右排列，日期未知的仍按分数显示。金色环标出有测量依据的 Pareto 前沿。",
-    "{unscored} without scores excluded · {older} before 2024 · {hidden} hidden by score or search": "未报告成绩的 {unscored} 个已排除 · {older} 个早于 2024 年 · 分数或搜索筛选隐藏 {hidden} 个",
+    "{unscored} without scores excluded · {older} before 2024 · {hidden} hidden by score": "未报告成绩的 {unscored} 个已排除 · {older} 个早于 2024 年 · 分数筛选隐藏 {hidden} 个",
+    "Saturation": "饱和度",
+    "Searching all benchmarks (filters paused)": "搜索全部 benchmark（暂不筛选）",
     "No comparable score": "没有可比较的分数",
     "Benchmark date": "Benchmark 日期",
     "Highest reported score · 0–100": "最高报告分数 · 0–100",
@@ -1356,7 +1359,7 @@ function readUrl() {
   const params = backgroundLocation?.searchParams || currentParams;
   const requestedView = params.get("view");
   // Legacy Explorer permalinks resolve to the filterable Today list.
-  const legacyView = ["trends", "map", "leaderboard"].includes(requestedView)
+  const legacyView = ["trends", "map", "leaderboard", "saturation"].includes(requestedView)
     ? requestedView
     : "";
   // The path is the view, and that is what keeps Back and Forward honest: the
@@ -1394,8 +1397,11 @@ function readUrl() {
   state.lscore = scoreCutoff(params.get("lscore"));
   state.lheight = ["cards", "documents"].includes(params.get("lheight")) ? "documents" : "models";
   state.benchmarkVisibleLimit = BENCHMARK_SEARCH_LIMIT;
+  state.benchmarkQuery = (params.get("bq") || "").trim();
   state.lfrontier = params.get("lfrontier") || "";
   state.lfrontierExplicit = Boolean(state.lfrontier);
+  // Existing benchmark permalinks follow the score history to its new tab.
+  if (state.view === "leaderboard" && state.lfrontierExplicit) state.view = "saturation";
   const rawHash = window.location.hash.slice(1);
   const hashParams = new URLSearchParams(rawHash);
   // A first-class utility path wins over every legacy fragment. This keeps a
@@ -1466,6 +1472,10 @@ function writeUrl(mode = "replace") {
     if (state.ldomain) params.set("ldomain", state.ldomain);
     if (state.lorg) params.set("lorg", state.lorg);
     if (state.lera) params.set("lera", state.lera);
+  }
+  if (!utility && state.view === "saturation") {
+    params.set("lscore", state.lscore);
+    if (state.benchmarkQuery) params.set("bq", state.benchmarkQuery);
     // A benchmark auto-picked as the default is not the reader's choice, so it
     // stays out of the URL until they select one themselves.
     if (state.lfrontierExplicit && state.lfrontier) {
@@ -1595,10 +1605,16 @@ const VIEW_SEO = {
     canonical: "/",
   },
   leaderboard: {
-    title: "AI benchmarks by highest reported score | Benchmark Radar",
+    title: "AI benchmark frontier and rankings | Benchmark Radar",
     description:
-      "Browse AI benchmark scores from every source. Start with highest reported scores below 70 on the chart scale, inspect their sources, or browse all scored benchmarks.",
+      "Explore Benchmark Frontier by highest reported score, and compare benchmarks by recorded scores and source documents across the catalog.",
     canonical: "/leaderboard/",
+  },
+  saturation: {
+    title: "AI benchmark saturation and score histories | Benchmark Radar",
+    description:
+      "Browse benchmarks by highest reported score or search the complete catalog. Inspect reported scores over time with their sources, dates, and test conditions.",
+    canonical: "/saturation/",
   },
   trends: {
     title: "AI benchmark discovery trends over time | Benchmark Radar",
@@ -1725,7 +1741,7 @@ function syncNavState() {
 // popstate), where writing history again would either duplicate the entry or
 // fight the entry being restored.
 function setView(view, update = true, mode = "push") {
-  if (view !== "leaderboard" && selectedFrontierPoint) {
+  if (selectedFrontierPoint || describedFrontierPoint) {
     clearFrontierPointSelection();
   }
   state.view = view;
@@ -1740,6 +1756,15 @@ function setView(view, update = true, mode = "push") {
 function selectFrontier(benchmarkId) {
   state.lfrontier = benchmarkId;
   state.lfrontierExplicit = true;
+}
+
+function openSaturation(benchmarkId) {
+  selectFrontier(benchmarkId);
+  setView("saturation");
+  renderSaturation();
+  if (window.matchMedia("(max-width: 1050px)").matches) {
+    byId("adoption-frontier").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 function categoryColor(category, index = 0) {
@@ -4273,7 +4298,7 @@ function frontierAdvances(entry) {
 }
 
 function frontierDefaultEntry(board) {
-  return scoreBrowseRows(board)[0];
+  return saturationRows()[0];
 }
 
 const BENCHMARK_TASK_SHAPES = {
@@ -4518,10 +4543,10 @@ function benchmarkResultRow(record, { navigate = false, inert = false } = {}) {
     selectFrontier(record.slug);
     if (navigate) {
       // setView toggles visibility and the URL; it does not draw. On a first
-      // visit the leaderboard has never rendered, so switching to it without
+      // visit Saturation has never rendered, so switching to it without
       // this leaves the reader on an empty panel.
-      setView("leaderboard");
-      renderLeaderboard();
+      setView("saturation");
+      renderSaturation();
       return;
     }
     renderBenchmarkSearch();
@@ -4532,7 +4557,7 @@ function benchmarkResultRow(record, { navigate = false, inert = false } = {}) {
 }
 
 // Each row keeps its source identity. The score cutoff decides membership;
-// recorded numeric observations determine rank, without a source preference.
+// recorded numeric observations determine order, without a source preference.
 function scoreSourceLabel(source) {
   return t(catalogSourceMeta(source).name);
 }
@@ -4550,11 +4575,24 @@ function matchesScoreFilter(summary) {
   return matchesScoreCutoff(summary, state.lscore);
 }
 
-function scoreBrowseRows() {
+function scoreBrowseRows(cutoff = state.lscore) {
   return scorePopulation(state.benchmarkIndex || [])
-    .filter((row) => (row.date === null || row.date >= SKYLINE_START_DATE) && matchesScoreFilter(row.summary))
+    .filter((row) => !matchesScoreCutoff(row.summary, 100) || matchesScoreCutoff(row.summary, cutoff))
     .sort((a, b) => (b.summary?.numeric_count || 0) - (a.summary?.numeric_count || 0)
-      || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+function saturationRows() {
+  const matches = benchmarkQueryIds();
+  // Search is a lookup across the whole catalog. It temporarily bypasses the
+  // browsing cutoff without changing the shared slider value.
+  const rows = scoreBrowseRows(matches ? 100 : state.lscore);
+  return matches ? rows.filter((row) => matches.has(row.id)) : rows;
+}
+
+function scoreRankingRows() {
+  return scoreBrowseRows(100)
+    .filter((row) => (row.date === null || row.date >= SKYLINE_START_DATE) && matchesScoreCutoff(row.summary, 100))
     .map((row, index) => ({ ...row, rank: index + 1 }));
 }
 
@@ -4570,33 +4608,46 @@ function scoreBrowseResultRow(row) {
     className: "benchmark-result score-browse-result",
     attrs: { type: "button", "aria-pressed": row.id === state.lfrontier ? "true" : "false" },
   }, [
-    element("span", { className: "benchmark-result-name", text: `${row.rank}. ${row.name}` }),
-    element("span", { className: "benchmark-result-facts", text: `${scoreSourceLabel(row.source)} · ${row.date
-      ? `${t(benchmarkDateLabel(row))} ${formatDate(row.date, { dateStyle: "medium" })}` : t("Date unknown")}` }),
+    element("span", { className: "benchmark-result-name", text: row.name }),
+    element("span", { className: "benchmark-result-facts", text: [scoreSourceLabel(row.source),
+      row.date ? `${t(benchmarkDateLabel(row))} ${formatDate(row.date, { dateStyle: "medium" })}` : t("Date unknown"),
+      matchesScoreCutoff(row.summary, 100) ? "" : t("No score reported"),
+    ].filter(Boolean).join(" · ") }),
   ]);
   button.addEventListener("click", () => {
-    selectFrontier(row.id);
-    renderAdoptionFrontier(catalogDocumentBoard());
-    writeUrl("push");
+    openSaturation(row.id);
   });
   return button;
 }
 
 function setScoreFilter(value) {
   state.lscore = scoreCutoff(value);
-  state.benchmarkVisibleLimit = BENCHMARK_SEARCH_LIMIT;
-  // An intentional permalink stays visible outside the filtered list.
-  // Only the automatic opening selection follows a filter change.
-  if (!state.lfrontierExplicit) state.lfrontier = "";
-  renderAdoptionFrontier(catalogDocumentBoard());
+  syncScoreFilters();
+  if (state.view === "saturation") {
+    if (!state.benchmarkQuery) {
+      state.benchmarkVisibleLimit = BENCHMARK_SEARCH_LIMIT;
+      // An explicit selection keeps its complete history outside the cutoff.
+      if (!state.lfrontierExplicit) state.lfrontier = "";
+      renderSaturation();
+    }
+  } else {
+    renderBenchmarkSkyline();
+  }
   writeUrl();
+}
+
+function syncScoreFilters(value = state.lscore) {
+  for (const view of ["leaderboard", "saturation"]) {
+    byId(`${view}-score-filter`).value = value;
+    byId(`${view}-score-value`).textContent = value >= 100 ? t("All") : value;
+  }
 }
 
 function renderScoreSelectionNote() {
   const item = scorePopulation(state.benchmarkIndex || []).find((row) => row.id === state.lfrontier);
   const summary = item?.summary;
-  const outside = Boolean(state.lfrontierExplicit && item && (!matchesScoreFilter(summary)
-    || (item.date && item.date < SKYLINE_START_DATE)));
+  const outside = Boolean(state.lfrontierExplicit && item
+    && !saturationRows().some((row) => row.id === item.id));
   const note = byId("frontier-filter-note");
   note.hidden = !outside;
   note.textContent = outside ? t("Outside current filter") : "";
@@ -4606,7 +4657,7 @@ function renderScoreSelectionNote() {
 }
 
 function renderScoreRanking(rows) {
-  const visible = state.scoreRankingExpanded ? rows.slice(0, state.benchmarkVisibleLimit) : rows.slice(0, 5);
+  const visible = rows.slice(0, state.scoreRankingExpanded ? BENCHMARK_SEARCH_LIMIT : 5);
   const maximum = rows[0]?.summary?.numeric_count || 1;
   replaceChildren(byId("score-ranking-list"), visible.map((row) => {
     const button = element("button", {
@@ -4617,9 +4668,7 @@ function renderScoreRanking(rows) {
       element("small", { text: `${scoreSourceLabel(row.source)} · ${scoreSummaryLabel(row.summary)}` }),
     ]);
     button.addEventListener("click", () => {
-      selectFrontier(row.id);
-      renderAdoptionFrontier(catalogDocumentBoard());
-      writeUrl("push");
+      openSaturation(row.id);
     });
     return element("li", { className: "leaderboard-top-row" }, [
       element("span", { className: "leaderboard-top-rank", text: String(row.rank).padStart(2, "0") }),
@@ -4646,34 +4695,29 @@ function renderBenchmarkSearch() {
   const container = byId("benchmark-search-results");
   const status = byId("benchmark-search-status");
   if (!container || !status || !state.data) return;
-  const board = catalogDocumentBoard();
-  let rows = scoreBrowseRows(board);
-  const matches = benchmarkQueryIds(board);
-  if (matches) rows = rows.filter((row) => matches.has(row.id));
+  byId("benchmark-search-input").value = state.benchmarkQuery;
+  const rows = saturationRows();
   const shown = rows.slice(0, state.benchmarkVisibleLimit);
   replaceChildren(container, shown.map(scoreBrowseResultRow));
-  renderScoreRanking(rows);
   const loading = !state.benchmarkIndexLoaded;
   const failed = state.benchmarkIndexLoaded && !state.benchmarkIndex;
   const coverage = loading ? t("Still checking the benchmark registry…")
     : failed ? t("The benchmark catalog could not be loaded.") : "";
   status.textContent = [t("{shown} of {total} matches")
     .replace("{shown}", shown.length.toLocaleString())
-    .replace("{total}", rows.length.toLocaleString()), coverage].filter(Boolean).join(" · ");
+    .replace("{total}", rows.length.toLocaleString()),
+    state.benchmarkQuery ? t("Searching all benchmarks (filters paused)") : "", coverage].filter(Boolean).join(" · ");
   if (!rows.length) {
     container.append(element("p", { className: "empty-state", text: loading
-      ? t("Loading benchmark details…") : t("No scored benchmarks match these filters.") }));
-    if (state.lscore < 100) {
-      const all = element("button", { className: "clear-button", text: t("All scored"), attrs: { type: "button" } });
+      ? t("Loading benchmark details…") : t("No benchmarks match these filters.") }));
+    if (!state.benchmarkQuery && state.lscore < 100) {
+      const all = element("button", { className: "clear-button", text: t("All"), attrs: { type: "button" } });
       all.addEventListener("click", () => setScoreFilter(100));
       container.append(all);
     }
   }
   const more = byId("benchmark-search-more");
   more.hidden = shown.length >= rows.length;
-  byId("leaderboard-score-filter").value = state.lscore;
-  byId("leaderboard-score-value").textContent = state.lscore >= 100 ? t("All") : state.lscore;
-  renderBenchmarkSkyline();
 }
 
 function skylineChart(model, cutoff) {
@@ -5061,7 +5105,7 @@ function renderBenchmarkSkyline(cutoff = state.lscore) {
   }
   // Selection in another chart survives a slider preview.
   if (host.contains(selectedFrontierPoint) || host.contains(describedFrontierPoint)) clearFrontierPointSelection();
-  const model = skylineModel(state.benchmarkIndex, cutoff, benchmarkQueryIds(), state.lheight);
+  const model = skylineModel(state.benchmarkIndex, cutoff, null, state.lheight);
   const svg = skylineChart(model, cutoff);
   const sourceCounts = [...new Set(model.all.map((row) => row.source))].map((source) =>
     `${scoreSourceLabel(source)}: ${model.visible.filter((row) => row.source === source).length.toLocaleString()} / ${model.all.filter((row) => row.source === source).length.toLocaleString()}`);
@@ -5087,7 +5131,7 @@ function renderBenchmarkSkyline(cutoff = state.lscore) {
   byId("benchmark-skyline-count").textContent = t("{visible} of {n} benchmarks shown · {s} sources in corpus", {
     visible: model.visible.length.toLocaleString(), n: model.population.toLocaleString(), s: model.sources,
   });
-  byId("benchmark-skyline-note").textContent = t("{unscored} without scores excluded · {older} before 2024 · {hidden} hidden by score or search", {
+  byId("benchmark-skyline-note").textContent = t("{unscored} without scores excluded · {older} before 2024 · {hidden} hidden by score", {
     unscored: model.unscored.toLocaleString(), older: model.beforeStart.toLocaleString(),
     hidden: (model.hidden - model.beforeStart - model.unscored).toLocaleString(),
   });
@@ -5100,20 +5144,21 @@ function initBenchmarkSearch() {
   const onInput = debounce(() => {
     state.benchmarkQuery = input.value.trim();
     state.benchmarkVisibleLimit = BENCHMARK_SEARCH_LIMIT;
-    renderBenchmarkSearch();
+    renderSaturation();
+    writeUrl();
   });
   input.addEventListener("input", onInput);
   loadBenchmarkIndex().then((records) => {
     // Loading and failure remain explicit; no source-specific fallback corpus.
     state.benchmarkIndex = records;
     state.benchmarkIndexLoaded = true;
-    renderBenchmarkSearch();
     // A ?lfrontier=<slug> permalink can only resolve once the index fetch has
     // settled either way: a resolved index confirms the slug, a failed one
     // turns the panel's loading state into an explicit unavailability note
     // (see renderAdoptionFrontier).
     // Rebuild the document counts and navigation after the common index loads.
     if (state.view === "leaderboard") renderLeaderboard();
+    if (state.view === "saturation") renderSaturation();
   });
 }
 
@@ -5919,10 +5964,10 @@ function setCanonicalFrontierChrome(visible) {
   }
 }
 
-// The picker and ranking share the filtered catalog, with source names for provenance.
+// The picker follows Saturation's browser, including the full-catalog search.
 function frontierPickerGroups(scored) {
-  return [[t("Ranked by data points"), scoreBrowseRows().map((row) => [
-    row.id, `${row.rank}. ${row.name} · ${scoreSourceLabel(row.source)}`,
+  return [[t("Browse all benchmarks"), scored.map((row) => [
+    row.id, `${row.name} · ${scoreSourceLabel(row.source)}`,
   ])]];
 }
 
@@ -6073,7 +6118,7 @@ function renderBenchmarkNavigator(board) {
   const host = byId("benchmark-shortlist");
   const info = byId("benchmark-example-info");
   if (info) replaceChildren(info, []);
-  if (host) replaceChildren(host, scoreBrowseRows(board).slice(0, 3).map(scoreBrowseResultRow));
+  if (host) replaceChildren(host, saturationRows().slice(0, 3).map(scoreBrowseResultRow));
 }
 
 function renderFrontierTaskPreview(entry) {
@@ -6751,7 +6796,7 @@ function frontierPointSizes(offTheLine) {
 // reveal it was drawn for: same-selection repaints inside the window replay
 // the entrance from its start rather than cutting it off, and once the window
 // closes the selection counts as seen, so later repaints render finished.
-// The key commits only while the Leaderboard is the visible view: a redraw
+// The key commits only while Saturation is the visible view: a redraw
 // into a hidden panel must not spend an entrance the reader has yet to see.
 const FRONTIER_ENTRANCE_MS =
   FRONTIER_SWEEP_DELAY_MS + FRONTIER_SWEEP_MS + FRONTIER_POINT_FADE_MS + 120;
@@ -6760,7 +6805,7 @@ let frontierEntranceTimer = null;
 let drawnFrontierEntranceKey = null;
 
 function frontierShouldAnimate(key) {
-  if (state.view !== "leaderboard") return false;
+  if (state.view !== "saturation") return false;
   // Remember what is actually on screen: the completion callback below may
   // fire after the reader has moved to another benchmark.
   drawnFrontierEntranceKey = key;
@@ -6778,7 +6823,7 @@ function frontierShouldAnimate(key) {
         frontierEntranceTimer = setTimeout(spendOrDefer, FRONTIER_ENTRANCE_MS);
         return;
       }
-      if (state.view === "leaderboard" && drawnFrontierEntranceKey === key) {
+      if (state.view === "saturation" && drawnFrontierEntranceKey === key) {
         completedFrontierEntranceKey = key;
       }
     };
@@ -7187,7 +7232,9 @@ function clearAdoptionFrontier(message) {
 }
 
 function renderAdoptionFrontier(board) {
-  const scored = scoreBrowseRows();
+  const scored = saturationRows();
+  const defaultEntry = frontierDefaultEntry(board);
+  if (!state.lfrontierExplicit) state.lfrontier = defaultEntry?.id || "";
   renderBenchmarkNavigator(board);
   if (!state.benchmarkIndex) {
     renderCatalogShell(board, scored, {
@@ -7197,12 +7244,10 @@ function renderAdoptionFrontier(board) {
     });
     return;
   }
-  const defaultEntry = frontierDefaultEntry(board);
-  if (!state.lfrontierExplicit) state.lfrontier = defaultEntry?.id || "";
   if (!state.lfrontier) {
     renderCatalogShell(board, scored, {
       eyebrow: "", heading: t("Reported benchmark scores"), badge: "",
-      message: t("No scored benchmarks match these filters."),
+      message: t("No benchmarks match these filters."),
     });
     return;
   }
@@ -7268,9 +7313,7 @@ function findingCard(finding, board) {
       attrs: { type: "button" },
     });
     jump.addEventListener("click", () => {
-      selectFrontier(target.benchmark_id);
-      renderAdoptionFrontier(board);
-      writeUrl("push");
+      openSaturation(target.benchmark_id);
       byId("adoption-frontier").scrollIntoView({ behavior: "smooth", block: "start" });
     });
     children.push(jump);
@@ -7405,9 +7448,7 @@ function leaderboardRow(entry) {
         attrs: { type: "button" },
       });
   frontierButton?.addEventListener("click", () => {
-    selectFrontier(entry.benchmark_id);
-    renderAdoptionFrontier(board);
-    writeUrl("push");
+    openSaturation(entry.benchmark_id);
     byId("adoption-frontier").scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
@@ -7553,17 +7594,24 @@ function syncLeaderboardNav() {
   if (navButton) navButton.hidden = false;
 }
 
+function renderSaturation() {
+  syncScoreFilters();
+  renderAdoptionFrontier(catalogDocumentBoard());
+}
+
 function renderLeaderboard() {
   initBenchmarkSearch();
+  syncScoreFilters();
+  renderBenchmarkSkyline();
+  renderScoreRanking(scoreRankingRows());
   const board = catalogDocumentBoard();
   syncLeaderboardNav();
-  if (!board) { renderBenchmarkSearch(); renderAdoptionFrontier(null); return; }
+  if (!board) return;
 
   byId("leaderboard-measures").textContent = board.measures || "";
   renderLeaderboardTop(board);
   renderLeaderboardFilters(board);
   renderBenchmarkFindings(state.data.model_card_leaderboard);
-  renderAdoptionFrontier(board);
 
   const topEntries = (board.entries || []).filter((entry) => entry.card_count > 0);
 
@@ -8454,6 +8502,7 @@ function bindEvents() {
       setView(view);
       if (view === "today") renderToday();
       if (view === "leaderboard") renderLeaderboard();
+      if (view === "saturation") renderSaturation();
       if (view === "trends") renderTrends();
       if (view === "map") renderTrendMap();
     });
@@ -8491,18 +8540,16 @@ function bindEvents() {
   });
   byId("score-ranking-more").addEventListener("click", () => {
     state.scoreRankingExpanded = !state.scoreRankingExpanded;
-    renderBenchmarkSearch();
+    renderScoreRanking(scoreRankingRows());
   });
-  const scoreFilter = byId("leaderboard-score-filter");
-  // The readout tracks the thumb; the list re-filters once the drag settles.
-  scoreFilter.addEventListener("input", (event) => {
-    const value = scoreCutoff(event.target.value);
-    byId("leaderboard-score-value").textContent = value >= 100 ? t("All") : value;
-    // The chart previews the drag; the list still settles on release, because
-    // re-filtering it would also rebuild the frontier chart on every tick.
-    renderBenchmarkSkyline(value);
+  document.querySelectorAll("[data-score-filter]").forEach((scoreFilter) => {
+    scoreFilter.addEventListener("input", (event) => {
+      const value = scoreCutoff(event.target.value);
+      syncScoreFilters(value);
+      if (state.view === "leaderboard") renderBenchmarkSkyline(value);
+    });
+    scoreFilter.addEventListener("change", (event) => setScoreFilter(event.target.value));
   });
-  scoreFilter.addEventListener("change", (event) => setScoreFilter(event.target.value));
   byId("benchmark-skyline-height").addEventListener("change", (event) => {
     state.lheight = event.target.value;
     renderBenchmarkSkyline();
@@ -8574,7 +8621,7 @@ function bindEvents() {
     const isNarrow = window.innerWidth <= 760;
     if (isNarrow === wasNarrow) return;
     wasNarrow = isNarrow;
-    if (state.data) renderAdoptionFrontier(catalogDocumentBoard());
+    if (state.data && state.view === "saturation") renderSaturation();
   });
   document.addEventListener("keydown", (event) => {
     // A <dialog>'s native Escape-close is the keydown's default action (its
@@ -8960,7 +9007,8 @@ async function initialize() {
   const legacyUtilityHash = ["cli", "cite", "rubric"].some(
     (utility) => initialHash === utility || initialHashParams.has(utility),
   );
-  if (initialParams.has("view") || legacyUtilityHash) writeUrl("replace");
+  if (initialParams.has("view") || legacyUtilityHash
+    || (state.view === "saturation" && viewFromPath(window.location.pathname) === "leaderboard")) writeUrl("replace");
   bindEvents();
   const initializationNavigationSequence = viewNavigationSequence;
   const initializationRefreshSequence = successfulDataRefreshSequence;
@@ -9003,6 +9051,7 @@ async function initialize() {
     // handlers render another view when the reader opens it.
     if (state.view === "today") renderToday();
     if (state.view === "leaderboard") renderLeaderboard();
+    if (state.view === "saturation") renderSaturation();
     if (state.view === "trends") renderTrends();
     if (state.view === "map") renderTrendMap();
 

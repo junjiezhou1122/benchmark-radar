@@ -23,7 +23,7 @@ github.com/ktwu01/benchmark-radar，每天更新，并支持一键导出数据
 **几秒找到一个 benchmark，再看模型成绩如何随时间变化。点击下面的动图，查看
 SWE-bench Verified 的 saturation 过程。**
 
-<a href="https://benchmark-radar.org/leaderboard/?lfrontier=swe_bench_verified">
+<a href="https://benchmark-radar.org/saturation/?lfrontier=swe_bench_verified">
   <img src="assets/swe-bench-verified.gif" alt="搜索 SWE-bench Verified 并查看模型成绩随时间变化的动画演示" width="720" />
 </a>
 

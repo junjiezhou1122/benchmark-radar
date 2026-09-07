@@ -49,9 +49,10 @@ state.benchmarkIndex = [
   {slug:'missing',name:'Missing',source:'llm_stats',score_summary:summary(null,0)},
 ];
 state.lscore = 70;
-const scoreNames = ['scoreRecord','matchesScoreFilter','scoreBrowseRows','frontierDefaultEntry','catalogDisplayFactor'];
+const scoreNames = ['scoreRecord','matchesScoreFilter','scoreBrowseRows','saturationRows','scoreRankingRows','benchmarkQueryIds','searchBenchmarkIndex','foldName','frontierDefaultEntry','catalogDisplayFactor'];
+state.benchmarkQuery = '';
 const scores = new Function('state', 'scorePopulation', 'matchesScoreCutoff', 'SKYLINE_START_DATE', `${scoreNames.map(fn).join('\n')}\nreturn {${scoreNames.join(',')}};`)(state, scorePopulation, matchesScoreCutoff, SKYLINE_START_DATE);
-assert.deepEqual(scores.scoreBrowseRows().map(r=>[r.id,r.rank]), [['external',1],['curated',2]]);
+assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['external','curated','missing']);
 assert.equal(scores.frontierDefaultEntry(state.data.model_card_leaderboard).id,'external');
 assert.equal(scores.matchesScoreFilter(summary(69.999)),true);
 assert.equal(scores.matchesScoreFilter(summary(70)),false);
@@ -59,12 +60,39 @@ assert.equal(scores.matchesScoreFilter(summary(60,0)),false);
 assert.equal(scores.matchesScoreFilter(summary(0)),true,'zero is a reported score');
 assert.equal(scores.matchesScoreFilter(null),false);
 state.lscore=100;
-assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['at100','over70','external','curated']);
+assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['at100','over70','external','curated','missing']);
 state.lscore=90;
-assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['over70','external','curated']);
+assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['over70','external','curated','missing']);
 // An intermediate step the old three-option filter could not express.
 state.lscore=40;
-assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), []);
+assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['missing']);
+// Searching bypasses the slider without losing old or unscored source records.
+state.lscore=70;
+state.benchmarkIndex.push(
+  {slug:'old95',name:'Old high score',aliases:['NeedleBench'],source:'artificial_analysis',released:'2020-01-01',score_summary:summary(95,3)},
+  {slug:'unscored',name:'Unscored lookup',aliases:['NeedleBench'],source:'opencompass_hub'},
+);
+for (const row of state.benchmarkIndex) row.categories = ['lookup'];
+const fixtureRecords = state.benchmarkIndex;
+const ranking = scores.scoreRankingRows().map(row=>row.id);
+assert.deepEqual(ranking,['at100','over70','external','curated']);
+const browsing = scores.saturationRows().map(row=>row.id);
+assert(!browsing.includes('old95'));
+assert(browsing.includes('unscored'));
+state.benchmarkQuery='NeedleBench';
+assert.deepEqual(scores.saturationRows().map(row=>row.id),['old95','unscored']);
+assert.equal(state.lscore,70,'search must not reset the shared slider');
+state.benchmarkQuery='lookup';
+assert.equal(scores.saturationRows().length,fixtureRecords.length);
+assert.equal(new Set(scores.saturationRows().map(row=>row.source)).size,4);
+state.benchmarkQuery='not in catalog';
+assert.deepEqual(scores.saturationRows(),[]);
+state.benchmarkQuery='';
+assert.deepEqual(scores.saturationRows().map(row=>row.id),browsing,'clearing search restores the cutoff');
+state.lscore=10;
+assert.deepEqual(scores.scoreRankingRows().map(row=>row.id),ranking,'the ranking never follows the slider');
+state.lscore=100;
+assert.deepEqual(new Set(scores.saturationRows().map(row=>row.id)),new Set(fixtureRecords.map(row=>row.slug)));
 state.lscore=70;
 state.benchmarkIndex=null;
 assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), [],'a missing index cannot fall back to a preferred source');
@@ -340,8 +368,8 @@ for(const [heightMetric,fullMode] of fullModes) for(const cutoff of [10,30,70,10
   assert(current.visible.every(row=>Number.isFinite(row.displayScore) && row.summary.numeric_count>0),
     'every displayed benchmark has a numeric reported score, even with All selected');
   assert(current.hidden-current.beforeStart-current.unscored>=0,'exclusion counts must not overlap');
-  assert.deepEqual(current.visible.map(row=>row.id).sort(), scores.scoreBrowseRows().map(row=>row.id).sort(),
-    'chart and browser must show exactly the same filtered record IDs');
+  assert.deepEqual(current.visible.map(row=>row.id).sort(), scores.scoreRankingRows().filter(row=>matchesScoreCutoff(row.summary,cutoff)).map(row=>row.id).sort(),
+    'the figure is the cutoff slice of the independently ranked scored cohort');
   const rendered=chart(current,cutoff);
   const drawn=flatten(rendered);
   const marks=drawn.filter(node=>'data-benchmark-id' in node.attrs);
@@ -481,3 +509,46 @@ const searchable = [
 assert.deepEqual(nameSearch(searchable,'HLE').map(row=>row.slug),['exact','prefix']);
 assert.deepEqual(nameSearch(searchable,'science').map(row=>row.slug),['domain']);
 assert.deepEqual(nameSearch(searchable.map(row=>({...row,source:'another_source'})),'HLE').map(row=>row.slug),['exact','prefix']);
+
+// Execute the shared slider handler against both sets of controls.
+state.benchmarkIndex = fixtureRecords;
+const controls = new Map(['leaderboard-score-filter','leaderboard-score-value','saturation-score-filter','saturation-score-value'].map(id=>[id,{}]));
+let skylineRenders=0, saturationRenders=0, urlWrites=0;
+const filters = new Function('state','byId','t','renderBenchmarkSkyline','renderSaturation','writeUrl',`
+  const BENCHMARK_SEARCH_LIMIT = 50;
+  ${fn('scoreCutoff')}
+  ${fn('syncScoreFilters')}
+  ${fn('setScoreFilter')}
+  return {setScoreFilter,syncScoreFilters};
+`)(state,id=>controls.get(id),text=>text,()=>skylineRenders++,()=>saturationRenders++,()=>urlWrites++);
+state.view='leaderboard';
+state.benchmarkQuery='';
+state.lfrontier='old95';
+state.lfrontierExplicit=true;
+state.benchmarkVisibleLimit=100;
+filters.setScoreFilter(40);
+assert.equal(skylineRenders,1);
+assert.equal(saturationRenders,0);
+assert.equal(state.benchmarkVisibleLimit,100);
+assert.equal(state.lfrontier,'old95');
+for (const view of ['leaderboard','saturation']) assert.equal(controls.get(`${view}-score-filter`).value,40);
+state.view='saturation';
+filters.setScoreFilter(60);
+assert.equal(saturationRenders,1);
+assert.equal(skylineRenders,1);
+assert.equal(state.benchmarkVisibleLimit,50);
+assert.equal(state.lfrontier,'old95','selected histories remain complete outside the browsing cutoff');
+state.benchmarkQuery='NeedleBench';
+state.benchmarkVisibleLimit=100;
+filters.setScoreFilter(10);
+assert.equal(saturationRenders,1,'the slider must not rebuild an unfiltered search');
+assert.equal(state.benchmarkVisibleLimit,100,'changing the paused filter must not reset search pagination');
+assert.deepEqual(scores.saturationRows().map(row=>row.id),['old95','unscored']);
+assert.equal(state.lscore,10);
+state.benchmarkQuery='';
+assert(!scores.saturationRows().some(row=>row.id==='old95'));
+filters.setScoreFilter(100);
+assert.equal(controls.get('leaderboard-score-value').textContent,'All');
+assert.equal(controls.get('saturation-score-value').textContent,'All');
+assert.equal(urlWrites,4);
+console.log('Shared slider, independent rankings, and full-catalog Saturation searches passed.');

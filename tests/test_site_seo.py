@@ -16,6 +16,7 @@ def test_sitemap_covers_every_indexable_view():
     assert urls == [
         f"{SITE_URL}/",
         f"{SITE_URL}/leaderboard/",
+        f"{SITE_URL}/saturation/",
         f"{SITE_URL}/trends/",
         f"{SITE_URL}/explore/",
         f"{SITE_URL}/cli/",
@@ -137,7 +138,7 @@ def test_structured_data_describes_a_searchable_site_and_a_dataset():
     target = website["potentialAction"]["target"]["urlTemplate"]
     # The search endpoint is the leaderboard's real lq filter, not a pretend one.
     assert "{search_term_string}" in target
-    assert "/leaderboard/?lq={search_term_string}" in target
+    assert "/saturation/?bq={search_term_string}" in target
     assert website["potentialAction"]["query-input"] == "required name=search_term_string"
 
     dataset = next(block for block in blocks if block["@type"] == "Dataset")

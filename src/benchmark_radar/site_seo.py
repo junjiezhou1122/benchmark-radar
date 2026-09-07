@@ -30,6 +30,7 @@ SITEMAP_NAMESPACE = "http://www.sitemaps.org/schemas/sitemap/0.9"
 INDEXABLE_VIEWS: tuple[tuple[str, str], ...] = (
     ("Today", "/"),
     ("Leaderboard", "/leaderboard/"),
+    ("Saturation", "/saturation/"),
     ("Trends", "/trends/"),
     ("Explore", "/explore/"),
     ("CLI", "/cli/"),

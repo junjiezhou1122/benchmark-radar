@@ -188,7 +188,7 @@ def test_the_picker_uses_the_full_population_cutoff_contract():
     # their membership together with strict numeric boundaries and all sources.
     assert "matchesScoreCutoff(summary, state.lscore)" in membership
     picker = script.split("function frontierPickerGroups(scored)", 1)[1].split("\n}", 1)[0]
-    assert "scoreBrowseRows()" in picker
+    assert "scored.map((row)" in picker
     assert "renderFrontierPicker(scored, state.lfrontier);" in script
 
 
@@ -200,7 +200,7 @@ def test_the_picker_and_the_search_both_cover_both_layers():
     assert "scorePopulation(" in rows
     assert "a.source.localeCompare" not in rows
     render = script.split("function renderBenchmarkSearch()", 1)[1].split("\nfunction ", 1)[0]
-    assert "benchmarkQueryIds(board)" in render
+    assert "saturationRows()" in render
     query = script.split("function benchmarkQueryIds()", 1)[1].split("\n}", 1)[0]
     assert "searchCuratedEntries" not in query
     assert "searchBenchmarkIndex(state.benchmarkIndex || [], state.benchmarkQuery)" in query
@@ -219,7 +219,7 @@ def test_catalog_search_matches_aliases_without_source_preference():
 def test_missing_catalog_fails_without_a_preferred_source_fallback():
     script = source("site/assets/app.js")
     render = script.split("function renderBenchmarkSearch()", 1)[1].split("\nfunction ", 1)[0]
-    assert "let rows = scoreBrowseRows(board);" in render
+    assert "const rows = saturationRows();" in render
     query = script.split("function benchmarkQueryIds()", 1)[1].split("\n}", 1)[0]
     assert "state.benchmarkIndex || []" in query
     assert "const failed = state.benchmarkIndexLoaded && !state.benchmarkIndex" in render
@@ -282,7 +282,7 @@ def test_shortcuts_use_the_same_score_ranking_as_the_picker():
     navigator = script.split("function renderBenchmarkNavigator(board)", 1)[1].split(
         "\nfunction ", 1
     )[0]
-    assert "scoreBrowseRows(board).slice(0, 3).map(scoreBrowseResultRow)" in navigator
+    assert "saturationRows().slice(0, 3).map(scoreBrowseResultRow)" in navigator
     assert "card_count" not in navigator
 
 
@@ -620,8 +620,7 @@ def test_a_finding_can_move_the_chart_to_the_benchmark_it_is_about():
         "\nfunction renderBenchmarkFindings", 1
     )[0]
 
-    assert "selectFrontier(target.benchmark_id)" in card
-    assert "renderAdoptionFrontier(board)" in card
+    assert "openSaturation(target.benchmark_id)" in card
     # Corpus-scope findings name no benchmark, so there is nothing to focus.
     assert "finding.benchmark_id" in card
 
@@ -721,7 +720,7 @@ def test_issue_312_the_saturation_view_reveals_left_to_right():
     # crawled catalog settling mid-reveal replays rather than cancels it.
     assert "function frontierShouldAnimate(key)" in script
     gate = script.split("function frontierShouldAnimate(key)", 1)[1].split("\n}", 1)[0]
-    assert 'if (state.view !== "leaderboard") return false;' in gate
+    assert 'if (state.view !== "saturation") return false;' in gate
     assert "completedFrontierEntranceKey === key" in gate
     # And the completion callback rechecks visibility and the drawn selection:
     # leaving mid-reveal -- to another view, another benchmark, or a hidden
@@ -729,7 +728,7 @@ def test_issue_312_the_saturation_view_reveals_left_to_right():
     assert "const spendOrDefer = () => {" in gate
     assert 'document.visibilityState !== "visible"' in gate
     assert "drawnFrontierEntranceKey === key" in gate
-    assert 'state.view === "leaderboard" && drawnFrontierEntranceKey === key' in gate
+    assert 'state.view === "saturation" && drawnFrontierEntranceKey === key' in gate
     assert "const FRONTIER_SWEEP_MS = 3600;" in script
     assert "FRONTIER_SWEEP_DELAY_MS + FRONTIER_SWEEP_MS + FRONTIER_POINT_FADE_MS" in script
     assert "frontierShouldAnimate(`catalog:${record.slug}`)" in script
