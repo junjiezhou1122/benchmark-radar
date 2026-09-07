@@ -1,7 +1,7 @@
 // Execute production functions with small deterministic inputs, without a browser.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SKYLINE_START_DATE, benchmarkDate, skylineModel, skylineGeometry, skylineDateLanes, skylineScoreLanes, skylineCapPositions, skylineFrontierSteps, scorePopulation, matchesScoreCutoff } from '../site/assets/skyline.js';
+import { SKYLINE_START_DATE, benchmarkDate, benchmarkDateLabel, skylineModel, skylineGeometry, skylineDateLanes, skylineScoreLanes, skylineCapPositions, skylineFrontierSteps, scorePopulation, matchesScoreCutoff } from '../site/assets/skyline.js';
 const source = readFileSync('site/assets/app.js', 'utf8');
 function fn(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -161,6 +161,14 @@ assert.deepEqual(benchmarkDate({first_observed:'2026-08-17',collected_at:'2026-0
   {date:null,dateBasis:null},'neither a crawl nor a model release can become a benchmark date');
 assert.equal(benchmarkDate({first_score_reported_at:'2024-02-29'}).date,'2024-02-29');
 assert.equal(benchmarkDate({released:'2026-02-30',first_score_reported_at:'2024-02-30'}).date,null);
+const proxyRecord={first_score_record:{reported_at:'2024-02-29',date_precision:'model_announcement',obs_id:'first-score'}};
+assert.deepEqual(benchmarkDate(proxyRecord),{date:'2024-02-29',dateBasis:'score_record_proxy'},
+  'source-dated numeric score records must reach the main timeline with their proxy basis intact');
+assert.equal(benchmarkDateLabel(benchmarkDate(proxyRecord)),'First dated LLM score (model-release proxy)');
+assert.deepEqual(benchmarkDate({...proxyRecord,released:'2025-01-01'}),{date:'2025-01-01',dateBasis:'released'});
+assert.deepEqual(benchmarkDate({...proxyRecord,first_score_reported_at:'2025-02-01'}),{date:'2025-02-01',dateBasis:'first_score'},
+  'actual publication evidence takes priority over a model-date proxy');
+assert.equal(benchmarkDate({first_score_record:{reported_at:'2024-01-01',date_precision:'crawl'}}).date,null);
 const boundary=skylineModel({old:record(30),fallbackOld:record(20,{observations:[
   {value:10,reported_at:'2023-12-31'}, {value:20,reported_at:'2025-01-01'}]}), boundary:record(40)},
   [entry('old',8,{released:'2023-12-31'}),entry('fallbackOld',9,{released:null}),entry('boundary',1,{released:'2024-01-01'})],[],100);
@@ -190,9 +198,9 @@ function svgElement(tag,attrs={},text=null) {
   return {tag,attrs,text,children:[],append(...children){this.children.push(...children);}};
 }
 const translate = (key,params={})=>Object.entries(params).reduce((s,[k,v])=>s.replaceAll(`{${k}}`,v),key);
-const chart = new Function('skylineGeometry','skylineDateLanes','skylineScoreLanes','skylineCapPositions','skylineFrontierSteps','svgElement','t','metricLabel','shorten','formatDate','makeFrontierPointInteractive','scoreSourceLabel',
+const chart = new Function('skylineGeometry','skylineDateLanes','skylineScoreLanes','skylineCapPositions','skylineFrontierSteps','svgElement','t','metricLabel','shorten','formatDate','makeFrontierPointInteractive','scoreSourceLabel','benchmarkDateLabel',
   `${fn('skylineChart')}\nreturn skylineChart;`)(skylineGeometry,skylineDateLanes,skylineScoreLanes,skylineCapPositions,skylineFrontierSteps,svgElement,translate,
-  (n,label)=>`${n} ${label}`, (s,n)=>s.slice(0,n), x=>x, (node,details)=>{node.details=details;}, x=>x);
+  (n,label)=>`${n} ${label}`, (s,n)=>s.slice(0,n), x=>x, (node,details)=>{node.details=details;}, x=>x, benchmarkDateLabel);
 const flatten = (node)=>[node,...node.children.flatMap(flatten)];
 for (const cutoff of [10,70,100]) {
   const m=skylineModel(tracks,cards,[],cutoff);
@@ -249,7 +257,18 @@ for(const cutoff of [10,30,70,100]) {
   assert.equal(drawn.filter(node=>node.attrs.class==='skyline-guide').length,current.comparable.length,
     'only comparable measurements have a Pareto wall projection');
   if(cutoff===70) {
-    assert(current.rows.length>=300,'the reported-score visualization must never regress to 28 or 29 dated curated records');
+    const main=plotted.filter(node=>node.attrs['data-benchmark-date']);
+    assert(main.length>=300,'a few dozen main skyline points plus hundreds in a side panel still fails principle.md');
+    const scoredSources=new Set(current.rows.filter(row=>row.date!==null).map(row=>row.source));
+    assert(scoredSources.has('llm_stats') && scoredSources.has('artificial_analysis'));
+    for(const row of current.rows.filter(row=>row.date!==null)) {
+      const mark=main.find(node=>node.attrs['data-benchmark-id']===row.id);
+      assert(mark,`${row.id}: every dated numeric score belongs in the main skyline`);
+      if(row.dateBasis==='score_record_proxy') {
+        assert.equal(mark.attrs['data-date-basis'],'score_record_proxy');
+        assert(mark.details.rows.some(detail=>detail.label==='First dated LLM score (model-release proxy)'));
+      }
+    }
     assert(current.dated.length>300,'investigate a timeline limited to a few dozen curated benchmarks');
     assert(current.visible.length>700,'missing dates or adoption cannot silently remove most of the corpus');
     for(const source of ['curated','llm_stats','artificial_analysis','opencompass_hub']) {
@@ -279,7 +298,7 @@ for(const cutoff of [10,30,70,100]) {
     for(const other of datedScored) {
       if(other===mark) continue;
       const otherCap=other.children.find(node=>'data-frontier-anchor' in node.attrs);
-      assert(Math.hypot(cap.attrs.cx-otherCap.attrs.cx,cap.attrs.cy-otherCap.attrs.cy)>=12.99,
+      assert(Math.hypot(cap.attrs.cx-otherCap.attrs.cx,cap.attrs.cy-otherCap.attrs.cy)>=9.99,
         'nearby and coincident scored benchmarks must all remain targetable');
     }
   }

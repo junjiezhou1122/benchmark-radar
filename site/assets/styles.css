@@ -2932,13 +2932,14 @@ td a {
 
 .frontier-tooltip-details {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
   gap: 0.2rem 0.65rem;
   margin: 0;
 }
 
 .frontier-tooltip-details dt {
   color: #97a5ac;
+  overflow-wrap: anywhere;
 }
 
 .frontier-tooltip-details dd {
@@ -5092,8 +5093,8 @@ dialog {
 .skyline-subtitle { margin: .15rem 0 0; color: var(--muted); font-size: 1rem; }
 .skyline-count { color: #876014; font-size: .9rem; font-weight: 600; white-space: nowrap; }
 .skyline-chart { overflow-x: auto; margin-top: .5rem; }
-.skyline-chart svg { display: block; width: 100%; min-width: 960px; max-width: 1110px; margin: 0 auto; }
-.skyline-chart svg.skyline-has-undated { min-width: 1320px; max-width: 1660px; }
+.skyline-chart svg { display: block; width: 100%; min-width: 1100px; max-width: 1300px; margin: 0 auto; }
+.skyline-chart svg.skyline-has-undated { min-width: 1500px; max-width: 1830px; }
 .skyline-panel-divider { stroke: var(--edge); stroke-width: 1; }
 .skyline-chart:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 .skyline-note { font-size: .875rem; color: var(--muted); margin: .65rem 0; max-width: 95ch; }
@@ -5133,6 +5134,7 @@ dialog {
 .skyline-cap, .skyline-foot { fill: var(--skyline-color); }
 .skyline-cap { stroke: var(--panel); stroke-width: 1; }
 .skyline-point.is-unverified .skyline-cap { fill: var(--panel); stroke: var(--skyline-color); stroke-width: 1.5; opacity: .75; }
+.skyline-point[data-date-basis="score_record_proxy"] .skyline-cap { stroke-dasharray: 2 1; }
 .skyline-point.is-pareto .skyline-mark,
 .skyline-point:hover .skyline-mark,
 .skyline-point:focus .skyline-mark,
@@ -5171,6 +5173,7 @@ dialog {
 .skyline-swatch { width: .6rem; height: .6rem; border-radius: 50%; background: var(--skyline-color); }
 .skyline-swatch-pareto { background: transparent; border: 2px solid #b57d18; width: .8rem; height: .8rem; }
 .skyline-swatch-unknown { background: var(--panel); border: 1.5px solid var(--muted); }
+.skyline-swatch-proxy { background: var(--panel); border: 1.5px dashed var(--muted); }
 .skyline-source-coverage { margin: .25rem 0 .7rem; color: var(--muted); font-size: .8rem; }
 .skyline-empty { margin: .5rem 0; }
 @media (max-width: 640px) {

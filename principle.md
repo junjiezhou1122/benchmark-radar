@@ -75,9 +75,16 @@ Use the benchmark's valid release date first. If it has no release date, use
 the earliest dated numeric LLM score for that benchmark, labelled **First LLM
 score reported**. Take the earliest score across the available history, before
 applying the 2024 cutoff; do not pick its first score after 2024 to force it into
-the view. Keep the evidence and date basis inspectable. Neither a batch crawl
-timestamp nor a model's release date is a benchmark release or score report date.
-An adoption-only mention is not a score.
+the view. Keep the evidence and date basis inspectable. A batch crawl timestamp
+or an adoption-only mention is not a score date.
+
+When an aggregator dates its numeric LLM score records by model release, use
+the earliest dated score record as a **model-release proxy**, after any known
+benchmark release or actual score-publication date. Carry that date precision
+into the chart and tooltip. Do not discard all such records or move hundreds
+of scored benchmarks into a second chart: they belong in the main skyline.
+Never label this proxy as the benchmark's release or actual score-publication
+date. It is the earliest score-entry date available from that source.
 
 If neither date is known, show an individual mark in the main visualization's
 clearly labelled undated panel, visible without expanding anything. Preserve
@@ -103,8 +110,9 @@ investigate, not evidence that they were all introduced that day.
 - Check that filtered, visible, and unknown counts reconcile to that population.
 - Test missing fields and every source, not just a few curated fixtures.
 - Verify release-date priority, earliest-score fallback, the inclusive 2024
-  boundary, and rejection of crawl/model dates. Missing adoption must not remove
-  dated scores from the main plot, and undated records must remain inspectable.
+  boundary, rejection of crawl dates, and explicit labelling of model-date
+  proxies. Missing adoption must not remove dated scores from the main plot,
+  and undated records must remain inspectable.
 - Treat an unexplained drop from thousands of records to dozens as a defect
   that blocks delivery.
 

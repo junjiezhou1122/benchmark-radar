@@ -358,11 +358,18 @@ def test_index_has_one_row_per_source_record(normalized: dict) -> None:
     unscored = next(row for row in index if row["source"] == "opencompass_hub")
     assert unscored["collected_at"]
     assert unscored["first_score_source_reference"] is None
+    assert unscored["first_score_record"] is None
     assert unscored["score_summary"] is None
+    scored = [row for row in index if row["first_score_record"]]
+    assert len(scored) > 600, "the index must preserve dates for the whole scored catalog"
+    for row in scored:
+        assert row["first_score_record"]["date_precision"] == "model_announcement"
+        assert row["first_score_record"]["obs_id"]
+        assert row["first_score_record"]["source_url"]
 
 
-def test_first_score_report_uses_publication_evidence_not_model_or_crawl_dates():
-    from benchmark_radar.external_catalog import first_score_report
+def test_first_score_record_preserves_earliest_evidence_and_date_precision():
+    from benchmark_radar.external_catalog import first_score_record
 
     rows = [
         {
@@ -388,12 +395,18 @@ def test_first_score_report_uses_publication_evidence_not_model_or_crawl_dates()
         "reported_at": "2023-12-31",
         "obs_id": "first",
         "source_url": "https://example.org/report",
+        "date_precision": "document_publication",
     }
-    assert first_score_report(rows) == expected
-    assert first_score_report(list(reversed(rows))) == expected
-    assert first_score_report(rows[2:]) is None
+    assert first_score_record(rows, allow_model_dates=False) == expected
+    assert first_score_record(list(reversed(rows)), allow_model_dates=False) == expected
+    assert first_score_record(rows[2:], allow_model_dates=False) is None
+    proxy = first_score_record(rows)
+    assert proxy["reported_at"] == "2018-01-01", "choose the earliest date before any 2024 filter"
+    assert proxy["date_precision"] == "model_announcement"
+    assert first_score_record(list(reversed(rows))) == proxy
+    assert first_score_record(rows[3:]) is None, "crawl dates and non-numeric scores never qualify"
     assert (
-        first_score_report([{"value": 0, "reported_date": "2024-02-29", "date_precision": "day"}])[
+        first_score_record([{"value": 0, "reported_date": "2024-02-29", "date_precision": "day"}])[
             "reported_at"
         ]
         == "2024-02-29"

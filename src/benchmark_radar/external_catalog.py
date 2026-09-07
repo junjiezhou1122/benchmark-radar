@@ -286,8 +286,13 @@ def _observation(
     }
 
 
-def first_score_report(observations: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Earliest numeric score publication, excluding model/crawl timestamps."""
+def first_score_record(
+    observations: list[dict[str, Any]], *, allow_model_dates: bool = True
+) -> dict[str, Any] | None:
+    """Earliest dated numeric score, preserving the source's date precision."""
+    precisions = {"day", "document_publication", "score_publication"}
+    if allow_model_dates:
+        precisions.add("model_announcement")
     reports = []
     for row in observations:
         value = row.get("value")
@@ -295,12 +300,7 @@ def first_score_report(observations: list[dict[str, Any]]) -> dict[str, Any] | N
             not isinstance(value, (int, float))
             or isinstance(value, bool)
             or not math.isfinite(value)
-            or row.get("date_precision")
-            not in {
-                "day",
-                "document_publication",
-                "score_publication",
-            }
+            or row.get("date_precision") not in precisions
         ):
             continue
         reported = row.get("reported_at") or row.get("reported_date")
@@ -317,6 +317,7 @@ def first_score_report(observations: list[dict[str, Any]]) -> dict[str, Any] | N
                 "reported_at": reported,
                 "obs_id": row.get("obs_id"),
                 "source_url": row.get("source_url"),
+                "date_precision": row.get("date_precision"),
             }
         )
     return min(reports, key=lambda row: (row["reported_at"], row["obs_id"] or ""), default=None)
@@ -351,7 +352,8 @@ def _series(
         # No scale means no percentage bar. See the module docstring.
         "display_scale": None,
         "observation_count": len(observations),
-        "first_score_report": first_score_report(observations),
+        "first_score_report": first_score_record(observations, allow_model_dates=False),
+        "first_score_record": first_score_record(observations),
         "score_summary": score_summary(
             observations,
             fractional_display=True,
@@ -580,13 +582,15 @@ def build_benchmark_index(
                 "source": record["source"],
                 "publisher": publisher["name"] if publisher else None,
                 "released": record.get("released"),
-                # Collection is provenance, never benchmark introduction. A
-                # score fallback must carry actual score-publication evidence.
+                # Collection is provenance, never benchmark introduction.
+                # Keep actual publication evidence separate from model-date
+                # proxies so every consumer can explain its fallback.
                 "collected_at": (record.get("provenance") or {}).get("crawled_at"),
                 "first_score_reported_at": (series.get("first_score_report") or {}).get(
                     "reported_at"
                 ),
                 "first_score_source_reference": series.get("first_score_report"),
+                "first_score_record": series.get("first_score_record"),
                 "source_url": (record.get("provenance") or {}).get("source_url"),
                 "openness": openness.get("status", "unknown"),
                 "modality": record.get("modality"),

@@ -197,7 +197,7 @@ def _browser_score_summary(record: dict[str, Any]) -> dict[str, Any] | None:
 def _benchmark_date(
     record: dict[str, Any], entry: dict[str, Any] | None = None
 ) -> tuple[str | None, str | None]:
-    """Mirror skyline.js benchmarkDate: release, then first numeric LLM report."""
+    """Mirror skyline.js: release, score publication, then a labelled score-date proxy."""
 
     def valid(value: Any) -> bool:
         try:
@@ -218,7 +218,22 @@ def _benchmark_date(
         and row.get("date_precision") not in {"model_announcement", "crawl"}
     ]
     first = min((value for value in reports if valid(value)), default=None)
-    return first, "First LLM score reported" if first else None
+    if first:
+        return first, "First LLM score reported"
+    first_record = record.get("first_score_record") or {}
+    if first_record.get("date_precision") in {
+        "day",
+        "document_publication",
+        "score_publication",
+        "model_announcement",
+    } and valid(first_record.get("reported_at")):
+        label = (
+            "First dated LLM score (model-release proxy)"
+            if first_record.get("date_precision") == "model_announcement"
+            else "First LLM score reported"
+        )
+        return first_record["reported_at"], label
+    return None, None
 
 
 def _score_browser_seed(

@@ -18,14 +18,30 @@ function validDate(value) {
 export function benchmarkDate(record, entry = {}) {
   const released = [entry?.released, record.released].find(validDate);
   if (released) return { date: released, dateBasis: "released" };
-  // Only dates attached to an actual numeric LLM score qualify. A model-card
-  // mention, model announcement, or batch crawl does not date a benchmark.
+  // Actual numeric score-publication dates take precedence over proxies.
+  // A model-card mention or batch crawl does not date a benchmark.
   const dates = [record.first_reported_at, record.first_score_reported_at,
     ...(record.observations || []).filter((row) => Number.isFinite(row.value)
       && !["model_announcement", "crawl"].includes(row.date_precision))
       .map((row) => row.reported_at || row.reported_date)]
     .filter(validDate).sort();
-  return { date: dates[0] || null, dateBasis: dates.length ? "first_score" : null };
+  if (dates.length) return { date: dates[0], dateBasis: "first_score" };
+  // Aggregators date their score entries by the scored model's release. Keep
+  // that earliest score-record date as an explicitly labelled proxy; never
+  // relabel it as the benchmark's release or a score publication date.
+  const firstRecord = record.first_score_record;
+  if (["day", "document_publication", "score_publication", "model_announcement"].includes(firstRecord?.date_precision)
+    && validDate(firstRecord?.reported_at)) return {
+    date: firstRecord.reported_at,
+    dateBasis: firstRecord.date_precision === "model_announcement" ? "score_record_proxy" : "first_score",
+  };
+  return { date: null, dateBasis: null };
+}
+
+export function benchmarkDateLabel(row) {
+  return row.dateBasis === "released" ? "Released"
+    : row.dateBasis === "score_record_proxy" ? "First dated LLM score (model-release proxy)"
+      : "First LLM score reported";
 }
 
 // This is the population used by BOTH the chart and the browser. Keeping a
@@ -145,8 +161,8 @@ export function skylineGeometry(all) {
   // Oblique projection: time to the right, low scores at the front, adoption up.
   // Fixed domains across cutoffs prevent filtering from moving the surviving points.
   const project = (timeFraction, score, adoption = 0) => [
-    250 + timeFraction * 730 - score * 1.15,
-    405 - score * 1.25 - 230 * Math.log1p(adoption) / Math.log1p(maximum),
+    250 + timeFraction * 920 - score * 1.4,
+    515 - score * 2.5 - 220 * Math.log1p(adoption) / Math.log1p(maximum),
   ];
   const timeFraction = (time) => !Number.isFinite(time) || time < start ? null : (time - start) / (end - start);
   const years = Array.from({ length: endYear - startYear + 1 }, (_, index) => startYear + index);
@@ -157,7 +173,7 @@ export function skylineGeometry(all) {
       if (time < end) quarters.push({ time, year, quarter: month / 3 + 1 });
     }
   }
-  return { width: 1110, height: 510, startYear, endYear, years, quarters, start, end, maximum, project, timeFraction };
+  return { width: 1300, height: 646, startYear, endYear, years, quarters, start, end, maximum, project, timeFraction };
 }
 
 // Separate nearby marks vertically while preserving each exact date on X.
@@ -190,16 +206,17 @@ export function skylineScoreLanes(rows, scoreY, gap = 9) {
 
 // Coincident stem tips keep their measured coordinates. Only their interactive
 // caps fan out, with a connector back to the true tip, so none hides another.
-export function skylineCapPositions(rows, position, gap = 13) {
+export function skylineCapPositions(rows, position, contains, gap = 10) {
   const placed = new Map();
+  const coordinates = [];
   for (const row of [...rows].sort((a, b) => Number(b.pareto) - Number(a.pareto)
     || a.time - b.time || a.plotScore - b.plotScore || a.id.localeCompare(b.id))) {
     const actual = position(row);
     let cap = actual;
-    const clear = ([x, y]) => x >= 135 && x <= 1040 && y >= 30 && y <= 420
-      && [...placed.values()].every((other) => Math.hypot(x - other[0], y - other[1]) >= gap);
+    const clear = (point) => contains(row, point)
+      && coordinates.every((other) => Math.hypot(point[0] - other[0], point[1] - other[1]) >= gap);
     if (!clear(cap)) {
-      search: for (let radius = gap; radius <= 130; radius += gap) {
+      search: for (let radius = gap; radius <= 1300; radius += gap) {
         for (let step = 0; step < 16; step++) {
           const angle = -Math.PI / 2 + step * Math.PI / 8;
           const candidate = [actual[0] + radius * Math.cos(angle), actual[1] + radius * Math.sin(angle)];
@@ -208,6 +225,7 @@ export function skylineCapPositions(rows, position, gap = 13) {
       }
     }
     placed.set(row.id, cap);
+    coordinates.push(cap);
   }
   return placed;
 }

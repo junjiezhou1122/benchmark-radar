@@ -233,3 +233,41 @@ def test_seed_uses_release_then_earliest_score_and_applies_inclusive_2024_cutoff
     assert "Undated evidence" in markup
     assert "Date unknown" in markup
     assert "3 of 3 matches" in markup
+
+
+def test_seed_preserves_score_entry_proxy_and_prefers_release_or_publication():
+    proxy = {
+        "first_score_record": {
+            "reported_at": "2024-02-29",
+            "date_precision": "model_announcement",
+            "obs_id": "earliest-numeric-score",
+        }
+    }
+    assert _benchmark_date(proxy) == (
+        "2024-02-29",
+        "First dated LLM score (model-release proxy)",
+    )
+    assert _benchmark_date({**proxy, "released": "2025-01-01"}) == ("2025-01-01", "Released")
+    assert _benchmark_date({**proxy, "first_score_reported_at": "2025-02-01"}) == (
+        "2025-02-01",
+        "First LLM score reported",
+    )
+    assert _benchmark_date(
+        {"first_score_record": {"reported_at": "2024-01-01", "date_precision": "crawl"}}
+    ) == (None, None)
+    index = [
+        {"slug": "proxy", "name": "Score entry", "source": "llm_stats", **proxy},
+        {
+            "slug": "old-proxy",
+            "name": "Pre-2024 score entry",
+            "source": "llm_stats",
+            "first_score_record": {
+                "reported_at": "2023-12-31",
+                "date_precision": "model_announcement",
+            },
+        },
+    ]
+    markup = "".join(_score_browser_seed({}, index).values())
+    assert "First dated LLM score (model-release proxy) Feb 29, 2024" in markup
+    assert "Pre-2024 score entry" not in markup
+    assert "1 of 1 matches" in markup
