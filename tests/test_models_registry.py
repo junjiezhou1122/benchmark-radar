@@ -1,11 +1,4 @@
-"""One structure for models, whichever layer reported them.
-
-A curated model card and a crawled score row shared exactly one field name --
-`organization` -- because the project modelled the two things that *mention* a
-model and never the model itself. Asking "which models do we know about?" meant
-walking two structures, and any consumer that forgot the second silently
-dropped 321 models: Gemini had a record and MiMo did not.
-"""
+"""Model reports and registry observations use the same model evidence contract."""
 
 from __future__ import annotations
 
@@ -16,8 +9,6 @@ from pathlib import Path
 import pytest
 
 from benchmark_radar.models_registry import (
-    CRAWLED,
-    CURATED,
     build_registry,
     model_key,
     summarize,
@@ -58,24 +49,22 @@ def test_a_model_is_one_record_no_matter_which_layer_reported_it():
     for record in gemini + mimo:
         assert record.key and record.model and record.organization
         assert record.sources
-        assert set(record.layers) <= {CURATED, CRAWLED}
+        assert set(record.provenance_sources) <= {
+            "model_reports",
+            "llm_stats",
+            "artificial_analysis",
+            "opencompass",
+        }
 
 
 @needs_corpus
-def test_a_model_both_layers_reported_is_one_record_carrying_both():
-    """The join the old two-list shape could not express at all.
-
-    Claude Opus 5 and DeepSeek-V3 exist as a curated card AND as crawled rows.
-    Stored as two lists they were two unrelated entries; here they are one
-    record whose `layers` names both.
-    """
+def test_a_model_reported_by_multiple_sources_carries_each_source():
     registry = _registry()
-    both = [r for r in registry.values() if len(r.layers) > 1]
+    both = [r for r in registry.values() if len(r.provenance_sources) > 1]
 
-    assert len(both) >= 10, "expected models present in both layers"
+    assert len(both) >= 10, "expected models reported by multiple sources"
     for record in both:
-        assert record.layers == [CURATED, CRAWLED]
-        assert {s.layer for s in record.sources} == {CURATED, CRAWLED}
+        assert set(record.provenance_sources) == {s.source for s in record.sources}
 
 
 @needs_corpus
@@ -91,15 +80,27 @@ def test_evidence_stays_labelled_rather_than_flattened():
 
     for record in registry.values():
         for entry in record.sources:
-            assert entry.layer in (CURATED, CRAWLED)
-            if entry.layer == CRAWLED:
+            assert entry.source in (
+                "model_reports",
+                "llm_stats",
+                "artificial_analysis",
+                "opencompass",
+            )
+            assert entry.evidence_id
+            if entry.source in ("llm_stats", "artificial_analysis"):
                 # Never promoted onto the record itself.
                 assert entry.payload.get("comparable_group") is None
                 assert "url" not in entry.payload or entry.payload.get("source_url")
 
     # And the record carries no field that only one layer could support.
     sample = next(iter(registry.values()))
-    assert set(sample.to_dict()) == {"key", "model", "organization", "layers", "sources"}
+    assert set(sample.to_dict()) == {
+        "key",
+        "model",
+        "organization",
+        "provenance_sources",
+        "sources",
+    }
 
 
 def test_the_key_is_stable_and_safe():
@@ -114,7 +115,7 @@ def test_the_published_registry_matches_what_the_builder_produces():
     published = json.loads(Path("site/data/models.json").read_text(encoding="utf-8"))
     report = summarize(_registry())
 
-    for field in ("model_count", "curated_only", "crawled_only", "both_layers"):
+    for field in ("model_count", "source_counts", "multiple_sources"):
         assert published[field] == report[field], field
     assert len(published["models"]) == published["model_count"]
     # The published form is an index: identity and layer, not embedded payloads.
@@ -122,7 +123,7 @@ def test_the_published_registry_matches_what_the_builder_produces():
         "key",
         "model",
         "organization",
-        "layers",
+        "provenance_sources",
         "source_counts",
     }
 
@@ -205,7 +206,7 @@ def test_a_missing_shard_directory_refuses_to_write_a_curated_only_registry(tmp_
     shards stopped being committed.
 
     They are derived and untracked, so a fresh checkout has none until
-    `normalize-external` writes them, and `_crawled_models()` reaches them with
+    `normalize-catalog` writes them, and `_crawled_models()` reaches them with
     a glob, which answers "nothing" for a missing directory instead of failing.
     `benchmark-radar classify` would then rewrite models.json with the 34
     curated models and exit 0, and the registry test above skips itself when
@@ -218,7 +219,7 @@ def test_a_missing_shard_directory_refuses_to_write_a_curated_only_registry(tmp_
     radar.write_text(json.dumps({"model_card_leaderboard": {"model_cards": []}}), encoding="utf-8")
     output = tmp_path / "models.json"
 
-    with pytest.raises(FileNotFoundError, match="normalize-external"):
+    with pytest.raises(FileNotFoundError, match="normalize-catalog"):
         write_model_registry(radar, tmp_path / "absent-shards", output)
 
     # Refusing means refusing: a stale models.json is not overwritten with a
@@ -229,7 +230,7 @@ def test_a_missing_shard_directory_refuses_to_write_a_curated_only_registry(tmp_
 def test_an_empty_shard_directory_refuses_to_write_a_curated_only_registry(tmp_path):
     """Same short registry, reached a different way.
 
-    An interrupted `normalize-external` leaves the directory behind with
+    An interrupted `normalize-catalog` leaves the directory behind with
     nothing in it, and a directory that exists is not the same as a directory
     that has shards: the glob answers "nothing" either way.
     """
@@ -239,7 +240,7 @@ def test_an_empty_shard_directory_refuses_to_write_a_curated_only_registry(tmp_p
     shard_dir = tmp_path / "empty-shards"
     shard_dir.mkdir()
 
-    with pytest.raises(FileNotFoundError, match="normalize-external"):
+    with pytest.raises(FileNotFoundError, match="normalize-catalog"):
         write_model_registry(radar, shard_dir, output)
 
     assert not output.exists()

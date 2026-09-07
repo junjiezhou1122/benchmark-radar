@@ -116,7 +116,7 @@ def test_missing_model_identity_is_unknown_instead_of_a_partial_or_zero_count(ro
     assert result["model_count_basis"] is None
 
 
-def test_generated_external_index_and_shards_share_summary():
+def test_generated_catalog_index_and_shards_share_summary():
     index = json.loads(Path("site/data/benchmark-index.json").read_text())["benchmarks"]
     for record in index:
         shard = json.loads(Path(f"site/data/benchmarks/{record['slug']}.json").read_text())
@@ -127,7 +127,8 @@ def test_generated_external_index_and_shards_share_summary():
         series = payload["series"]
         expected = score_summary(
             payload["rows"],
-            fractional_display=True,
+            fractional_display=series.get("unit") is None,
+            unit=series.get("unit"),
             declared_max=series["declared_max"],
             max_score_contradicted=series["max_score_contradicted"],
         )
@@ -159,6 +160,12 @@ def test_seed_ranks_score_points_without_source_preference():
         },
     }
     index = [
+        {
+            "slug": "curated",
+            "name": "Curated",
+            "source": "model_reports",
+            "score_summary": summary(2, 50),
+        },
         {
             "slug": "external",
             "name": "External",
@@ -197,6 +204,12 @@ def test_seed_excludes_unscored_but_keeps_zero_scores_and_unjoined_records():
         },
     }
     index = [
+        {
+            "slug": "unjoined",
+            "name": "unjoined",
+            "source": "model_reports",
+            "score_summary": score_summary([{"value": 50}]),
+        },
         {"slug": "unknown", "name": "Unknown score", "source": "opencompass_hub"},
         {
             "slug": "zero",

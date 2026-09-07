@@ -131,7 +131,7 @@ def test_readmes_offer_a_short_agent_setup_prompt():
     for section in (english_section, chinese_section):
         assert "npx skills add ktwu01/benchmark-radar" in section
         assert "skills/benchmark-radar/SKILL.md" in section
-        assert "normalize-external" not in section
+        assert "normalize-catalog" not in section
         assert "build-data-release" not in section
 
 

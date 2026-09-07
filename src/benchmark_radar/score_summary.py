@@ -75,6 +75,7 @@ def score_summary(
         if complete_models
         else None,
         "raw_max": highest["value"] if highest else None,
+        "raw_min": min((row["value"] for row in numeric), default=None),
         "display_multiplier": multiplier,
         "display_max": highest["value"] * multiplier if highest else None,
         "unit": unit,

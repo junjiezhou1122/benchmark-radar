@@ -1280,7 +1280,7 @@ def story(
             ),
             p("Data statement", st["subsection"]),
             p(
-                "Counts were recomputed from site/data/radar.json, site/data/benchmark-index.json, site/data/models.json, data/model_cards.yml, data/benchmark_scores.yml, normalized files under data/external/, and config.yml. The PDF is a dated interpretation. The rolling dashboard may change after the cutoff; cite its current number with a retrieval date.",
+                "Counts were recomputed from site/data/radar.json, site/data/benchmark-index.json, site/data/models.json, data/model_cards.yml, data/benchmark_scores.yml, normalized files under data/catalog/, and config.yml. The PDF is a dated interpretation. The rolling dashboard may change after the cutoff; cite its current number with a retrieval date.",
                 st["body"],
             ),
             p("References", st["section"]),

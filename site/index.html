@@ -490,26 +490,34 @@
           <div class="skyline-heading">
             <div>
               <h2 id="benchmark-skyline-heading" data-i18n="Benchmark Frontier">Benchmark Frontier</h2>
-              <p class="skyline-subtitle" data-i18n="Where difficult benchmarks earn adoption">Where difficult benchmarks earn adoption</p>
+              <p class="skyline-subtitle" data-i18n="Which difficult benchmarks have been tested most">Which difficult benchmarks have been tested most</p>
             </div>
-            <p class="skyline-count" id="benchmark-skyline-count" role="status"></p>
           </div>
           <label class="skyline-height-control" for="benchmark-skyline-height">
             <span data-i18n="Height">Height</span>
             <select id="benchmark-skyline-height">
               <option value="models" data-i18n="Models with reported scores">Models with reported scores</option>
-              <option value="cards" data-i18n="Unique model cards">Unique model cards</option>
+              <option value="documents" data-i18n="Source documents">Source documents</option>
             </select>
           </label>
-          <p class="skyline-note" id="benchmark-skyline-note"></p>
           <div class="frontier-chart skyline-chart" id="benchmark-skyline-chart" tabindex="0" role="region" aria-label="Benchmark Frontier chart" data-i18n-aria="Benchmark Frontier chart"></div>
-          <details class="skyline-method">
-            <summary data-i18n="How to read the frontier">How to read the frontier</summary>
-            <p data-i18n="skyline.reading">Each benchmark that passes the date, reported-score and search filters has its own visible mark. Height defaults to the number of distinct models with numeric scores in that source. Source model IDs preserve separately evaluated configurations; curated reports use organization and model names. Repeated score rows do not increase the count. Select Unique model cards to see distinct documents in the curated registry. These two measures are kept separate, and both counts appear on hover.</p>
+          <div class="skyline-caption">
+            <div id="benchmark-skyline-legend" aria-label="Chart legend" data-i18n-aria="Chart legend"></div>
+            <details class="skyline-method" id="benchmark-skyline-method">
+              <summary class="info-disclosure-toggle" aria-label="Chart notes" data-i18n-aria="Chart notes"><span aria-hidden="true">i</span></summary>
+              <div class="skyline-method-body">
+                <p id="benchmark-skyline-count" role="status"></p>
+                <p id="benchmark-skyline-note"></p>
+                <p id="benchmark-skyline-sources"></p>
+                <p id="benchmark-skyline-coverage"></p>
+                <p id="benchmark-skyline-pareto"></p>
+                <p data-i18n="skyline.reading">Each mark is one benchmark record. Height counts distinct models with numeric scores. Source model IDs preserve evaluated configurations; repeated score rows add no models. Source documents counts distinct cited reports or registry pages through the same evidence collection. Both counts appear on hover.</p>
             <p data-i18n="skyline.pareto">The side view projects reported scores and the selected counts onto the left wall, leaving out time. The gold staircase compares only benchmarks with verified score scales. Within the dated 2024+ cohort, a benchmark is Pareto when no other eligible benchmark has an equal or lower normalized score and an equal or greater selected count, with at least one strict advantage. Dates select the cohort; they do not determine dominance. Scores and counts are never multiplied. The score slice cannot promote a dominated benchmark onto the frontier.</p>
             <p data-i18n="skyline.scope">Height uses log1p(count); ticks, tooltips and Pareto use raw counts. The axis covers the full scored 2024+ cohort and stays fixed while filtering. Only declared percentage metrics with a known selected count enter Pareto; lower-is-better percentages become 100 minus the original value. Hollow points flag an unverified score scale or an unknown count, which is never treated as zero. Overlapping caps are spaced apart; hover or focus traces their exact coordinates. Arrow keys move through benchmarks. A shared scale does not establish equivalent test protocols or prove a benchmark is solved.</p>
-            <p data-i18n="skyline.regions">The timeline starts on January 1, 2024, inclusive. Dates use the benchmark's release first, then its earliest numeric LLM score report. When a source dates score entries by model release, the earliest entry supplies a clearly labelled model-release proxy; this is not a verified score-publication date. Crawl timestamps and adoption-only mentions never supply dates. Known dates before 2024 are excluded. Records with no date remain individually visible in a labelled area. Hard frontier, Emerging and Saturated are reading guides.</p>
-          </details>
+            <p data-i18n="skyline.regions">The timeline starts on January 1, 2024, inclusive. Dates use the benchmark's release first, then its earliest numeric LLM score report. When a source dates score entries by model release, the earliest entry supplies a clearly labelled model-release proxy; this is not a verified score-publication date. Crawl timestamps and adoption-only mentions never supply dates. Known dates before 2024 are excluded. Records with no date remain individually visible in a labelled area.</p>
+              </div>
+            </details>
+          </div>
         </section>
 
         <section class="score-ranking leaderboard-top" aria-label="Ranked by data points" data-i18n-aria="Ranked by data points">
@@ -585,7 +593,7 @@
             </div>
             <p id="frontier-filter-note" class="section-note" role="status" hidden></p>
             <p id="frontier-highest-score" class="section-note" hidden></p>
-            <div class="frontier-external" id="frontier-external" hidden></div>
+            <div class="frontier-catalog" id="frontier-catalog" hidden></div>
             <div class="frontier-chart" id="frontier-chart"></div>
             <!-- Legend below the figure it explains: above it, it pushed the
                  chart down to explain marks the reader had not seen yet. -->
@@ -620,8 +628,7 @@
 
         <section class="leaderboard-top" aria-labelledby="leaderboard-adoption-heading">
           <div class="leaderboard-top-heading">
-            <h2 id="leaderboard-adoption-heading" data-i18n="Most reported benchmarks in model cards">Most reported benchmarks in model cards</h2>
-            <span id="leaderboard-top-info"></span>
+            <h2 id="leaderboard-adoption-heading" data-i18n="Most documented benchmarks">Most documented benchmarks</h2>
             <!-- Written but not shown: the visible copy is in the (i). A screen
                  reader announces it with the heading. -->
             <p class="leaderboard-deck visually-hidden" id="leaderboard-measures"></p>
@@ -629,7 +636,7 @@
           <div class="leaderboard-top-columns" aria-hidden="true">
             <span class="leaderboard-top-columns-rank" data-i18n="Rank">Rank</span>
             <span class="leaderboard-top-columns-name" data-i18n="Benchmark">Benchmark</span>
-            <span class="leaderboard-top-columns-count" data-i18n="leaderboard.column.model_cards">Model cards</span>
+            <span class="leaderboard-top-columns-count" data-i18n="leaderboard.column.model_cards">Source documents</span>
           </div>
           <ol class="leaderboard-top-list" id="leaderboard-top-list"></ol>
           <button
@@ -639,6 +646,9 @@
             aria-label="Show more ranked benchmarks"
             hidden
           >Show more ranked benchmarks</button>
+          <div class="figure-caption">
+            <span id="leaderboard-top-info"></span>
+          </div>
         </section>
 
 
@@ -647,7 +657,7 @@
         <details class="findings-panel" id="benchmark-findings" aria-labelledby="findings-heading" hidden>
           <summary class="section-title findings-summary">
             <span>
-              <span class="eyebrow" data-i18n="What the two layers say">What the two layers say</span>
+              <span class="eyebrow" data-i18n="What the evidence shows">What the evidence shows</span>
               <strong id="findings-heading" data-i18n="Stated findings">Stated findings</strong>
             </span>
             <span id="findings-count" aria-live="polite"></span>
@@ -661,7 +671,7 @@
         <details class="trend-panel adoption-table" id="adoption-table">
           <summary class="section-title adoption-table-summary">
             <span>
-              <strong id="leaderboard-table-heading">Benchmarks by model card adoption</strong>
+              <strong id="leaderboard-table-heading">Benchmarks by source documents</strong>
             </span>
             <span id="leaderboard-count" aria-live="polite"></span>
           </summary>
@@ -692,10 +702,8 @@
             </button>
           </form>
           <p class="section-note" data-i18n="leaderboard.filters.note">
-            Each model card counts once per benchmark. A card reporting AIME in four
-            configurations counts the same as a card reporting it once, so a long appendix
-            cannot outweigh a different vendor. Organizations breaks the tie: the same count
-            from six vendors is a shared standard, from one vendor a house style.
+            Each source document counts once per benchmark record. Repeated scores or
+            mentions in the same document add no citations. This table covers all sources.
           </p>
           <div class="leaderboard-list" id="leaderboard-list"></div>
           <div class="leaderboard-list-actions">
@@ -713,15 +721,14 @@
           <summary class="ledger-summary">
             <span>
               <span class="eyebrow" data-i18n="Audit the counts">Audit the counts</span>
-              <strong id="leaderboard-cards-heading" data-i18n="Model cards in the registry">Model cards in the registry</strong>
+              <strong id="leaderboard-cards-heading" data-i18n="Source documents in the catalog">Source documents in the catalog</strong>
             </span>
             <span id="leaderboard-cards-count"></span>
           </summary>
           <div class="ledger-body">
             <p class="section-note" data-i18n="leaderboard.ledger.note">
-              The curated source list this ranking is computed from. Expand any card to see
-              every benchmark it reports, grouped the way the source document groups them, so
-              our data can be checked line by line against the original.
+              Source documents from every registry. Expand a document to inspect
+              the benchmarks it records and open the original evidence.
             </p>
             <div class="leaderboard-list" id="leaderboard-cards"></div>
           </div>
@@ -792,17 +799,10 @@
         <div class="trend-panel">
           <div class="section-title">
             <h2 data-i18n="trends.daily.title">Daily evidence and attention volume</h2>
-            <div class="legend" id="trend-legend" aria-label="Category legend"></div>
           </div>
-          <p class="section-note" data-i18n="trends.daily.note">
-            Category tags overlap. Each bar is an independent count, not a part of a stacked total.
-          </p>
           <label class="trend-filter">
             <input type="checkbox" id="trend-released-only" />
             <span data-i18n="trends.releaseOnly">Releases only</span>
-            <span class="heading-note" data-i18n="trends.releaseOnly.note">
-              Excludes records re-announced as an update to something already surfaced.
-            </span>
           </label>
           <p class="trend-message" id="trend-message" role="status"></p>
           <div class="trend-chart-frame">
@@ -810,6 +810,14 @@
                  presentational and hide their tooltip description. -->
             <div class="trend-chart" id="trend-chart" role="group" aria-label="Daily category counts"></div>
             <div class="day-tooltip" id="day-tooltip" role="tooltip" aria-hidden="true" hidden></div>
+          </div>
+          <div class="figure-caption">
+            <div class="legend" id="trend-legend" aria-label="Category legend"></div>
+            <details class="figure-note">
+              <summary class="info-disclosure-toggle" aria-label="Chart notes" data-i18n-aria="Chart notes"><span aria-hidden="true">i</span></summary>
+              <p class="section-note" data-i18n="trends.daily.note">Category tags overlap. Each bar is an independent count, not a part of a stacked total.</p>
+              <p class="section-note" data-i18n="trends.releaseOnly.note">Releases only excludes records re-announced as an update to something already surfaced.</p>
+            </details>
           </div>
         </div>
 

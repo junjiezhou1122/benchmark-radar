@@ -79,7 +79,7 @@ function organizationColor(organization) {
 //
 // The key is the canonical organization name -- `Google`, not `Google
 // DeepMind` -- so the crawled and curated layers resolve the same mark. See
-// CANONICAL_ORGANIZATIONS in external_catalog.py, which is what guarantees
+// CANONICAL_ORGANIZATIONS in catalog.py, which is what guarantees
 // only canonical names ever reach this table.
 const ORGANIZATION_ICONS = {
   OpenAI: [

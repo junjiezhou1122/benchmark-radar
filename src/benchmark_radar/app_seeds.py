@@ -64,14 +64,9 @@ def _collate(name: str) -> tuple[str, str]:
 LEADERBOARD_TOP_LIMIT = 5
 
 # The sentence renderLeaderboardTop joins onto board.measures inside the (i)
-# beside the ranking. It is the caveat that keeps an adoption count from being
+# below the ranking. It is the caveat that keeps a document count from being
 # read as a quality score, so a page that ships the ranking ships it too.
-LEADERBOARD_TOP_NOTE = (
-    "A report counts once per test, even if it lists that test several times. "
-    "Some reports publish their results as a picture rather than text, and we "
-    "read those with software that can misread a digit, so the list at the "
-    "bottom of this page links every count back to the report it came from."
-)
+LEADERBOARD_TOP_NOTE = "Open the source-document list below to trace each count to its citations."
 
 
 # The slider's default position in site/index.html. The seed must render the
@@ -103,13 +98,13 @@ def _info_disclosure(text: str) -> str:
 
 
 def _leaderboard_seed(
-    dashboard: dict[str, Any], external_index: list[dict[str, Any]]
+    dashboard: dict[str, Any], catalog_index: list[dict[str, Any]]
 ) -> dict[str, str]:
     """The top rows, the measures note and the caveat renderLeaderboardTop emits."""
     board = dashboard.get("model_card_leaderboard") or {}
     ranked = [entry for entry in (board.get("entries") or []) if (entry.get("card_count") or 0) > 0]
     entries = ranked[:LEADERBOARD_TOP_LIMIT]
-    browse_seed = _score_browser_seed(dashboard, external_index)
+    browse_seed = _score_browser_seed(dashboard, catalog_index)
     if not entries:
         return browse_seed
     # Scaled against the top row on screen rather than the top row overall,
@@ -124,7 +119,7 @@ def _leaderboard_seed(
         f'style="width:{int(entry["card_count"]) / top * 100:.1f}%"></span>'
         "</span>"
         '<span class="leaderboard-top-count">'
-        f"{esc(_metric_label(entry.get('card_count'), 'model card'))}</span>"
+        f"{esc(_metric_label(entry.get('card_count'), 'source document'))}</span>"
         "</li>"
         for entry in entries
     )
@@ -170,27 +165,18 @@ def _leaderboard_seed(
 def _browser_score_summary(record: dict[str, Any]) -> dict[str, Any] | None:
     """Match scoreBrowserSummary: preserve source values except declared error percentages."""
     summary = record.get("score_summary")
-    values = [
-        row["value"]
-        for row in record.get("observations", [])
-        if isinstance(row.get("value"), (int, float))
-        and not isinstance(row["value"], bool)
-        and math.isfinite(row["value"])
-    ]
-    if not summary and values:
-        summary = {
-            "numeric_count": len(values),
-            "display_max": max(values),
-            "unit": record.get("unit"),
-            "display_multiplier": 1,
-        }
+    if not summary:
+        return None
+    minimum = summary.get("raw_min")
+    maximum = summary.get("raw_max")
     if (
         record.get("unit") == "percent"
-        and record.get("direction") == "lower_is_better"
-        and values
-        and all(0 <= value <= 100 for value in values)
+        and (record.get("score_direction") or record.get("direction")) == "lower_is_better"
+        and isinstance(minimum, (int, float))
+        and isinstance(maximum, (int, float))
+        and 0 <= minimum <= maximum <= 100
     ):
-        return {**(summary or {}), "display_max": 100 - min(values), "normalized_from_lower": True}
+        return {**summary, "display_max": 100 - minimum, "normalized_from_lower": True}
     return summary
 
 
@@ -237,34 +223,18 @@ def _benchmark_date(
 
 
 def _score_browser_seed(
-    dashboard: dict[str, Any], external_index: list[dict[str, Any]]
+    dashboard: dict[str, Any], catalog_index: list[dict[str, Any]]
 ) -> dict[str, str]:
     """The default list rendered by renderBenchmarkSearch, at DEFAULT_SCORE_CUTOFF."""
-    board = dashboard.get("model_card_leaderboard") or {}
-    progression = (dashboard.get("benchmark_score_progression") or {}).get("benchmarks") or {}
-    named = {
-        entry["benchmark_id"]: entry
-        for entry in board.get("entries", [])
-        if entry.get("benchmark_id")
-    }
     rows = [
-        {
-            "id": benchmark_id,
-            "name": named.get(benchmark_id, {}).get("name") or benchmark_id,
-            "source": "curated",
-            "summary": _browser_score_summary(record),
-            "date": _benchmark_date(record, named.get(benchmark_id)),
-        }
-        for benchmark_id, record in progression.items()
-    ] + [
         {
             "id": record["slug"],
             "name": record["name"],
             "source": record["source"],
-            "summary": record.get("score_summary"),
+            "summary": _browser_score_summary(record),
             "date": _benchmark_date(record),
         }
-        for record in external_index
+        for record in catalog_index
     ]
     rows = [
         row
@@ -281,7 +251,7 @@ def _score_browser_seed(
     if not shown:
         return {}
     names = {
-        "curated": "Curated registry",
+        "model_reports": "Model reports",
         "llm_stats": "LLM Stats",
         "artificial_analysis": "Artificial Analysis",
         "opencompass_hub": "OpenCompass Hub",
@@ -558,11 +528,11 @@ def _map_seed(dashboard: dict[str, Any]) -> dict[str, str]:
 def view_seeds(
     dashboard: dict[str, Any],
     palette: tuple[dict[str, str], list[str]],
-    external_index: list[dict[str, Any]] | None = None,
+    catalog_index: list[dict[str, Any]] | None = None,
 ) -> dict[str, dict[str, str]]:
     """Every view's seed, keyed by view. An empty dict means nothing to publish."""
     return {
-        "leaderboard": _leaderboard_seed(dashboard, external_index or []),
+        "leaderboard": _leaderboard_seed(dashboard, catalog_index or []),
         "trends": _trends_seed(dashboard, palette),
         "map": _map_seed(dashboard),
     }

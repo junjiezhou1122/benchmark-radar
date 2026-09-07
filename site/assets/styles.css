@@ -4713,35 +4713,35 @@ footer {
 
 /* External catalog detail (display plan step 4). Lives inside the dark
    frontier panel, so the palette follows the panel's, not the page's. */
-.frontier-external {
+.frontier-catalog {
   margin-top: 0.9rem;
 }
 
-.external-block {
+.catalog-block {
   margin-top: 1.3rem;
   padding-top: 1.1rem;
   border-top: 1px solid #39464c;
 }
 
-.external-block:first-child {
+.catalog-block:first-child {
   margin-top: 0;
   padding-top: 0;
   border-top: 0;
 }
 
-.external-block h3 {
+.catalog-block h3 {
   margin: 0 0 0.7rem;
   font-family: var(--display);
   font-size: 1.1rem;
 }
 
-.external-block h4 {
+.catalog-block h4 {
   margin: 0.9rem 0 0.3rem;
   font-size: 0.95rem;
 }
 
-.external-description,
-.external-basis {
+.catalog-description,
+.catalog-basis {
   max-width: 75ch;
   margin: 0 0 0.8rem;
   color: #d6e0e3;
@@ -4750,7 +4750,7 @@ footer {
 
 /* The #262 inheritance note: a borrowed identity is flagged, never silent. A
    left rule and muted panel set it apart from the record's own description. */
-.external-inherited {
+.catalog-inherited {
   max-width: 75ch;
   margin: 0 0 0.8rem;
   padding: 0.5rem 0.7rem;
@@ -4761,11 +4761,11 @@ footer {
   font-size: 0.8rem;
 }
 
-.external-openness-chip {
+.catalog-openness-chip {
   margin: 0 0 0.7rem;
 }
 
-.external-facts {
+.catalog-facts {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   gap: 0.25rem 1rem;
@@ -4773,24 +4773,24 @@ footer {
   font-size: 0.82rem;
 }
 
-.external-facts dt {
+.catalog-facts dt {
   color: #aebcc1;
 }
 
-.external-facts dd {
+.catalog-facts dd {
   margin: 0;
 }
 
-.external-empty {
+.catalog-empty {
   margin: 0;
   color: #aebcc1;
   font-size: 0.82rem;
   font-style: italic;
 }
 
-.external-artifacts,
-.external-sizes,
-.external-siblings {
+.catalog-artifacts,
+.catalog-sizes,
+.catalog-siblings {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -4800,23 +4800,23 @@ footer {
   list-style: none;
 }
 
-.external-artifacts a {
+.catalog-artifacts a {
   color: white;
 }
 
-.external-artifacts a:hover,
-.external-artifacts a:focus-visible {
+.catalog-artifacts a:hover,
+.catalog-artifacts a:focus-visible {
   text-decoration: underline;
 }
 
-.external-sizes li {
+.catalog-sizes li {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: baseline;
 }
 
-.external-evidence-link {
+.catalog-evidence-link {
   color: #7fc7bc;
   font-size: 0.76rem;
 }
@@ -4876,41 +4876,38 @@ footer {
   line-height: 1.5;
 }
 
-/* externalScoreChart (the crawled-score figure) draws entirely with the
-   curated chart's own classes -- frontier-grid, frontier-tick,
-   frontier-axis-label, score-point*, score-best-line/label -- so it carries no
-   styling of its own here. */
+/* Every score source uses the same chart classes and visual treatment. */
 
-.external-scores-wrap {
+.catalog-scores-wrap {
   max-height: 26rem;
   overflow: auto;
   border: 1px solid #39464c;
   border-radius: 6px;
 }
 
-.external-scores {
+.catalog-scores {
   min-width: 0;
   font-size: 0.8rem;
 }
 
-.external-scores th,
-.external-scores td {
+.catalog-scores th,
+.catalog-scores td {
   padding: 0.35rem 0.7rem;
   text-align: left;
 }
 
-.external-scores thead th {
+.catalog-scores thead th {
   position: sticky;
   top: 0;
   background: #0d1519;
   color: #aebcc1;
 }
 
-.external-scores tbody tr + tr {
+.catalog-scores tbody tr + tr {
   border-top: 1px solid #223036;
 }
 
-.external-sibling-link {
+.catalog-sibling-link {
   padding: 0;
   border: 0;
   background: none;
@@ -4921,7 +4918,7 @@ footer {
   text-underline-offset: 2px;
 }
 
-.external-sibling-meta {
+.catalog-sibling-meta {
   margin-left: 0.5rem;
   color: #aebcc1;
   font-size: 0.76rem;
@@ -4952,36 +4949,9 @@ footer {
   margin: 0;
 }
 
-/* Hover reveals it too, not only click (issue #269).
-
-   A closed <details> hides its body by not generating a box for it, and any
-   `display` declared on that body overrides the hiding rather than adding to
-   it -- which pins the panel permanently open. So the reveal is driven by
-   visibility and opacity on a box that is always generated: the body is laid
-   out but transparent and non-interactive until hover, focus, or the open
-   state. Click still works and is what keeps it up while the pointer travels
-   onto the text; coarse pointers get the click path alone, which is right. */
-.info-disclosure > .info-disclosure-body {
-  display: block;
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 90ms ease-out;
-}
-
-.info-disclosure[open] > .info-disclosure-body,
-.info-disclosure:focus-within > .info-disclosure-body {
-  visibility: visible;
-  opacity: 1;
-  pointer-events: auto;
-}
-
-@media (hover: hover) {
-  .info-disclosure:hover > .info-disclosure-body {
-    visibility: visible;
-    opacity: 1;
-    pointer-events: auto;
-  }
+/* A closed note stays closed, including while its toggle has keyboard focus. */
+.info-disclosure:not([open]) > .info-disclosure-body {
+  display: none;
 }
 
 /* --- Rounded surfaces (issue #333) ------------------------------------------
@@ -5053,7 +5023,7 @@ dialog {
    surfaces that show crawled text; the site's own copy never needs it. */
 .record-card,
 .map-detail,
-.external-block {
+.catalog-block {
   overflow-wrap: anywhere;
 }
 
@@ -5173,6 +5143,14 @@ dialog {
 .skyline-point:hover .skyline-guide-tip,
 .skyline-point:focus .skyline-guide-tip,
 .skyline-point.is-selected .skyline-guide-tip { display: inline; }
+.figure-caption { position: relative; padding-right: 2.5rem; margin-top: .65rem; }
+.figure-caption > .info-disclosure,
+.figure-caption > #leaderboard-top-info,
+.figure-note > summary { position: absolute; right: 0; top: 0; }
+.figure-caption { min-height: 2rem; }
+.figure-caption .info-disclosure-body { left: auto; right: 0; top: 2.5rem; width: min(26rem, calc(100vw - 2rem)); }
+.figure-caption > .frontier-org-key { margin: 0; }
+.figure-note .section-note { max-width: 85ch; margin: .65rem 0 0; }
 .skyline-legend { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; list-style: none; padding: 0; margin: .4rem 0; color: var(--muted); font-size: .875rem; }
 .skyline-legend li { display: flex; align-items: center; gap: .4rem; }
 .skyline-swatch { width: .6rem; height: .6rem; border-radius: 50%; background: var(--skyline-color); }
@@ -5180,6 +5158,12 @@ dialog {
 .skyline-swatch-unknown { background: var(--panel); border: 1.5px solid var(--muted); }
 .skyline-swatch-proxy { background: var(--panel); border: 1.5px dashed var(--muted); }
 .skyline-source-coverage { margin: .25rem 0 .7rem; color: var(--muted); font-size: .8rem; }
+.skyline-caption { position: relative; padding-right: 2.5rem; margin-top: .7rem; }
+.skyline-caption .skyline-method { margin: 0; }
+.skyline-caption .skyline-method > summary { position: absolute; top: .1rem; right: 0; }
+.skyline-method-body { margin-top: .9rem; padding: .25rem 1rem; border-left: 2px solid var(--line); color: var(--muted); font-size: .875rem; max-width: 85ch; }
+.skyline-method:not([open]) > .skyline-method-body { display: none; }
+.skyline-method-body p { margin: .5rem 0; line-height: 1.6; }
 .skyline-empty { margin: .5rem 0; }
 @media (max-width: 640px) {
   .skyline-heading { align-items: flex-start; flex-direction: column; gap: .2rem; }

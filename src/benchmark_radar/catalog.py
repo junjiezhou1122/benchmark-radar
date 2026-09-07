@@ -1,53 +1,19 @@
-"""External benchmark catalog: crawled aggregator records, normalized.
+"""Normalize registered leaderboard snapshots into the shared benchmark catalog.
 
-The curated layers (`model_cards.yml`, `benchmark_scores.yml`) record what was
-curated out of a cited document. This layer records what a third-party
-aggregator published on a crawl date. The two never join, and this module's job
-is to keep that separation structural rather than advisory.
+All adapters emit the same records, series, observations and cited documents.
+Source names preserve provenance and never determine a record's eligibility.
+Missing fields stay unknown until reviewed evidence supplies them. Identity
+links do not merge source records, transfer scores or establish a test protocol.
 
-WHAT AN LLM STATS RECORD HONESTLY CONTAINS
-
-The llm-stats leaderboard API returns eight keys per benchmark: an id, a name,
-a description, a max score, categories, a modality, a model count, and the
-score entries. There is no author, institution, paper, repository, licence,
-dataset size, or release date anywhere in it. So every source record this
-module emits for llm-stats carries `publisher: None`, `artifacts: []`,
-`sizes: []`, `openness.status: "unknown"` and `released: None`.
-
-Those empty fields are the output, not a gap awaiting a later pass. A record
-that admits the source knows nothing about provenance is exactly what lets the
-site answer "who made this?" with "not established" instead of with a guess.
-Filling them in would require inferring identity from a benchmark name, which
-is where confident wrong attributions come from.
-
-WHY SCORES CANNOT BE JOINED AS A COMPARABLE SERIES
-
-No llm-stats row records shots, harness, tool access, or attempts, and none
-records *when the score was measured*. `announcement_date` is real and present
-on effectively every row (see `_observation`), but it dates the model's own
-release, not the evaluation run -- a score can be added to a leaderboard long
-after the model it names first shipped. `benchmark_scores.yml` states the rule
-this layer inherits: an unstated condition is never treated as equal to
-another unstated condition. So every observation still carries
-`comparable_group: None`, and null is not a group. Two nulls do not join,
-which makes "no like-for-like trend and no cross-source ranking" a property of
-the data rather than a request to the renderer. Within each LLM Stats benchmark,
-higher values are better: the source ranks every scored series in descending
-numeric order, an invariant validated below. The site can therefore link
-successive reported highs. That record path is explicitly placed by model
-release and is not a comparison series: `date_precision` on each observation
-exists precisely so a date this loosely tied to the score is never silently
-promoted into "when this was measured."
-
-For the same reason `display_scale` is always `None`. The aggregator's declared
-`max_score` is not a ceiling: `vending-bench-2` declares 1.0 and carries a
-score of 8017.59. A renderer given a scale will draw a percentage bar, so it is
-given no scale, and `max_score_contradicted` records the collision as a fact
-rather than as a judgement about which number is wrong.
+LLM Stats and Artificial Analysis use the CSV adapter here. Their model-release
+dates are labelled proxies, not evaluation dates. A declared maximum can be
+contradicted by the observations; it never establishes a percentage scale on
+its own. Each series carries its measured direction and display metadata.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -59,7 +25,7 @@ from .score_summary import score_summary
 
 CATALOG_SCHEMA_VERSION = 1
 
-DEFAULT_OUTPUT_DIR = Path("data/external")
+DEFAULT_OUTPUT_DIR = Path("data/catalog")
 
 LLM_STATS_SNAPSHOT_ID = "llm_stats_2026-08-17"
 LLM_STATS_SOURCE = "llm_stats"
@@ -80,7 +46,7 @@ SOURCES = {
 
 _SLUG_STRIP = re.compile(r"[^a-z0-9]+")
 
-# One organization, one name, across both layers.
+# One organization, one name, across all sources.
 #
 # The aggregator names an organization however its own catalog spells it, and
 # that spelling is not always the one the curated registry uses for the same
@@ -134,7 +100,7 @@ def canonical_organization(name: str | None) -> str | None:
     return CANONICAL_ORGANIZATIONS.get(cleaned, cleaned)
 
 
-class ExternalCatalogError(ValueError):
+class CatalogError(ValueError):
     """Raised when a snapshot cannot be normalized into catalog records."""
 
 
@@ -149,7 +115,7 @@ def slugify(key: str) -> str:
     """
     slug = _SLUG_STRIP.sub("-", key.lower()).strip("-")
     if not slug:
-        raise ExternalCatalogError(f"key {key!r} has no slug-safe characters")
+        raise CatalogError(f"key {key!r} has no slug-safe characters")
     return slug
 
 
@@ -252,9 +218,17 @@ def _observation(
     rank = (row.get("rank") or "").strip()
     # Identity is (benchmark, model_id): distinct dated checkpoints can share a
     # display name, so the name is vocabulary and the id is what a row is.
-    model_id = (row.get("model_id") or "").strip() or (row.get("model_name") or "").strip()
+    model_id = (row.get("model_id") or "").strip() or None
+    observation_identity = (
+        model_id
+        or "unidentified-"
+        + hashlib.sha256(
+            json.dumps(row, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()[:20]
+    )
+    self_reported = (row.get("self_reported") or "").strip().lower()
     return {
-        "obs_id": f"{source}:{row['benchmark_id'].strip()}:{model_id}",
+        "obs_id": f"{source}:{row['benchmark_id'].strip()}:{observation_identity}",
         "key": key,
         "series_id": series_id,
         "model_name": (row.get("model_name") or "").strip(),
@@ -267,9 +241,12 @@ def _observation(
         # only honest comparability class is "none". Null never joins to null.
         "reported_by": (
             "self_reported"
-            if (row.get("self_reported") or "").strip().lower() == "true"
+            if self_reported == "true"
             else "third_party"
+            if self_reported == "false"
+            else "unknown"
         ),
+        "measured_by": "Artificial Analysis" if source == ARTIFICIAL_ANALYSIS_SOURCE else None,
         "comparable_group": None,
         "rank_in_source_response": int(rank) if rank.isdigit() else None,
         "crawled_at": crawled_at,
@@ -374,7 +351,7 @@ def normalize_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
     """
     snapshot_id = snapshot["id"]
     if snapshot_id not in SOURCES:
-        raise ExternalCatalogError(f"snapshot {snapshot_id!r} has no source descriptor")
+        raise CatalogError(f"snapshot {snapshot_id!r} has no source descriptor")
     source, key_prefix = SOURCES[snapshot_id]
 
     benchmark_rows = snapshot["benchmark_rows"]
@@ -421,7 +398,7 @@ def normalize_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
 
     def _order(item: dict[str, Any]) -> tuple[str, int, str]:
         rank = item["rank_in_source_response"]
-        return (item["key"], rank if rank is not None else 1 << 30, item["model_id"])
+        return (item["key"], rank if rank is not None else 1 << 30, item["model_id"] or "")
 
     observations.sort(key=_order)
 
@@ -574,6 +551,7 @@ def build_benchmark_index(
                 "slug": record["slug"],
                 "key": record["key"],
                 "name": record["name"],
+                "aliases": list(record.get("aliases") or []),
                 # Search text stays source-derived. The normalizers carry
                 # descriptions by language; no generated prose or inferred
                 # category is introduced in this compact index.
@@ -605,6 +583,8 @@ def build_benchmark_index(
                 "score_count": series.get("observation_count", 0),
                 "score_summary": series.get("score_summary"),
                 "score_direction": series.get("direction"),
+                "unit": series.get("unit"),
+                "evidence_summary": record.get("evidence_summary"),
                 "has_paper": any(item["kind"] == "paper" for item in artifacts),
                 "has_repo": any(item["kind"] == "repo" for item in artifacts),
                 "repo_kind": repository.get("kind"),
@@ -617,11 +597,18 @@ def build_benchmark_index(
     return index
 
 
-def write_benchmark_index(index: list[dict[str, Any]], output: Path) -> Path:
+def write_benchmark_index(
+    index: list[dict[str, Any]], output: Path, *, documents: dict[str, Any] | None = None
+) -> Path:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
         json.dumps(
-            {"schema_version": CATALOG_SCHEMA_VERSION, "count": len(index), "benchmarks": index},
+            {
+                "schema_version": CATALOG_SCHEMA_VERSION,
+                "count": len(index),
+                "benchmarks": index,
+                **({"document_registry": documents} if documents is not None else {}),
+            },
             ensure_ascii=False,
             sort_keys=True,
         )

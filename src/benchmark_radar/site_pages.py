@@ -10,7 +10,7 @@ of them.
 
 The pages derive from the shards exactly as the shards derive from the crawl
 CSVs, so they are generated and gitignored, never committed. The build calls
-this right after `normalize-external` writes the shards, and the sitemap build
+this right after `normalize-catalog` writes the shards, and the sitemap build
 scans the same shard directory for the URLs to list. A page never invents
 values: missing fields are omitted from the HTML, never shown as a zero, an
 empty string, or the literal word for a missing value. Scores stay partitioned
@@ -391,7 +391,7 @@ def write_benchmark_pages(
     """
     if not shard_dir.is_dir():
         raise FileNotFoundError(
-            f"{shard_dir} holds no benchmark shards; run `benchmark-radar normalize-external` first"
+            f"{shard_dir} holds no benchmark shards; run `benchmark-radar normalize-catalog` first"
         )
     shard_paths = sorted(shard_dir.glob("*.json"))
     if not shard_paths:

@@ -79,13 +79,18 @@ results come first; the daily briefing follows as context for the scan date.
 Explain a shared limitation once near the affected group. Do not repeat “not
 comparable” or “not enough history” in every card.
 
-## Keep evidence layers distinct
+## One catalog with typed evidence
 
-| Layer | Meaning | What the interface must show |
-| --- | --- | --- |
-| Radar | Daily discovery evidence | Source and date; label it as a signal |
-| Catalog | Normalized external records | Provenance and source identity |
-| Curated measurements | Reviewed adoption and score history | Protocol, date, and comparability |
+Model reports, OpenCompass Hub, Artificial Analysis and LLM Stats contribute
+benchmark records through the same contract. Source names identify provenance;
+they do not grant priority in ranking or access to a chart.
+
+| Evidence | What the interface must preserve |
+| --- | --- |
+| Benchmark record | Source identity, name and reviewed identity links |
+| Score observation | Value, model ID, units, protocol, date basis and citation |
+| Source document | Document identity, type, URL and benchmark references |
+| Daily discovery observation | Source, date and the mention or release observed |
 
 Search returns candidates, not recommendations. Recent attention, model-card
 adoption, and model scores answer different questions and must not share an
@@ -104,8 +109,8 @@ default.
 Never call a benchmark "external" in the interface. That word describes where a
 record was collected, not what the thing is, and it invites a reader to discount
 most of the corpus. Name the source instead: "Artificial Analysis", "LLM Stats",
-"Curated registry". The layer table above governs how a row is *labelled* and
-what provenance it must expose. It never licenses dropping a layer from a view.
+"OpenCompass Hub", "Model reports". Preserve the evidence fields above for
+each source. Missing measurements do not remove benchmark records.
 
 A figure and the list beside it answer the same question over the same rows. If
 a chart shows a dozen benchmarks while the list underneath says 790, the chart
@@ -183,3 +188,10 @@ Before merging a user-facing change, check:
 - Does it work at 320px with long content, keyboard navigation, direct URLs,
   Back and Forward, slow loading, and empty or error states?
 - Does it load only the data needed for the current task?
+
+## Figure captions
+
+Put legends below their figure. Leave only the keys needed to read its colors
+and shapes expanded. Collect counts, coverage, exclusions and method text in
+one closed information note beside the legend. Use [principle.md](principle.md)
+for the full-corpus, missing-data and Frontier filter rules.

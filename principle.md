@@ -6,11 +6,13 @@ This is the operating scale of Benchmark Radar. It is not a small collection
 of benchmarks from model cards. Every benchmark-facing chart, search, table,
 count, and export must start from the full population across all sources.
 
-The current population is the catalog records in `benchmark-index.json` plus
-the curated score tracks in `radar.json`: 1,259 records across four sources at
-the time this rule was introduced. Rebuild the data and calculate the current
-total and source count. Never hard-code these numbers into the interface;
-the corpus and its source coverage should be able to grow.
+The benchmark catalog in `benchmark-index.json` contains the whole population,
+including model reports, OpenCompass Hub, Artificial Analysis and LLM Stats.
+The baseline was 1,259 records across four sources when this rule was introduced.
+Include registry entries that have citations but no scores, and entries with
+neither measurement. Rebuild the data and calculate the current total and source
+count. Never hard-code these numbers into the interface or add report records
+again after reading the unified index.
 
 **If a main surface contains only a few dozen benchmarks, assume records are
 missing and investigate. Do not present that subset as Benchmark Radar.**
@@ -19,6 +21,55 @@ Check which sources, records, and fields disappeared at each join or filter.
 A successful render, plausible Pareto frontier, or passing test does not excuse
 missing most of the population. A chart and the browser beside it must use the
 same record universe and respond consistently to the user's filters.
+
+## One corpus, one record contract, equal treatment of sources
+
+Model reports and benchmark registries contribute to the same catalog. Normalize
+their benchmarks, model identities, observations, documents and citations into
+the same structures before any chart, search, count or export reads them. The
+downloadable catalog and the website must cover the same benchmark IDs.
+
+Use source names as provenance: **Model reports**, **OpenCompass Hub**,
+**Artificial Analysis**, **LLM Stats**. Do not introduce "internal", "external",
+"curated" or "crawled" tiers that change inclusion, ranking, visual prominence,
+or access to a measurement. Name modules for their job or source, such as
+`catalog_opencompass`, and use `data/catalog/` for shared normalization products.
+Keep old public commands as aliases when a rename would break existing clients.
+
+Keep model-card citations in the same evidence collection as registry citations.
+A document type describes evidence; it does not create another benchmark corpus.
+Source adapters may parse different inputs, but consumers must not reconstruct
+the population by concatenating a preferred registry with an optional supplement.
+If the catalog cannot load, show the failure instead of a plausible shortlist.
+
+Equal treatment means applying the same rules to the same kinds of evidence.
+Keep score values, units, protocols, dates and citations attached to their source
+record. A score and a citation are different measurements. Count distinct models
+by model identity and documents by document identity; repeated observations do
+not create extra models or documents. Unknown values stay unknown. Apply scale
+and protocol requirements by available evidence, never by source membership.
+
+Preserve one record per source benchmark and its stable links. Link records only
+through reviewed identity evidence; a similar name cannot justify combining
+models, adding counts, averaging scores or assuming matching test protocols.
+
+## Put the figure first; collect explanations in one information note
+
+Place **all legends below the main figure** they explain, including domain
+colors, organization colors and mark shapes. Keep only the keys needed to read
+the visible marks expanded. Axis names, units, ticks and essential missing-data
+labels belong on the plot; paragraphs about the method do not.
+
+Collect coverage, source totals, exclusions, count definitions, date caveats,
+projection explanations and Pareto rules in **one collapsed `(i)` note below
+the figure**, beside its legend. For example, "342 of 1,259 benchmarks shown",
+"Height recorded for 342 of 342", and "Same scores and selected counts; time
+omitted" all belong in that note. Update its counts when filters change.
+
+The note must work with keyboard and touch, have an accessible name, and keep
+its contents out of the layout while closed. Do not scatter the same caveat
+across the heading, plot, legend and footer. A loading failure or empty result
+needs a visible status; an information note must not hide a broken surface.
 
 ## Frontier and its score ranking require a reported score
 
@@ -39,15 +90,15 @@ The rules below apply after this explicit filter on the Frontier surface.
 
 ## Missing measurements do not delete corpus records
 
-Having a score, release date, reviewed identity, or model-card adoption count
+Having a score, release date, reviewed identity, or source-document count
 is not a requirement for belonging to the corpus. Do not use an inner join
-against the curated registry to define the main chart's population.
+against the model-report registry to define the main chart's population.
 
 Keep records with missing measurements visible and individually inspectable,
 using a clearly labelled missing-data area or another suitable representation
 within the same surface. A footnote saying that hundreds of records were
 excluded does not replace showing them. Do not invent dates, treat unknown
-adoption as zero, or rename score observations as unique model cards.
+counts as zero, or rename score observations as unique model cards.
 
 **The main visualization must draw every benchmark that survives the user's
 explicit filters, one mark per source record, by default.** Counting a record
@@ -58,10 +109,10 @@ units must choose a visible representation, never remove a scored mark.
 
 Preserve the dimensions that are known. A benchmark with a reported score and
 date belongs on the time × score plane even when adoption is unrecorded; use
-an explicit unknown-adoption mark. Keep unverified source scales visually
+an explicit unknown-count mark. Keep unverified source scales visually
 distinct from normalized scores and out of Pareto calculations. Benchmarks
 whose numeric score cannot use the main scale retain dated, individual marks.
-A generic holding area below a tiny curated chart is not sufficient when it
+A generic holding area below a tiny report-only chart is not sufficient when it
 discards known dimensions.
 
 A numeric score cutoff may hide records whose known scores are at or above it.
@@ -74,8 +125,8 @@ record once so the categories reconcile.
 ## Calculate only what the evidence supports
 
 Represent every record, but compute a statistic only from records with the
-measurements that statistic requires. State that measured coverage beside the
-result. In particular, Pareto eligibility requires a declared common score
+measurements that statistic requires. State measured coverage in the figure's information note or the
+exported metadata. In particular, Pareto eligibility requires a declared common score
 scale and a recorded value for the selected count. Unknown measurements must
 never become zeros or qualify a point for the frontier.
 
@@ -88,18 +139,19 @@ display scale does not establish equivalent test protocols.
 The default Frontier height is **Models with reported scores**: distinct models
 with numeric scores for that source's benchmark record. Aggregate score records
 already contain hundreds of model IDs for some benchmarks; a chart that only
-uses the small curated document registry discards that measured coverage.
+uses the small model-report registry discards that measured coverage.
 Deduplicate by the source's model ID, preserving separately evaluated
-configurations. Curated observations use the exact organization and model name.
+configurations. Report observations use the exact organization and model name.
 Repeated scores, protocols and source documents for the same model must not
 increase this count. If model identities are incomplete, mark the count unknown.
 
-Keep **Unique model cards** as a separate height option, counted from distinct
-registry documents. Models, score rows, model-card documents and citations are
-different quantities. Never substitute or sum them, transfer a count between
-similarly named source records, or label hundreds of evaluated models as
-hundreds of model-card citations. Both counts and the selected coverage must be
-inspectable. Switching height measures must preserve the filtered benchmark IDs.
+The **Source documents** height option counts distinct cited documents through
+the same evidence collection for every source, including model cards and
+registry pages. Models, score rows and documents are different quantities.
+Never substitute or sum them, transfer a count between similarly named source
+records, or label hundreds of evaluated models as hundreds of documents. Both
+counts and the selected coverage must be inspectable. Switching height measures
+must preserve the filtered benchmark IDs.
 
 Use `log1p(count)` for height and raw counts for ticks, tooltips and dominance.
 Derive the maximum from the entire scored 2024+ cohort for the selected measure,
@@ -166,7 +218,12 @@ investigate, not evidence that they were all introduced that day.
   cannot substitute for missing marks. Every source with matching scored records
   must render; account for sources excluded by the reported-score requirement.
 - Check that filtered, visible, and unknown counts reconcile to that population.
-- Test missing fields and every source, not just a few curated fixtures.
+- Test missing fields and every source, not just a few model-report fixtures.
+- Check that report records and their citations reach the index, detail shards,
+  website and offline archive once each. Verify the 577 model IDs for Artificial
+  Analysis HLE and SciCode and 492 for CritPt from the source observations.
+- Inspect the UI at desktop and mobile widths: legends below their figures,
+  secondary annotations inside one closed information note, and no lost marks.
 - Verify release-date priority, earliest-score fallback, the inclusive 2024
   boundary, rejection of crawl dates, and explicit labelling of model-date
   proxies. Missing adoption must not remove dated scores from the main plot,

@@ -8,12 +8,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from benchmark_radar.external_catalog import (
+from benchmark_radar.catalog import (
     build_benchmark_index,
     normalize_snapshot,
     write_catalog,
 )
-from benchmark_radar.external_overrides import (
+from benchmark_radar.catalog_overrides import (
     DEFAULT_LLM_STATS_IDENTITY_OVERRIDES_PATH,
     IdentityOverrideError,
     apply_llm_stats_identity_overrides,

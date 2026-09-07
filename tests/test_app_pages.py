@@ -31,7 +31,7 @@ SITE = Path(__file__).resolve().parents[1] / "site"
 def _dashboard() -> dict:
     return {
         "model_card_leaderboard": {
-            "measures": "How many curated model cards report each benchmark.",
+            "measures": "Counts source documents for each benchmark.",
             "entries": [
                 {"rank": 1, "name": "Alpha & Reasoning", "card_count": 20},
                 {"rank": 2, "name": "Beta Bench", "card_count": 10},
@@ -130,6 +130,21 @@ def _write(tmp_path: Path, dashboard: dict) -> dict:
         )
     (tmp_path / "index.html").write_text(
         (SITE / "index.html").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    # Page fixtures supply the same catalog artifact as the production build.
+    board = dashboard.get("model_card_leaderboard") or {}
+    entries = [
+        {**entry, "document_count": entry.get("card_count", 0)}
+        for entry in board.get("entries", [])
+    ]
+    (tmp_path / "data").mkdir(exist_ok=True)
+    (tmp_path / "data" / "benchmark-index.json").write_text(
+        json.dumps(
+            {
+                "benchmarks": [],
+                "document_registry": {**board, "entries": entries},
+            }
+        )
     )
     return write_app_pages(dashboard, tmp_path)
 
@@ -367,12 +382,12 @@ def test_seeded_rows_match_what_the_renderer_would_draw(tmp_path):
     # The zero-count entry is filtered out, exactly as renderLeaderboardTop does.
     assert len(rows) == 3
     assert "Alpha &amp; Reasoning" in rows[0]
-    assert "20 model cards" in rows[0]
+    assert "20 source documents" in rows[0]
     assert "width:100.0%" in rows[0]
     assert "width:50.0%" in rows[1]
     # Singular noun at one, same as metricLabel.
-    assert "1 model card<" in rows[2]
-    assert "How many curated model cards report each benchmark." in page
+    assert "1 source document<" in rows[2]
+    assert "Counts source documents for each benchmark." in page
 
 
 def test_seeded_ranking_exposes_the_same_named_more_control_as_the_renderer(tmp_path):
@@ -556,8 +571,8 @@ def test_the_ranking_ships_with_the_caveat_that_keeps_it_honest(tmp_path):
     info = page.split('id="leaderboard-top-info"', 1)[1].split("</span>", 1)[0]
 
     assert 'class="info-disclosure"' in info
-    assert "How many curated model cards report each benchmark." in info
-    assert "A report counts once per test" in info
+    assert "Counts source documents for each benchmark." in info
+    assert "trace each count to its citations" in info
 
 
 def test_a_view_that_lost_its_data_loses_its_page(tmp_path):

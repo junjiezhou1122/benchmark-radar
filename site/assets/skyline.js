@@ -1,5 +1,5 @@
-// Benchmark-level measurements for the skyline. Catalog score observations
-// never stand in for model-card adoption, and time never enters dominance.
+// Benchmark measurements from one catalog. Source names describe provenance;
+// the same measurement rules apply to every record. Time never enters dominance.
 export const SKYLINE_DOMAINS = {
   Code: ["coding", "code", "coding_agent"],
   Science: ["science", "biology", "math", "ai_research"],
@@ -10,7 +10,7 @@ export const SKYLINE_DOMAINS = {
 export const SKYLINE_START_DATE = "2024-01-01";
 export const SKYLINE_HEIGHT_LABELS = {
   models: "Models with reported scores",
-  cards: "Unique model cards",
+  documents: "Source documents",
 };
 
 function validDate(value) {
@@ -51,31 +51,21 @@ export function benchmarkDateLabel(row) {
 // This is the population used by BOTH the chart and the browser. Keeping a
 // row does not require a score, date, adoption count, or join to another source.
 export function scoreBrowserSummary(record) {
-  const values = (record.observations || []).map((row) => row.value).filter(Number.isFinite);
-  const summary = record.score_summary || (values.length ? {
-    numeric_count: values.length, display_max: Math.max(...values), unit: record.unit, display_multiplier: 1,
-  } : null);
-  if (record.unit === "percent" && record.direction === "lower_is_better"
-    && values.length && values.every((value) => value >= 0 && value <= 100)) {
-    return { ...summary, display_max: 100 - Math.min(...values), normalized_from_lower: true };
+  const summary = record.score_summary;
+  if (!summary) return null;
+  const direction = record.score_direction || record.direction;
+  if (record.unit === "percent" && direction === "lower_is_better"
+    && Number.isFinite(summary.raw_min) && summary.raw_min >= 0 && summary.raw_max <= 100) {
+    return { ...summary, display_max: 100 - summary.raw_min, normalized_from_lower: true };
   }
   return summary;
 }
 
-export function scorePopulation(benchmarks = {}, entries = [], catalog = []) {
-  const named = new Map(entries.map((entry) => [entry.benchmark_id, entry]));
-  return [
-    ...Object.entries(benchmarks).map(([id, record]) => ({
-      id, name: named.get(id)?.name || id, source: "curated",
-      curated: named.get(id), record, summary: scoreBrowserSummary(record),
-      ...benchmarkDate(record, named.get(id)),
-    })),
-    ...catalog.map((record) => ({
-      id: record.slug, name: record.name, source: record.source,
-      external: record, record, summary: record.score_summary,
-      ...benchmarkDate(record),
-    })),
-  ];
+export function scorePopulation(catalog = []) {
+  return catalog.map((record) => ({
+    id: record.slug, name: record.name, source: record.source,
+    record, summary: scoreBrowserSummary(record), ...benchmarkDate(record),
+  }));
 }
 
 function hasReportedScore(summary) {
@@ -88,37 +78,29 @@ export function matchesScoreCutoff(summary, cutoff) {
   return hasReportedScore(summary) && (cutoff >= 100 || summary.display_max < cutoff);
 }
 
-export function skylineModel(benchmarks = {}, entries = [], catalog = [], cutoff = 70, matchingIds = null, heightMetric = "models") {
-  const population = scorePopulation(benchmarks, entries, catalog);
+export function skylineModel(catalog = [], cutoff = 70, matchingIds = null, heightMetric = "models") {
+  const population = scorePopulation(catalog);
   const all = population.map((item) => {
-    const { id, name, source, curated: entry, record, summary } = item;
-    const observations = (record.observations || []).filter((row) => Number.isFinite(row.value));
-    const direction = record.direction || record.score_direction;
+    const { id, name, source, record, summary } = item;
+    const direction = record.score_direction;
     const unit = record.unit || summary?.unit;
     const percent = unit === "percent" && ["higher_is_better", "lower_is_better"].includes(direction);
     const inverted = percent && direction === "lower_is_better";
-    const normalized = (row) => inverted ? 100 - row.value : row.value;
-    const best = observations.length ? observations.reduce((a, b) => normalized(b) > normalized(a) ? b : a) : null;
-    const rawScore = best?.value ?? summary?.raw_max ?? summary?.display_max ?? null;
-    const displayScore = summary?.display_max ?? best?.value ?? null;
-    const score = percent && (!inverted || best) && (best || Number.isFinite(displayScore))
-      && observations.every((row) => row.value >= 0 && row.value <= 100)
-      && displayScore >= 0 && displayScore <= 100
-      ? best ? normalized(best) : displayScore : null;
-    // Browsing a source's reported number does not certify its scale. Keep it
-    // spatially visible, but only `score` can enter the Pareto calculation.
+    const rawScore = (inverted ? summary?.raw_min : summary?.raw_max) ?? summary?.display_max ?? null;
+    const displayScore = summary?.display_max ?? null;
+    const score = percent && Number.isFinite(displayScore) && displayScore >= 0 && displayScore <= 100
+      && Number.isFinite(summary?.raw_min) && summary.raw_min >= 0 && summary.raw_max <= 100
+      ? displayScore : null;
+    // A reported value remains visible even when its scale is not verified.
     const plotScore = score ?? (unit == null && direction === "higher_is_better"
       && Number.isFinite(displayScore) && displayScore >= 0 && displayScore <= 100 ? displayScore : null);
-    const adopters = entry?.adopters;
-    const adoption = Array.isArray(adopters)
-      && adopters.every((card) => typeof card.model_card_id === "string" && card.model_card_id)
-      ? new Set(adopters.map((card) => card.model_card_id)).size : null;
+    const measuredDocuments = record.evidence_summary?.document_count;
+    const documentCount = Number.isInteger(measuredDocuments) && measuredDocuments >= 0 ? measuredDocuments : null;
     const modelCount = Number.isInteger(summary?.model_count) && summary.model_count >= 0 ? summary.model_count : null;
-    const heightCount = heightMetric === "cards" ? adoption : modelCount;
+    const heightCount = heightMetric === "documents" ? documentCount : modelCount;
     const { date, dateBasis } = item;
-    const domainValues = [entry?.domain, ...(record.categories || []), record.modality]
+    const domainValues = [...(record.categories || []), record.modality]
       .filter(Boolean).map((value) => value.toLowerCase());
-    const card = adopters?.find((card) => card.model_card_id === best?.source_id);
     const missing = [];
     if (!Number.isFinite(displayScore)) missing.push("score");
     else if (score === null) missing.push("scale");
@@ -129,11 +111,11 @@ export function skylineModel(benchmarks = {}, entries = [], catalog = [], cutoff
       dateReference: dateBasis === "released" && record.released === date ? record.released_reference
         : dateBasis === "first_score" && record.first_score_reported_at === date ? record.first_score_source_reference : null,
       time: date ? Date.parse(`${date}T00:00:00Z`) : null,
-      score, plotScore, displayScore, rawScore, inverted, adoption, modelCount, heightCount, missing,
+      score, plotScore, displayScore, rawScore, inverted, documentCount, modelCount, heightCount, missing,
       domain: Object.keys(SKYLINE_DOMAINS).find((domain) => SKYLINE_DOMAINS[domain].some((value) => domainValues.includes(value))) || "Other",
-      sourceUrl: card?.url || record.source_url || summary?.source_reference?.source_url,
-      sourceId: best?.source_id, reportedAt: best?.reported_at,
-      metric: record.metric, protocol: best?.protocol, instrument: best?.instrument,
+      sourceUrl: summary?.source_reference?.source_url || record.source_url,
+      sourceId: summary?.source_reference?.source_id, reportedAt: summary?.source_reference?.reported_at,
+      metric: record.metric, protocol: summary?.source_reference?.protocol, instrument: summary?.source_reference?.instrument,
     };
   });
   // The requested cohort starts on 2024-01-01. Within that cohort, only score

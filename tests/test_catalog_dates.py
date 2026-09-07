@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from benchmark_radar.external_catalog import ExternalCatalogError, build_benchmark_index
-from benchmark_radar.external_dates import apply_benchmark_dates, load_benchmark_dates
-from benchmark_radar.external_identity import IdentityIndex, apply_inherited_identity
+from benchmark_radar.catalog import CatalogError, build_benchmark_index
+from benchmark_radar.catalog_dates import apply_benchmark_dates, load_benchmark_dates
+from benchmark_radar.catalog_identity import IdentityIndex, apply_inherited_identity
 
 
 def release_fact(**changes):
@@ -84,7 +84,7 @@ def test_invalid_release_evidence_fails_visibly(tmp_path, key, changes, error):
     path.write_text(
         yaml.safe_dump({"schema_version": 1, "benchmarks": {key: release_fact(**changes)}})
     )
-    with pytest.raises(ExternalCatalogError, match=error):
+    with pytest.raises(CatalogError, match=error):
         load_benchmark_dates([{"key": "source:a"}], path)
 
 
@@ -102,7 +102,7 @@ def test_first_score_date_requires_numeric_model_evidence(tmp_path, evidence):
             }
         )
     )
-    with pytest.raises(ExternalCatalogError, match="numeric LLM score evidence"):
+    with pytest.raises(CatalogError, match="numeric LLM score evidence"):
         load_benchmark_dates([{"key": "source:a"}], path)
 
 

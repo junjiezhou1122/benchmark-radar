@@ -4,7 +4,7 @@ llm-stats supplies scores and structurally cannot supply identity: its API
 returns eight keys and none is an author, paper, licence or size. OpenCompass
 is the other half. Round 1 gave the hub's own card metadata; round 2 resolved
 the GitHub and Hugging Face targets those cards point at, and applied the
-openness truth table from `docs/external-catalog/STRUCTURE.md`.
+openness truth table from `docs/catalog/STRUCTURE.md`.
 
 WHAT THIS MODULE CLEANS UP
 
@@ -40,7 +40,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .external_catalog import CATALOG_SCHEMA_VERSION, ExternalCatalogError, slugify
+from .catalog import CATALOG_SCHEMA_VERSION, CatalogError, slugify
 from .leaderboard_snapshots import DEFAULT_SNAPSHOTS_PATH, load_snapshots
 
 OPENCOMPASS_SOURCE = "opencompass_hub"
@@ -171,7 +171,7 @@ def _openness(record: dict[str, Any]) -> dict[str, Any]:
     data_license, data_note = _clean_license(raw_data_license)
     status = (record.get("openness") or {}).get("status") or "unknown"
     if status not in {"open", "restricted", "unknown"}:
-        raise ExternalCatalogError(f"unexpected openness status {status!r}")
+        raise CatalogError(f"unexpected openness status {status!r}")
     return {
         # Copied through, never recomputed. See the module docstring.
         "status": status,
@@ -218,14 +218,14 @@ def _catalog_snapshot(snapshot: dict[str, Any] | None) -> dict[str, Any]:
     """
     if snapshot is not None:
         if snapshot.get("id") != OPENCOMPASS_SNAPSHOT_ID:
-            raise ExternalCatalogError(
+            raise CatalogError(
                 f"expected snapshot {OPENCOMPASS_SNAPSHOT_ID!r}, got {snapshot.get('id')!r}"
             )
         return snapshot
     loaded = load_snapshots(DEFAULT_SNAPSHOTS_PATH)
     matches = [item for item in loaded["snapshots"] if item["id"] == OPENCOMPASS_SNAPSHOT_ID]
     if len(matches) != 1:
-        raise ExternalCatalogError(
+        raise CatalogError(
             f"expected one {OPENCOMPASS_SNAPSHOT_ID!r} snapshot, found {len(matches)}"
         )
     return matches[0]
@@ -302,7 +302,7 @@ def normalize_opencompass(
 ) -> dict[str, Any]:
     """Join the card snapshot and round-2 evidence into shared catalog records."""
     if not path.exists():
-        raise ExternalCatalogError(f"{path}: OpenCompass round 2 export not found")
+        raise CatalogError(f"{path}: OpenCompass round 2 export not found")
     rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
 
     snapshot = _catalog_snapshot(catalog_snapshot)
@@ -310,24 +310,22 @@ def normalize_opencompass(
     for row in snapshot["benchmark_rows"]:
         source_id = str(row.get("benchmark_id") or "").strip()
         if not source_id:
-            raise ExternalCatalogError("OpenCompass card snapshot contains an empty benchmark_id")
+            raise CatalogError("OpenCompass card snapshot contains an empty benchmark_id")
         if source_id in catalog_rows:
-            raise ExternalCatalogError(
-                f"OpenCompass card snapshot repeats benchmark_id {source_id!r}"
-            )
+            raise CatalogError(f"OpenCompass card snapshot repeats benchmark_id {source_id!r}")
         catalog_rows[source_id] = row
 
     round2_id_values = [str(row.get("benchmark_id") or "").strip() for row in rows]
     if not all(round2_id_values):
-        raise ExternalCatalogError("OpenCompass round-2 export contains an empty benchmark_id")
+        raise CatalogError("OpenCompass round-2 export contains an empty benchmark_id")
     if len(round2_id_values) != len(set(round2_id_values)):
-        raise ExternalCatalogError("OpenCompass round-2 export repeats a benchmark_id")
+        raise CatalogError("OpenCompass round-2 export repeats a benchmark_id")
     round2_ids = set(round2_id_values)
     catalog_ids = set(catalog_rows)
     if round2_ids != catalog_ids:
         missing_round2 = sorted(catalog_ids - round2_ids)
         missing_catalog = sorted(round2_ids - catalog_ids)
-        raise ExternalCatalogError(
+        raise CatalogError(
             "OpenCompass card and round-2 benchmark ids differ: "
             f"missing_round2={missing_round2[:5]}, missing_catalog={missing_catalog[:5]}"
         )

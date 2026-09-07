@@ -1,5 +1,9 @@
 # What we should really display
 
+Historical design, superseded by [the shared catalog contract](STRUCTURE.md)
+and [principle.md](../../principle.md). Source priority, separate corpora and
+report-only fallbacks described below must not guide new work.
+
 Office hours, 2026-08-18. Rewritten after actually opening the page instead of reasoning
 about it. Two of my earlier conclusions were wrong and are corrected here.
 

@@ -337,12 +337,18 @@ def write_app_pages(
     utility_seo = load_utility_seo(app_js)
     palette = load_category_colors(site_dir / "assets" / "glyphs.js")
     index_path = site_dir / "data" / "benchmark-index.json"
-    external_index = (
-        json.loads(index_path.read_text(encoding="utf-8"))["benchmarks"]
-        if index_path.exists()
-        else []
-    )
-    seeds = view_seeds(dashboard, palette, external_index)
+    catalog = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else {}
+    catalog_index = catalog.get("benchmarks", [])
+    documents = catalog.get("document_registry")
+    seed_dashboard = dict(dashboard)
+    seed_dashboard["model_card_leaderboard"] = {
+        **(documents or {}),
+        "entries": [
+            {**entry, "card_count": entry["document_count"]}
+            for entry in (documents or {}).get("entries", [])
+        ],
+    }
+    seeds = view_seeds(seed_dashboard, palette, catalog_index)
     dialog_seeds = utility_seeds(dashboard)
     written: list[Path] = []
     published: list[str] = []

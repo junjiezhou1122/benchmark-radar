@@ -1,7 +1,7 @@
 // Execute production functions with small deterministic inputs, without a browser.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SKYLINE_START_DATE, benchmarkDate, benchmarkDateLabel, skylineModel, skylineGeometry, skylineDateLanes, skylineScoreLanes, skylineCapPositions, skylineFrontierSteps, scorePopulation, matchesScoreCutoff } from '../site/assets/skyline.js';
+import { SKYLINE_START_DATE, benchmarkDate, benchmarkDateLabel, skylineModel as buildSkylineModel, skylineGeometry, skylineDateLanes, skylineScoreLanes, skylineCapPositions, skylineFrontierSteps, scorePopulation, matchesScoreCutoff } from '../site/assets/skyline.js';
 const source = readFileSync('site/assets/app.js', 'utf8');
 function fn(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -38,17 +38,18 @@ assert.equal(dates.filteredObservations().length, 2);
 state.data.latest_date = '2024-03-01';
 assert.deepEqual(dates.todayDateRange(), {start:'2024-02-01',end:'2024-03-01'});
 
-const summary = (display_max, numeric_count=1) => ({display_max,numeric_count,display_multiplier:1});
+const summary = (display_max, numeric_count=1) => ({display_max,numeric_count,display_multiplier:1,raw_min:display_max,raw_max:display_max});
 state.data.model_card_leaderboard = {entries:[{benchmark_id:'curated',name:'Curated'}]};
 state.data.benchmark_score_progression = {benchmarks:{curated:{score_summary:summary(60,2)}}};
 state.benchmarkIndex = [
-  {slug:'external',name:'External',source:'llm_stats',score_summary:summary(60,9)},
+  {slug:'curated',name:'Curated',source:'model_reports',score_summary:summary(60,2)},
+  {slug:'external',name:'Catalog',source:'llm_stats',score_summary:summary(60,9)},
   {slug:'over70',name:'Over70',source:'artificial_analysis',score_summary:summary(70,20)},
   {slug:'at100',name:'At100',source:'llm_stats',score_summary:summary(100,30)},
   {slug:'missing',name:'Missing',source:'llm_stats',score_summary:summary(null,0)},
 ];
 state.lscore = 70;
-const scoreNames = ['scoreRecord','matchesScoreFilter','scoreBrowseRows','frontierDefaultEntry','externalDisplayFactor'];
+const scoreNames = ['scoreRecord','matchesScoreFilter','scoreBrowseRows','frontierDefaultEntry','catalogDisplayFactor'];
 const scores = new Function('state', 'scorePopulation', 'matchesScoreCutoff', 'SKYLINE_START_DATE', `${scoreNames.map(fn).join('\n')}\nreturn {${scoreNames.join(',')}};`)(state, scorePopulation, matchesScoreCutoff, SKYLINE_START_DATE);
 assert.deepEqual(scores.scoreBrowseRows().map(r=>[r.id,r.rank]), [['external',1],['curated',2]]);
 assert.equal(scores.frontierDefaultEntry(state.data.model_card_leaderboard).id,'external');
@@ -66,9 +67,9 @@ state.lscore=40;
 assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), []);
 state.lscore=70;
 state.benchmarkIndex=null;
-assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['curated']);
-assert.equal(scores.externalDisplayFactor({score_summary:{display_multiplier:100}}),100);
-assert.equal(scores.externalDisplayFactor({score_summary:{display_multiplier:1}}),1);
+assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), [],'a missing index cannot fall back to a preferred source');
+assert.equal(scores.catalogDisplayFactor({score_summary:{display_multiplier:100}}),100);
+assert.equal(scores.catalogDisplayFactor({score_summary:{display_multiplier:1}}),1);
 const cutoff = new Function(`${fn('scoreCutoff')}\nreturn scoreCutoff;`)();
 assert.equal(cutoff('40'), 40);
 assert.equal(cutoff('100'), 100);
@@ -80,7 +81,7 @@ assert.equal(cutoff('44'), 40, 'an off-step value snaps to the nearest step');
 
 // A page reload must revalidate recovered dates, while views within one page
 // share their request. Failed loads still return the explicit unavailable state.
-const makeLoaders = new Function('fetch', `let benchmarkIndexPromise = null;
+const makeLoaders = new Function('fetch', `const state = {}; let benchmarkIndexPromise = null;
   const benchmarkShardCache = new Map();
   ${fn('loadBenchmarkIndex')}
   ${fn('loadBenchmarkShard')}
@@ -104,9 +105,29 @@ const unavailable = makeLoaders(async () => ({ok:false,status:503}));
 assert.equal(await unavailable.loadBenchmarkIndex(),null);
 assert.equal(await unavailable.loadBenchmarkShard('missing'),null);
 
-// The document mode retains its original deduplication and Pareto contract.
+function fixtureCatalog(benchmarks={},entries=[],catalog=[]) {
+  if (catalog.some(row => row.source === 'model_reports')) return catalog;
+  return [...Object.entries(benchmarks).map(([id, record]) => {
+    const named = entries.find(entry => entry.benchmark_id === id);
+    const numeric = (record.observations || []).filter(row => Number.isFinite(row.value));
+    const values = numeric.map(row => row.value);
+    const best = numeric.find(row => row.value === Math.max(...values));
+    const document = named?.adopters?.find(card => card.model_card_id === best?.source_id);
+    const scoreSummary = record.score_summary || (values.length ? summary(Math.max(...values),values.length) : null);
+    return {
+      ...record, slug:id, name:named?.name || id, source:'model_reports',
+      categories:[named?.domain].filter(Boolean), released:named?.released,
+      score_direction:record.direction,
+      score_summary:scoreSummary ? {...scoreSummary,raw_min:Math.min(...values),raw_max:Math.max(...values)} : null,
+      source_url:document?.url,
+      evidence_summary:{document_count:named?.adopters ? new Set(named.adopters.map(card=>card.model_card_id)).size : null},
+    };
+  }),...catalog];
+}
+const skylineModel = (benchmarks={},entries=[],catalog=[],cutoff=70,matchingIds=null,metric='models') =>
+  buildSkylineModel(fixtureCatalog(benchmarks,entries,catalog),cutoff,matchingIds,metric);
 const cardSkyline = (benchmarks={},entries=[],catalog=[],cutoff=70,matchingIds=null) =>
-  skylineModel(benchmarks,entries,catalog,cutoff,matchingIds,'cards');
+  skylineModel(benchmarks,entries,catalog,cutoff,matchingIds,'documents');
 // --- Benchmark Frontier: identity, normalization and dominance ----------------
 const entry = (id, count, extra = {}) => ({
   benchmark_id: id, name: id, released: '2025-01-01', domain: 'science',
@@ -132,7 +153,7 @@ const model = cardSkyline(tracks,cards,[],100);
 const paretoIds = (m) => m.rows.filter((row)=>row.pareto).map((row)=>row.id).sort();
 assert.deepEqual(paretoIds(model), ['adopted','all','hardest','twin','zero']);
 assert.equal(model.rows.length,8,'coincident benchmarks retain their identities');
-assert.equal(model.rows.find(r=>r.id==='zero').adoption,0,'known zero adoption stays valid');
+assert.equal(model.rows.find(r=>r.id==='zero').documentCount,0,'known zero adoption stays valid');
 assert.equal(model.rows.find(r=>r.id==='twin').date,'2024-01-01','the inclusive cohort boundary is eligible; age never affects dominance');
 for (let cut = 10; cut <= 100; cut += 10) {
   const sliced = cardSkyline(tracks,cards,[],cut);
@@ -144,7 +165,7 @@ for (let cut = 10; cut <= 100; cut += 10) {
 const duplicate = entry('repeats',2);
 duplicate.adopters.push({...duplicate.adopters[0]});
 const duplicated = cardSkyline({repeats:record(45,{observations:Array(100).fill({value:45})})},[duplicate],[],100);
-assert.equal(duplicated.rows[0].adoption,2,'repeated cards and repeated score rows cannot inflate adoption');
+assert.equal(duplicated.rows[0].documentCount,2,'repeated cards and repeated score rows cannot inflate adoption');
 assert.equal(duplicated.rows[0].score,45);
 const reversed = cardSkyline({error:record(90,{
   direction:'lower_is_better',observations:[{value:90},{value:25}],
@@ -168,7 +189,7 @@ assert.deepEqual(invalidModel.undated.map(row=>row.id),['undated'],
 assert.equal(invalidModel.unscored,1,'excluded unscored records are counted separately');
 assert(!invalidModel.visible.some(row=>row.id==='unscored'));
 assert.equal(invalidModel.all.filter(row=>row.missing.includes('scale')).length,7);
-assert.equal(invalidModel.all.find(row=>row.id==='unmeasured').adoption,null,'unknown adoption is not zero');
+assert.equal(invalidModel.all.find(row=>row.id==='unmeasured').documentCount,null,'unknown adoption is not zero');
 assert.equal(invalidModel.all.find(row=>row.id==='unscored').score,null,'unknown score is not zero');
 assert.equal(invalidModel.population,10);
 assert(invalidModel.pending.filter(row=>row.missing.includes('score') || row.missing.includes('scale') || row.missing.includes('count'))
@@ -268,7 +289,7 @@ assert.deepEqual(paretoIds(byModels),['hard','popular']);
 assert.deepEqual(paretoIds(byCards),['dominated','hard']);
 assert.equal(byModels.rows.find(row=>row.id==='unknown').heightCount,null,
   'neither score-row counts nor card counts may fill in an unknown model count');
-assert.equal(byModels.rows.find(row=>row.id==='popular').adoption,1);
+assert.equal(byModels.rows.find(row=>row.id==='popular').documentCount,1);
 assert.equal(byCards.rows.find(row=>row.id==='popular').modelCount,577);
 assert.equal(skylineGeometry(byModels.cohort).maximum,577,'model heights exceed 200 and exclude pre-2024 records');
 assert.equal(skylineGeometry(byCards.cohort).maximum,20,'document mode retains real document counts');
@@ -290,15 +311,15 @@ for(const m of [byModels,byCards]) {
   const popular=drawn.find(node=>node.attrs['data-benchmark-id']==='popular');
   assert.equal(popular.attrs['data-height-count'],m.heightMetric==='models'?577:1);
   assert(popular.details.rows.some(row=>row.label==='Models with reported scores' && row.value==='577'));
-  assert(popular.details.rows.some(row=>row.label==='Unique model cards' && row.value==='1'));
+  assert(popular.details.rows.some(row=>row.label==='Source documents' && row.value==='1'));
 }
 // A complete rebuilt corpus exercises crowded labels and the production input contract.
 const corpus = JSON.parse(readFileSync('site/data/radar.json','utf8'));
 const catalog = JSON.parse(readFileSync('site/data/benchmark-index.json','utf8')).benchmarks;
 const benchmarkRecords=corpus.benchmark_score_progression.benchmarks;
 const corpusEntries=corpus.model_card_leaderboard.entries;
-const full=skylineModel(benchmarkRecords,corpusEntries,catalog,100);
-const expected=catalog.length+Object.keys(benchmarkRecords).length;
+const full=buildSkylineModel(catalog,100);
+const expected=catalog.length;
 assert.equal(full.population,expected);
 assert.equal(full.visible.length+full.beforeStart+full.unscored,expected);
 assert(full.population>=1259,'principle.md: investigate a corpus smaller than 1,259 records');
@@ -308,10 +329,10 @@ assert.equal(full.all.filter(row=>row.source==='opencompass_hub').length,
   catalog.filter(row=>row.source==='opencompass_hub').length,'unscored records remain in the corpus');
 state.data=corpus;
 state.benchmarkIndex=catalog;
-const fullModes = new Map([['models',full],['cards',cardSkyline(benchmarkRecords,corpusEntries,catalog,100)]]);
+const fullModes = new Map([['models',full],['documents',cardSkyline(benchmarkRecords,corpusEntries,catalog,100)]]);
 for(const [heightMetric,fullMode] of fullModes) for(const cutoff of [10,30,70,100]) {
   state.lscore=cutoff;
-  const current=skylineModel(benchmarkRecords,corpusEntries,catalog,cutoff,null,heightMetric);
+  const current=buildSkylineModel(catalog,cutoff,null,heightMetric);
   assert.deepEqual(current.visible,fullMode.all.filter(row=>(row.date===null || row.date>=SKYLINE_START_DATE) && matchesScoreCutoff(row.summary,cutoff)));
   assert.equal(current.visible.length+current.hidden,expected);
   assert.equal(current.rows.length+current.pending.length,current.visible.length);
@@ -441,10 +462,22 @@ for(const [heightMetric,fullMode] of fullModes) for(const cutoff of [10,30,70,10
   }
 }
 const selected=new Set([full.visible.find(row=>row.displayScore<70).id]);
-const querySlice=skylineModel(benchmarkRecords,corpusEntries,catalog,70,selected);
+const querySlice=buildSkylineModel(catalog,70,selected);
 assert.deepEqual(querySlice.visible.map(row=>row.id),[...selected]);
 assert.equal(querySlice.population,expected,'a search never redefines the universe');
 const unscoredSelection=new Set([full.all.find(row=>!Number.isFinite(row.displayScore)).id]);
-assert.equal(skylineModel(benchmarkRecords,corpusEntries,catalog,100,unscoredSelection).visible.length,0,
+assert.equal(buildSkylineModel(catalog,100,unscoredSelection).visible.length,0,
   'searching for an unscored record does not restore it to the score figure');
 console.log('Full-corpus coverage, source parity, unknown measurements, score slicing, Pareto, and SVG construction passed.');
+
+// Alias, domain and no-score searches apply to every source with the same ranking.
+const nameSearch = new Function('foldName', `${fn('searchBenchmarkIndex')}\nreturn searchBenchmarkIndex;`)(
+  value=>String(value || '').toLowerCase().replace(/[^a-z0-9]+/g,''));
+const searchable = [
+  {slug:'prefix',name:'AutomationBench',source:'model_reports',aliases:['HLEAutomationBench']},
+  {slug:'exact',name:'Humanity Last Exam',source:'artificial_analysis',aliases:['HLE']},
+  {slug:'domain',name:'Unscored test',source:'opencompass_hub',categories:['science']},
+];
+assert.deepEqual(nameSearch(searchable,'HLE').map(row=>row.slug),['exact','prefix']);
+assert.deepEqual(nameSearch(searchable,'science').map(row=>row.slug),['domain']);
+assert.deepEqual(nameSearch(searchable.map(row=>({...row,source:'another_source'})),'HLE').map(row=>row.slug),['exact','prefix']);

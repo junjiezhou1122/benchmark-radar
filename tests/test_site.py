@@ -45,8 +45,9 @@ def test_readmes_offer_free_data_and_an_earned_star_request():
     assert "点击下面的动图" in chinese
     assert "assets/swe-bench-verified.gif" in english
     assert "assets/swe-bench-verified.gif" in chinese
-    assert "data/radar.json" in english and "no crawler or contact required" in english
-    assert "data/radar.json" in chinese and "无需爬虫或联系作者" in chinese
+    download = "releases/download/cli-data/benchmark-radar-data.zip"
+    assert download in english and "daily discovery snapshots in one ZIP" in english
+    assert download in chinese and "每日发现快照" in chinese
     assert "star the repository" in english
     assert "给仓库点个 Star" in chinese
     assert Path("CITATION.cff").exists()
@@ -375,7 +376,7 @@ def test_automatic_frontier_default_does_not_leak_into_unrelated_urls():
     assert "lfrontierExplicit: false" in script
     assert "state.lfrontierExplicit = Boolean(state.lfrontier)" in script
     assert "if (state.lfrontierExplicit && state.lfrontier)" in script
-    assert "state.lfrontierExplicit = false" in script
+    assert "if (!state.lfrontierExplicit)" in script
     assert "function selectFrontier(benchmarkId)" in script
 
 
@@ -1227,7 +1228,7 @@ def test_leaderboard_view_is_a_first_class_dashboard_view():
     assert 'data-view="leaderboard"' in html
     assert '"map", "leaderboard"' in script
     assert 'if (view === "leaderboard") renderLeaderboard();' in script
-    assert "state.data?.model_card_leaderboard" in script
+    assert "const board = catalogDocumentBoard();" in script
 
 
 def test_leaderboard_states_what_it_measures_before_the_ranking():
@@ -1367,23 +1368,15 @@ def test_model_card_rows_expand_to_the_benchmarks_they_report():
     assert '"Open source document ↗"' in script
     # Says a mention is not a score at the point where an expanded list would
     # otherwise read as an extract of the card's results table.
-    assert "These are mentions, not scores" in script
+    assert "Each linked benchmark counts once for this document" in script
 
 
-def test_leaderboard_degrades_when_the_curated_registry_is_absent():
+def test_leaderboard_availability_does_not_depend_on_the_model_report_registry():
     script = Path("site/assets/app.js").read_text(encoding="utf-8")
-
-    # No registry means no ranking. Hiding the nav entry and redirecting a
-    # ?view=leaderboard permalink beats offering a tab that opens blank.
-    assert "document.querySelector('[data-view=\"leaderboard\"]')" in script
-    assert "navButton.hidden = !state.data?.model_card_leaderboard;" in script
-    assert 'state.view === "leaderboard" && !state.data.model_card_leaderboard' in script
-    # The entry has to reflect the data from every view, not only from the one
-    # being rendered. Boot settles it before it picks a view to draw, so Today
-    # cannot leave a dead tab on screen for a click to push /leaderboard/ over.
-    boot = script.split("renderTodayDateOptions();\n    syncLeaderboardNav();", 1)
-    assert len(boot) == 2, "boot does not sync the leaderboard nav"
-    assert 'if (state.view === "leaderboard") renderLeaderboard();' in boot[1]
+    assert "navButton.hidden = false" in script
+    assert 'state.view === "leaderboard" && !state.data.model_card_leaderboard' not in script
+    assert 'if (state.view === "leaderboard") renderLeaderboard();' in script
+    assert "Full benchmark catalog could not be loaded." in script
 
 
 def test_leaderboard_names_an_unadopted_benchmark_rather_than_showing_a_bare_zero():
@@ -2418,12 +2411,12 @@ def test_a_benchmark_name_search_reaches_the_registry_not_only_the_daily_feed():
     section = script.split("function renderTodayBenchmarks()", 1)[1].split(
         "function renderToday(", 1
     )[0]
-    assert "searchCuratedEntries(board, query, { includeUnscored: true })" in section
+    assert "searchCuratedEntries" not in section
     assert "searchBenchmarkIndex(state.benchmarkIndex || [], query)" in section
 
     # Curated rows rank above crawled ones: same order the leaderboard picker
     # uses, and the layer with a protocol and a time axis.
-    assert section.index("curatedResultRow") < section.index("benchmarkResultRow")
+    assert "const total = matches.length;" in section
 
     # Registry matches are named as such. Folding them into a list sorted by
     # daily priority is what surfaced the arXiv paper over the benchmark.
@@ -2439,8 +2432,8 @@ def test_a_benchmark_name_search_reaches_the_registry_not_only_the_daily_feed():
     # Capped before the rows are built. "bench" matches 355 of the 1,148
     # crawled records, and building all of them into DOM subtrees with
     # listeners to then drop all but 50 is work repeated on every keystroke.
-    assert "curated.slice(0, BENCHMARK_SEARCH_LIMIT)" in section
-    assert section.index("externalShown") < section.index("benchmarkResultRow(record")
+    assert "matches.slice(0, BENCHMARK_SEARCH_LIMIT)" in section
+    assert section.index("matches.slice") < section.index("benchmarkResultRow(record")
 
     # A failed catalog fetch is reported whether or not the curated layer
     # matched. Only saying so on an empty result would present half a registry
@@ -2455,12 +2448,9 @@ def test_a_benchmark_name_search_reaches_the_registry_not_only_the_daily_feed():
     assert 'return !total && indexPending ? "pending" : total;' in section
     assert 'benchmarkMatches === "pending"' in script
 
-    # With no leaderboard to land on, rows render inert rather than as buttons
-    # whose click does nothing the reader can see. "Has entries" is not the
-    # test: renderAdoptionFrontier() gives up unless an adopted entry has a
-    # readable score record and a default entry resolves.
-    assert "inert: !navigate" in section
-    assert "const navigate = Boolean(board)" in section
+    # Every catalog record opens its own detail, even without report evidence.
+    assert "benchmarkResultRow(record, { navigate: true })" in section
+    assert "model_card_leaderboard" not in section
 
     # A truncated list says so. Presenting 50 of 383 as "the matches" invites
     # the reader to conclude a benchmark past row 50 is absent, which is the
@@ -2471,7 +2461,7 @@ def test_a_benchmark_name_search_reaches_the_registry_not_only_the_daily_feed():
     # Clicking a row must draw the view it lands on. setView() toggles
     # visibility and the URL but does not render, so without this a first-time
     # visitor arrives at an empty leaderboard: 0 chart children, 0 table rows.
-    for row in ("function curatedResultRow(entry", "function benchmarkResultRow(record"):
+    for row in ("function benchmarkResultRow(record",):
         body = script.split(row, 1)[1].split("\nfunction ", 1)[0]
         assert 'setView("leaderboard");\n      renderLeaderboard();' in body, row
 
@@ -2787,7 +2777,7 @@ def test_issue_333_the_page_never_scrolls_sideways():
 
     # 2. Crawled README banners made of box-drawing characters are a single
     #    unbreakable run, and one of them pushed a 720px column to 1349px.
-    wrap = _css_rule(styles, ".record-card,\n.map-detail,\n.external-block {")
+    wrap = _css_rule(styles, ".record-card,\n.map-detail,\n.catalog-block {")
     assert "overflow-wrap: anywhere;" in wrap
 
     # And a structural backstop so the next decorative overhang cannot bring it

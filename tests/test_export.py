@@ -5,13 +5,15 @@ from pathlib import Path
 
 import yaml
 
+from benchmark_radar.catalog_evidence import attach_evidence, document_registry
+from benchmark_radar.catalog_reports import normalize_reports
 from benchmark_radar.export import (
     leaderboard_badge,
     leaderboard_csv,
     leaderboard_markdown,
     write_exports,
 )
-from benchmark_radar.model_cards import adoption_rank, build_adoption_rank
+from benchmark_radar.model_cards import load_registry
 
 
 def write_registry(tmp_path: Path, document: dict) -> Path:
@@ -68,33 +70,49 @@ def minimal_registry() -> dict:
     }
 
 
-def _leaderboard(tmp_path: Path):
-    return build_adoption_rank(write_registry(tmp_path, minimal_registry()))
+def write_catalog(tmp_path: Path, registry: dict) -> Path:
+    normalized = normalize_reports(
+        load_registry(write_registry(tmp_path, registry)), {"results": []}
+    )
+    records = attach_evidence(normalized["source_records"], [], [])
+    path = tmp_path / "benchmark-index.json"
+    path.write_text(
+        json.dumps(
+            {
+                "benchmarks": [{"slug": record["slug"]} for record in records],
+                "document_registry": document_registry(records),
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _leaderboard(tmp_path: Path, registry: dict | None = None):
+    path = write_catalog(tmp_path, registry or minimal_registry())
+    return json.loads(path.read_text())["document_registry"]
 
 
 def test_exports_are_derived_from_the_same_ranking(tmp_path):
-    # The dashboard and the exports must not be able to publish two different
-    # rankings of the same registry (issue #88). Every format is built from
-    # `adoption_rank`, so the order and counts in the CSV are the order and
-    # counts a dashboard reader sees, not a parallel computation that happens
-    # to agree today.
-    registry_path = write_registry(tmp_path, minimal_registry())
-    leaderboard = build_adoption_rank(registry_path)
+    # Every format reads the shared document registry, preserving the same
+    # record IDs, ordering and measured counts as the website.
+    catalog_path = write_catalog(tmp_path, minimal_registry())
+    leaderboard = json.loads(catalog_path.read_text())["document_registry"]
 
-    written = write_exports(tmp_path / "out", registry_path=registry_path)
+    written = write_exports(tmp_path / "out", catalog_path=catalog_path)
     exported = json.loads(written["json"].read_text(encoding="utf-8"))
 
     assert [entry["benchmark_id"] for entry in exported["entries"]] == [
         entry["benchmark_id"] for entry in leaderboard["entries"]
     ]
-    assert exported["model_card_count"] == leaderboard["model_card_count"]
+    assert exported["document_count"] == leaderboard["document_count"]
 
     rows = list(csv.DictReader(io.StringIO(written["csv"].read_text(encoding="utf-8"))))
     assert [row["benchmark_id"] for row in rows] == [
         entry["benchmark_id"] for entry in leaderboard["entries"]
     ]
-    assert [int(row["card_count"]) for row in rows] == [
-        entry["card_count"] for entry in leaderboard["entries"]
+    assert [int(row["document_count"]) for row in rows] == [
+        entry["document_count"] for entry in leaderboard["entries"]
     ]
 
 
@@ -104,10 +122,10 @@ def test_every_export_carries_the_measures_caveat(tmp_path):
     # beside them. A ranking separated from its disclaimer reads as a quality
     # ordering, which is the one misreading the registry exists to prevent, so
     # the caveat ships inside each artifact rather than next to it.
-    registry_path = write_registry(tmp_path, minimal_registry())
-    leaderboard = build_adoption_rank(registry_path)
+    catalog_path = write_catalog(tmp_path, minimal_registry())
+    leaderboard = json.loads(catalog_path.read_text())["document_registry"]
 
-    written = write_exports(tmp_path / "out", registry_path=registry_path)
+    written = write_exports(tmp_path / "out", catalog_path=catalog_path)
     exported = json.loads(written["json"].read_text(encoding="utf-8"))
     assert exported["measures"] == leaderboard["measures"]
     # Asserted as the claim rather than the phrasing. Issue #241 rewrote this
@@ -117,8 +135,8 @@ def test_every_export_carries_the_measures_caveat(tmp_path):
     #
     # The load-bearing part is that popularity is not quality, and that the
     # statement travels with the data rather than living only in the UI.
-    assert "not the same as a good one" in exported["measures"]
-    assert "how many" in exported["measures"].lower()
+    assert "not benchmark quality" in exported["measures"]
+    assert "distinct source documents" in exported["measures"].lower()
 
     assert leaderboard["measures"] in leaderboard_markdown(leaderboard)
 
@@ -148,12 +166,7 @@ def test_markdown_escapes_pipes_in_registry_prose(tmp_path):
     # renders wrong rather than failing.
     registry = minimal_registry()
     registry["benchmarks"][0]["name"] = "Alpha | Bravo"
-    leaderboard = adoption_rank(
-        {
-            "benchmarks": registry["benchmarks"],
-            "model_cards": registry["model_cards"],
-        }
-    )
+    leaderboard = _leaderboard(tmp_path, registry)
     table = leaderboard_markdown(leaderboard)
 
     row = next(line for line in table.splitlines() if "Alpha" in line)
@@ -177,7 +190,7 @@ def test_write_exports_preserves_csv_line_endings(tmp_path):
     # which turns the explicit \r\n into \r\r\n on Windows runners. The
     # in-memory string being correct is not evidence the written file is.
     written = write_exports(
-        tmp_path / "out", registry_path=write_registry(tmp_path, minimal_registry())
+        tmp_path / "out", catalog_path=write_catalog(tmp_path, minimal_registry())
     )
     raw = written["csv"].read_bytes()
 
@@ -193,7 +206,7 @@ def test_badge_reports_coverage_not_rank(tmp_path):
     badge = json.loads(leaderboard_badge(leaderboard))
 
     assert badge["schemaVersion"] == 1
-    assert str(leaderboard["model_card_count"]) in badge["message"]
+    assert str(leaderboard["document_count"]) in badge["message"]
     assert str(leaderboard["benchmark_count"]) in badge["message"]
     top = leaderboard["entries"][0]["name"]
     assert top not in badge["message"]
@@ -204,7 +217,7 @@ def test_export_json_omits_the_daily_corpus(tmp_path):
     # require downloading the corpus, its entity graph, and every observation
     # that the dashboard bundle also carries.
     written = write_exports(
-        tmp_path / "out", registry_path=write_registry(tmp_path, minimal_registry())
+        tmp_path / "out", catalog_path=write_catalog(tmp_path, minimal_registry())
     )
     exported = json.loads(written["json"].read_text(encoding="utf-8"))
 
@@ -212,14 +225,14 @@ def test_export_json_omits_the_daily_corpus(tmp_path):
     assert "days" not in exported
     # The denominator travels with the counts: a card_count is not
     # interpretable without knowing how many documents it was counted against.
-    assert exported["model_card_count"] == 2
+    assert exported["document_count"] == 2
     assert exported["counting_unit"].startswith("One document")
 
 
 def test_export_records_its_source_url(tmp_path):
     written = write_exports(
         tmp_path / "out",
-        registry_path=write_registry(tmp_path, minimal_registry()),
+        catalog_path=write_catalog(tmp_path, minimal_registry()),
         source_url="https://example.com/?view=leaderboard",
     )
 
@@ -233,16 +246,15 @@ def test_export_records_its_source_url(tmp_path):
 def test_shipped_registry_exports_cleanly(tmp_path):
     # The curated registry on disk is what actually gets published, and it
     # exercises real prose, real URLs, and benchmarks no card reports.
-    registry_path = Path("data/model_cards.yml")
-    if not registry_path.exists():  # pragma: no cover - depends on checkout
-        return
-
-    written = write_exports(tmp_path / "out", registry_path=registry_path)
+    catalog_path = Path("site/data/benchmark-index.json")
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    written = write_exports(tmp_path / "out", catalog_path=catalog_path)
     exported = json.loads(written["json"].read_text(encoding="utf-8"))
     rows = list(csv.DictReader(io.StringIO(written["csv"].read_text(encoding="utf-8"))))
 
-    assert len(rows) == exported["benchmark_count"]
+    assert len(rows) == exported["benchmark_count"] == len(catalog["benchmarks"])
+    assert {row["benchmark_id"] for row in rows} == {row["slug"] for row in catalog["benchmarks"]}
     assert [int(row["rank"]) for row in rows] == list(range(1, len(rows) + 1))
     # Zero-adoption benchmarks are kept and ranked last: "in the registry,
     # adopted by nobody" is a finding, not a row to drop from the export.
-    assert int(rows[-1]["card_count"]) <= int(rows[0]["card_count"])
+    assert int(rows[-1]["document_count"]) <= int(rows[0]["document_count"])
