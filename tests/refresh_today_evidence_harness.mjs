@@ -126,13 +126,14 @@ if (start < 0 || end < 0) throw new Error("Dashboard logic not found in app.js")
 const harness = `${source.slice(start, end)}
 globalThis.__harness = {
   state,
+  allObservations,
   refreshData,
   applyDashboardData,
 };`;
 
 new Function(harness)();
 
-const { state, refreshData } = globalThis.__harness;
+const { state, allObservations, refreshData } = globalThis.__harness;
 
 // Step 1: User opens Today with initial baseline evidence
 state.data = {
@@ -159,6 +160,7 @@ state.data = {
 };
 state.view = "today";
 state.todayDate = "2026-08-25";
+const initialObservations = allObservations();
 
 // Step 2: User visits Trends and lets its payload load
 state.view = "trends";
@@ -171,10 +173,14 @@ state.view = "today";
 await refreshData();
 
 const updatedItem = state.data?.days?.[0]?.evidence_items?.[0];
+const refreshedObservations = allObservations();
 console.log(
   JSON.stringify({
     requestedPath,
+    initialObservationId: initialObservations[0]?.id,
     refreshedEvidenceId: updatedItem?.id,
     refreshedEvidenceTitle: updatedItem?.title,
+    refreshedObservationId: refreshedObservations[0]?.id,
+    refreshedObservationTitle: refreshedObservations[0]?.title,
   })
 );

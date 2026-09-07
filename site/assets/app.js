@@ -1089,6 +1089,14 @@ function payloadHasEvidenceItems(data) {
   return Boolean(data?.days?.some(dayHasEvidenceItems));
 }
 
+function payloadHasObservations(data) {
+  return Boolean(
+    data?.days?.some(
+      (day) => dayHasEvidenceItems(day) || Array.isArray(day?.attention?.observations),
+    ),
+  );
+}
+
 function mergeDashboardData(current, incoming) {
   if (!current) return incoming;
   const currentDays = new Map((current.days || []).map((day) => [day.date, day]));
@@ -1129,7 +1137,7 @@ function applyDashboardData(data, requestSequence, fullPayload) {
     state.fullDataLoaded ||
     state.trendsDataLoaded ||
     Boolean(!data.bootstrap && Array.isArray(data.days) && data.days.length > 1);
-  if (fullPayload || (payloadHasEvidenceItems(data) && (data.days || []).length > 1)) {
+  if (payloadHasObservations(data)) {
     state.observations = null;
   }
   return true;
@@ -2924,13 +2932,14 @@ function renderTrends() {
       button.addEventListener("pointerleave", releaseDayTooltip);
       button.addEventListener("blur", releaseDayTooltip);
       button.addEventListener("click", () => {
+        const navigationSequence = ++viewNavigationSequence;
         state.todayDate = day.date;
         setView("today");
         renderToday();
         window.scrollTo({ top: 0, behavior: "smooth" });
         ensureFullData()
           .then(() => {
-            if (state.view !== "today") return;
+            if (navigationSequence !== viewNavigationSequence || state.view !== "today") return;
             state.todayDate = day.date;
             renderToday();
           })
@@ -2948,12 +2957,13 @@ function renderTrends() {
       const link = element("a", { text: day.date, attrs: { href: `/?date=${day.date}` } });
       link.addEventListener("click", (event) => {
         event.preventDefault();
+        const navigationSequence = ++viewNavigationSequence;
         state.todayDate = day.date;
         setView("today");
         renderToday();
         ensureFullData()
           .then(() => {
-            if (state.view !== "today") return;
+            if (navigationSequence !== viewNavigationSequence || state.view !== "today") return;
             state.todayDate = day.date;
             renderToday();
           })

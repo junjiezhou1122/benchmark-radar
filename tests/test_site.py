@@ -672,7 +672,12 @@ def test_routes_degrade_to_static_pages_and_refresh_the_payload_the_route_needs(
     assert "if (anchor) return;" in nav
     assert 'window.location.assign(anchor?.href || VIEW_PATHS[view] || "/")' in nav
     assert "const navigationSequence = ++viewNavigationSequence;" in nav
-    assert nav.count("navigationSequence !== viewNavigationSequence") == 2
+    assert nav.count("navigationSequence !== viewNavigationSequence") == 4
+    trends = script.split("function renderTrends()", 1)[1].split("const TOOLTIP_CATEGORY_LIMIT", 1)[
+        0
+    ]
+    assert trends.count("const navigationSequence = ++viewNavigationSequence;") == 2
+    assert trends.count("navigationSequence !== viewNavigationSequence") == 2
 
     # A route that needs history selects radar.json before fetching, verifies
     # again after assignment, and only then retires the visible error. Trends
@@ -856,9 +861,36 @@ def test_refresh_on_today_after_trends_reloads_evidence():
         check=True,
     )
     data = json.loads(result.stdout)
+    assert data["initialObservationId"] == "item-old"
     assert data["requestedPath"] == "/data/radar-bootstrap.json"
     assert data["refreshedEvidenceId"] == "item-new"
     assert data["refreshedEvidenceTitle"] == "New Updated Evidence"
+    assert data["refreshedObservationId"] == "item-new"
+    assert data["refreshedObservationTitle"] == "New Updated Evidence"
+
+
+def test_trends_day_load_does_not_override_newer_today_navigation():
+    import json
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        import pytest
+
+        pytest.skip("node is not installed")
+
+    result = subprocess.run(
+        [node, "tests/trends_today_navigation_harness.mjs"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    data = json.loads(result.stdout)
+    assert data["initialDate"] == "2026-07-23"
+    assert data["dateAfterTodayNavigation"] == "2026-09-05"
+    assert data["dateAfterDelayedResponse"] == "2026-09-05"
 
 
 def test_rubric_is_read_from_published_data_not_restated_in_the_browser():
