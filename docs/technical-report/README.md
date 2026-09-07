@@ -6,7 +6,7 @@ source of truth for the report. Edit it directly; nothing generates it from
 Python, Markdown, or the running site.
 
 The current manuscript evaluates software version 0.10.0, its full collection and
-publication pipeline, the public collection sources, the 1,259-entry web search
+publication pipeline, the public collection sources, the 1,283-entry web search
 surface, and the public data snapshot dated 2026-09-06.
 
 ## Build
@@ -30,25 +30,50 @@ make arxiv
 ```
 
 That writes `arxiv.tar.gz`. arXiv runs no BibTeX pass of its own, so the tarball
-ships the built `main.bbl` rather than `references.bib`. It also flattens every
+ships the built `main.bbl` rather than `references.bib`, together with
+`figure-data.tex` and the native figure sources. It also flattens every
 figure into one `figures/` directory, because the use-case screenshots live in
 `assets/use-case-492/` in this repository and that path does not exist upstream.
 Unpack the tarball and build it once on its own before uploading.
 
 ## Figures
 
-`latex/figures/` holds four checked-in PDF figures: `cover-metrics.pdf`,
-`pipeline-evaluation.pdf`, `search-surface.pdf`, and `source-composition.pdf`.
-They are committed assets, not build products, and no command in this repository
-regenerates them. They were drawn by the ReportLab builders that this repository
-no longer has; the last commit that contained that code is 6270ff3, so the old
-drawing routines can still be read there if a figure has to be reproduced
-exactly.
+The four PDF figures in `latex/figures/` now have native TikZ sources with
+matching `.tex` names. `make` rebuilds them before the manuscript; `make figures`
+builds just those four PDFs. Their shared styles live in
+`figures/figure-style.tex`. TeX Live's `pgf` (TikZ) and `helvet` packages are
+required in addition to the manuscript's existing dependencies. No ReportLab,
+PDF-page extraction, or downloaded ZIP is needed.
 
-Because the numbers inside those four figures cannot be refreshed by rerunning a
-generator, treat them as dated. If a data change invalidates a value one of them
-displays, redraw the figure and state its cutoff, rather than leaving a stale
-figure beside updated prose.
+`figure-data.tex` is a checked-in, dated export of numbers, shared by the figures
+and the corresponding manuscript counts. Normal builds use that file so a
+manuscript rebuild does not silently pick up a new corpus. To refresh it, first
+run the six-step clean-checkout CI sequence in `AGENTS.md`, then:
+
+```bash
+cd docs/technical-report/latex
+make refresh-figure-data  # Python reads the freshly rebuilt index and radar.json
+make check-figure-data    # verifies the export, including input SHA-256 hashes
+make
+```
+
+Review the cutoff, related prose and tables, all four figures, and the rendered
+manuscript together; commit `figure-data.tex`, the four figure PDFs, and
+`main.pdf` with the source changes. The exporter writes only numbers and input
+hashes, never manuscript prose. Missing inputs and incomplete corpus counts fail
+visibly. Source-composition bars show the five largest normalized discovery
+labels plus every remaining observation; these are not benchmark catalog source
+counts. `make clean` preserves the tracked PDFs and removes build intermediates.
+
+The reconstruction follows the legacy drawing routines in commit `6270ff3` and
+the checked-in PDFs. The supplied `Benchmark_Radar (1).zip` contained PDFs but no
+drawing sources. Rebuilding the catalog confirmed 1,283 records across four
+sources: the older 1,259 figure omitted 24 model-report benchmarks without scores,
+and the unused search illustration still said 1,242. Both now use the same full
+catalog count as the manuscript. The search illustration remains unembedded.
+
+The graphical abstract (`figures/abstract_overview.png`) is an authored raster
+asset, not one of these four generated diagrams.
 
 The use-case screenshots in `assets/use-case-492/` are likewise committed
 assets, captured from the running site.

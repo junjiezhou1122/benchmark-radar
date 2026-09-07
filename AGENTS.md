@@ -180,6 +180,10 @@ inputs retain their source spelling.
   Python, Markdown, or the running site.
 - Built PDF: `docs/technical-report/latex/main.pdf`, tracked so the report reads
   on GitHub. Rebuild and commit it with any change to `main.tex`.
+- The four PDF figures have native TikZ sources under `latex/figures/`.
+  `make` builds them from the dated `latex/figure-data.tex` export. Refresh that
+  export only after auditing a clean corpus rebuild; review and commit the
+  figure PDFs and manuscript PDF together. The exporter writes no report prose.
 - Build instructions and audited inputs: `docs/technical-report/README.md`
 - Zenodo metadata: `docs/technical-report/zenodo-metadata.json`. It describes
   the frozen v0.9.0 deposit, so its version and counts are a record of that
