@@ -2628,6 +2628,7 @@ function renderSearchScopeBanner(observationCount, benchmarkMatches) {
   });
   todayLink.addEventListener("click", (event) => {
     event.preventDefault();
+    viewNavigationSequence += 1;
     state.todayDate = state.data.latest_date;
     state.todayPage = 1;
     renderToday();
@@ -8677,6 +8678,8 @@ function bindEvents() {
     writeUrl("push");
   });
   byId("today-date").addEventListener("change", async (event) => {
+    // A newer date or range must also supersede a pending Trends-day load.
+    viewNavigationSequence += 1;
     const previousDate = state.todayRenderedDate || state.todayDate;
     const selectedDate = event.target.value;
     state.todayDate = selectedDate;
@@ -8769,6 +8772,7 @@ function bindEvents() {
     // its default scope is the full archive. Once a query exists, a reader can
     // still narrow it with the date select or the banner's "today" link.
     if (!hadQuery && state.q.trim() && !todayIsMultiDate()) {
+      viewNavigationSequence += 1;
       state.todayDate = "all";
       state.todayPage = 1;
       ensureFullData()
@@ -8786,6 +8790,7 @@ function bindEvents() {
     form.addEventListener("submit", (event) => event.preventDefault());
   });
   byId("clear-filters").addEventListener("click", async () => {
+    viewNavigationSequence += 1;
     state.todayDate = "all";
     state.q = "";
     state.kind = "";

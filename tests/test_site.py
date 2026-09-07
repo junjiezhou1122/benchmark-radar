@@ -923,6 +923,7 @@ def test_refresh_on_today_after_trends_reloads_evidence():
 
 
 def test_trends_day_load_does_not_override_newer_today_navigation():
+    """Both Trends entry points must preserve later date, range, and search choices."""
     import json
     import shutil
     import subprocess
@@ -941,9 +942,25 @@ def test_trends_day_load_does_not_override_newer_today_navigation():
         check=True,
     )
     data = json.loads(result.stdout)
-    assert data["initialDate"] == "2026-07-23"
-    assert data["dateAfterTodayNavigation"] == "2026-09-05"
-    assert data["dateAfterDelayedResponse"] == "2026-09-05"
+    expected_dates = {
+        "none": "2026-07-23",
+        "today": "2026-09-05",
+        "2026-08-20": "2026-08-20",
+        "30d": "30d",
+        "60d": "60d",
+        "all": "all",
+        "search": "all",
+        "clear": "all",
+    }
+    assert len(data["scenarios"]) == len(expected_dates) * 2
+    for scenario in data["scenarios"]:
+        expected = expected_dates[scenario["action"]]
+        assert scenario["selectedBeforeResponse"] == expected, scenario
+        assert scenario["dateAfterResponse"] == expected, scenario
+        expected_url = "/" if scenario["action"] == "today" else f"/?date={expected}"
+        if scenario["action"] == "search":
+            expected_url += "&q=benchmark"
+        assert scenario["urlAfterResponse"] == expected_url, scenario
 
 
 def test_rubric_is_read_from_published_data_not_restated_in_the_browser():
