@@ -35,6 +35,24 @@ figure into one `figures/` directory, because the use-case screenshots live in
 `assets/use-case-492/` in this repository and that path does not exist upstream.
 Unpack the tarball and build it once on its own before uploading.
 
+## Figures
+
+`latex/figures/` holds four checked-in PDF figures: `cover-metrics.pdf`,
+`pipeline-evaluation.pdf`, `search-surface.pdf`, and `source-composition.pdf`.
+They are committed assets, not build products, and no command in this repository
+regenerates them. They were drawn by the ReportLab builders that this repository
+no longer has; the last commit that contained that code is 6270ff3, so the old
+drawing routines can still be read there if a figure has to be reproduced
+exactly.
+
+Because the numbers inside those four figures cannot be refreshed by rerunning a
+generator, treat them as dated. If a data change invalidates a value one of them
+displays, redraw the figure and state its cutoff, rather than leaving a stale
+figure beside updated prose.
+
+The use-case screenshots in `assets/use-case-492/` are likewise committed
+assets, captured from the running site.
+
 ## Deposit
 
 The published v0.9.0 PDF at
