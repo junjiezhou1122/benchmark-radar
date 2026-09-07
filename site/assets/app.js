@@ -365,7 +365,7 @@ const I18N = {
   en: {},
   zh: {
     "Benchmark Frontier: {n} individual benchmarks from all sources. Dated benchmarks run left to right from 2024. Undated benchmarks remain visible by score. Gold rings mark the measured Pareto frontier.": "Benchmark 前沿：全部来源的 {n} 个独立标记。日期从 2024 年起向右排列，日期未知的仍按分数显示。金色环标出有测量依据的 Pareto 前沿。",
-    "{scored} with scores · {unscored} without scores · {older} before 2024 · {hidden} hidden by score or search": "{scored} 个有成绩 · {unscored} 个未报告成绩 · {older} 个早于 2024 年 · 分数或搜索筛选隐藏 {hidden} 个",
+    "{unscored} without scores excluded · {older} before 2024 · {hidden} hidden by score or search": "未报告成绩的 {unscored} 个已排除 · {older} 个早于 2024 年 · 分数或搜索筛选隐藏 {hidden} 个",
     "No comparable score": "没有可比较的分数",
     "Benchmark date": "Benchmark 日期",
     "Highest reported score · 0–100": "最高报告分数 · 0–100",
@@ -389,14 +389,14 @@ const I18N = {
     "Adoption not recorded": "采用量未记录",
     "Hollow marks: adoption or scale unverified": "空心点：采用量未知或分数刻度未核实",
     "Adoption or scale unverified": "采用量或刻度未核实",
-    "{visible} of {n} benchmarks shown · {s} sources": "显示 {visible} / {n} 个 benchmark · {s} 个来源",
+    "{visible} of {n} benchmarks shown · {s} sources in corpus": "显示 {visible} / {n} 个 benchmark · 全部数据来自 {s} 个来源",
     "Browse all benchmarks": "查找全部 benchmark",
     "Benchmark Frontier": "Benchmark 前沿",
     "Benchmark Frontier chart": "Benchmark 前沿图",
     "Where difficult benchmarks earn adoption": "哪些难题，正在被更多模型卡采用",
     "Show benchmarks with highest reported score below:": "只看最高报告分数低于此值的 benchmark：",
     "How to read the frontier": "怎样读这张前沿图",
-    "skyline.reading": "每个符合筛选条件的 benchmark 都有一个可见标记。有日期的成绩进入天际线；没有成绩的在下方时间轴保留独立圆点。细柱表示独立模型卡采用量，空心点表示采用量未知或分数刻度未核实。重叠的圆点会错开，悬停或聚焦可追溯实际坐标，并查看名称和证据。方向键可切换 benchmark。",
+    "skyline.reading": "这张图和下方排名只显示有数值成绩的 benchmark，包括零分。每个符合日期、分数和搜索条件的 benchmark 都有一个可见标记。细柱表示独立模型卡采用量，空心点表示采用量未知或分数刻度未核实。重叠的圆点会错开，悬停或聚焦可追溯实际坐标，并查看名称和证据。方向键可切换 benchmark。",
     "skyline.pareto": "Pareto 侧视图把相同的分数和独立模型卡数量投影到左侧墙面，省略时间。金色阶梯线标出前沿，分数和数量不相乘。在日期不早于 2024 年的 benchmark 中，如果没有另一个可比较的 benchmark 分数不高于它、采用量不低于它，且至少一项严格占优，它就位于 Pareto 前沿。日期只用于筛选范围，支配关系只看分数和采用量。拖动分数上限，不会把原本被支配的点变成前沿点。",
     "skyline.scope": "采用量按独立文档计数。只有明确采用百分比指标、且采用量已记录的 benchmark 才参与 Pareto 计算和侧墙投影；越低越好的百分比换算为 100 减去原值。其他成绩保留列表中的显示单位，不能直接比较，原始数值可在悬浮说明中查看。柱高用 log1p(count)，标签和 Pareto 计算用原始数量。采用量未知不等于零。刻度一致不代表测试条件相同，也不能据此认定 benchmark 已被解决。",
     "skyline.regions": "时间轴从 2024 年 1 月 1 日开始，包含当天。优先使用 benchmark 发布日期，其次使用最早的 LLM 数值成绩报告日期。如果来源按模型发布日期记录成绩，则采用最早一条成绩记录的日期，并明确标为模型发布日期估算；它不代表已核实的成绩发表日期。抓取时间和只有采用记录的文档不能代替日期。已知日期早于 2024 年的排除；完全没有日期的记录仍在标明的区域各自显示。底面的文字只是读图提示。",
@@ -4813,27 +4813,24 @@ function skylineChart(model, cutoff) {
   const mainHeight = hasUndatedScores ? Math.max(640, geometry.height) : geometry.height;
   const dateX = (time) => project(timeFraction(time), 0)[0];
   const pendingGroups = [
-    ["Other score scales", datedPending.filter((row) => Number.isFinite(row.displayScore))],
-    ["No score reported", datedPending.filter((row) => !Number.isFinite(row.displayScore))],
+    ["Other score scales", datedPending],
   ].filter(([, rows]) => rows.length).map(([heading, records]) => {
     // Allocate against the unsliced cohort, so dragging the cutoff cannot move
     // surviving benchmarks. Only Y is stacked; X always remains the exact date.
-    const candidates = model.cohort.filter((row) => row.plotScore === null
-      && Number.isFinite(row.displayScore) === Number.isFinite(records[0].displayScore));
+    const candidates = model.cohort.filter((row) => row.plotScore === null);
     const layout = skylineDateLanes(candidates, dateX);
     const ids = new Set(records.map((row) => row.id));
     return { heading, records, points: layout.points.filter(({ row }) => ids.has(row.id)),
       height: 92 + layout.lanes * 12 };
   });
   const undatedPending = [
-    ["Other score scales", model.undated.filter((row) => row.plotScore === null && Number.isFinite(row.displayScore))],
-    ["No score reported", model.undated.filter((row) => !Number.isFinite(row.displayScore))],
+    ["Other score scales", model.undated.filter((row) => row.plotScore === null)],
   ].filter(([, rows]) => rows.length);
   const unknownColumns = Math.floor(undatedWidth / 12);
   const datedBottom = mainHeight + pendingGroups.reduce((sum, group) => sum + group.height, 0);
   const undatedTop = hasUndatedScores ? mainHeight : datedBottom + 32;
   const height = Math.max(datedBottom,
-    undatedTop + undatedPending.reduce((sum, [, rows]) => sum + 70 + Math.ceil(rows.length / unknownColumns) * 12, 0));
+    undatedPending.length ? undatedTop + undatedPending.reduce((sum, [, rows]) => sum + 70 + Math.ceil(rows.length / unknownColumns) * 12, 0) : 0);
   const points = (vertices) => vertices.map((point) => point.map((v) => v.toFixed(2)).join(",")).join(" ");
   const line = (a, b, className) => svgElement("line", {
     x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: className,
@@ -5190,14 +5187,13 @@ function renderBenchmarkSkyline(cutoff = state.lscore) {
   replaceChildren(host, contents);
   enableFrontierTouchTargets(svg);
   enableSkylineKeyboard(svg);
-  byId("benchmark-skyline-count").textContent = t("{visible} of {n} benchmarks shown · {s} sources", {
+  byId("benchmark-skyline-count").textContent = t("{visible} of {n} benchmarks shown · {s} sources in corpus", {
     visible: model.visible.length.toLocaleString(), n: model.population.toLocaleString(), s: model.sources,
   });
-  const coverage = [t("{scored} with scores · {unscored} without scores · {older} before 2024 · {hidden} hidden by score or search", {
-    scored: (model.visible.length - model.unscored).toLocaleString(), unscored: model.unscored.toLocaleString(),
-    older: model.beforeStart.toLocaleString(), hidden: (model.hidden - model.beforeStart).toLocaleString(),
-  })];
-  byId("benchmark-skyline-note").textContent = coverage.join(". ");
+  byId("benchmark-skyline-note").textContent = t("{unscored} without scores excluded · {older} before 2024 · {hidden} hidden by score or search", {
+    unscored: model.unscored.toLocaleString(), older: model.beforeStart.toLocaleString(),
+    hidden: (model.hidden - model.beforeStart - model.unscored).toLocaleString(),
+  });
 }
 
 function initBenchmarkSearch() {

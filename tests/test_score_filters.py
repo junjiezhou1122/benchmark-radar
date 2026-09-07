@@ -134,7 +134,7 @@ def test_browser_date_and_score_filter_contracts():
     )
 
 
-def test_seed_keeps_benchmarks_without_scores_or_registry_joins():
+def test_seed_excludes_unscored_but_keeps_zero_scores_and_unjoined_records():
     data = {
         "model_card_leaderboard": {"entries": []},
         "benchmark_score_progression": {
@@ -143,6 +143,12 @@ def test_seed_keeps_benchmarks_without_scores_or_registry_joins():
     }
     index = [
         {"slug": "unknown", "name": "Unknown score", "source": "opencompass_hub"},
+        {
+            "slug": "zero",
+            "name": "Zero score",
+            "source": "llm_stats",
+            "score_summary": score_summary([{"value": 0}]),
+        },
         {
             "slug": "high",
             "name": "Above cutoff",
@@ -153,8 +159,9 @@ def test_seed_keeps_benchmarks_without_scores_or_registry_joins():
     seeds = _score_browser_seed(data, index)
     rendered = "".join(seeds.values())
     assert "unjoined" in rendered
-    assert "Unknown score" in rendered
-    assert "No score reported" in rendered
+    assert "Unknown score" not in rendered
+    assert "No score reported" not in rendered
+    assert "Zero score" in rendered
     assert "Above cutoff" not in rendered
     assert "2 of 2 matches" in rendered
 
@@ -224,6 +231,8 @@ def test_seed_uses_release_then_earliest_score_and_applies_inclusive_2024_cutoff
         },
         {"slug": "unknown", "name": "Undated evidence", "source": "llm_stats"},
     ]
+    for record in index:
+        record["score_summary"] = score_summary([{"value": 50}])
     markup = "".join(_score_browser_seed({}, index).values())
     assert "Old release" not in markup
     assert "Old score" not in markup
@@ -267,6 +276,8 @@ def test_seed_preserves_score_entry_proxy_and_prefers_release_or_publication():
             },
         },
     ]
+    for record in index:
+        record["score_summary"] = score_summary([{"value": 50}])
     markup = "".join(_score_browser_seed({}, index).values())
     assert "First dated LLM score (model-release proxy) Feb 29, 2024" in markup
     assert "Pre-2024 score entry" not in markup

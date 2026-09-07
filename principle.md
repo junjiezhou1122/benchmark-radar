@@ -20,7 +20,24 @@ A successful render, plausible Pareto frontier, or passing test does not excuse
 missing most of the population. A chart and the browser beside it must use the
 same record universe and respond consistently to the user's filters.
 
-## Missing measurements do not remove benchmarks
+## Frontier and its score ranking require a reported score
+
+The user explicitly requested this filter: **exclude benchmarks with no numeric
+reported score from Benchmark Frontier and its linked score ranking**, including
+when the score slider is set to All. Remove the "No score reported" bands and
+marks. A genuine score of zero is still a reported score and must remain.
+
+Start from the full corpus, apply this filter, and account for the excluded
+records in the counts. Keep the records in the underlying catalog, general
+search and dataset exports. A source with no scored records may have zero
+visible marks in this view; do not invent scores to preserve source counts.
+
+This exception only concerns missing scores. Missing adoption, an unknown date
+or an unverified score scale must not hide a record that has a numeric score.
+Keep scored records on other scales inspectable and outside Pareto calculations.
+The rules below apply after this explicit filter on the Frontier surface.
+
+## Missing measurements do not delete corpus records
 
 Having a score, release date, reviewed identity, or model-card adoption count
 is not a requirement for belonging to the corpus. Do not use an inner join
@@ -36,21 +53,23 @@ adoption as zero, or rename score observations as unique model cards.
 explicit filters, one mark per source record, by default.** Counting a record
 in the header, retaining it in search, or putting it in a collapsed list does
 not count as drawing it. A 28- or 29-point skyline above a hidden catalog still
-fails this rule even when the header says 1,259. Missing dates, adoption, score
-units, or scores must choose a visible representation, never remove a mark.
+fails this rule even when the header says 1,259. Missing dates, adoption or score
+units must choose a visible representation, never remove a scored mark.
 
 Preserve the dimensions that are known. A benchmark with a reported score and
 date belongs on the time × score plane even when adoption is unrecorded; use
 an explicit unknown-adoption mark. Keep unverified source scales visually
 distinct from normalized scores and out of Pareto calculations. Benchmarks
-without a usable score retain dated, individual marks. A generic holding area
-below a tiny curated chart is not sufficient when it discards known dimensions.
+whose numeric score cannot use the main scale retain dated, individual marks.
+A generic holding area below a tiny curated chart is not sufficient when it
+discards known dimensions.
 
 A numeric score cutoff may hide records whose known scores are at or above it.
 Records without scores cannot be classified as above or below the cutoff;
-keep them in the visible unknown-score area. Show the full population, the
-matching records, the unknown measurements, and the records hidden by the
-user's filters so the counts reconcile.
+Frontier excludes them with its separate reported-score requirement. Show the
+full population and account for the visible records, pre-2024 records, records
+excluded for missing scores, and records hidden by score or search. Count each
+record once so the categories reconcile.
 
 ## Calculate only what the evidence supports
 
@@ -111,10 +130,11 @@ investigate, not evidence that they were all introduced that day.
 
 - Rebuild the inputs and compute the full population and its sources.
 - Check that every input record is represented or accounted for by the explicit
-  date and score filters, including records without measurements.
+  date, reported-score and cutoff filters, including records without measurements.
 - Count actual individually inspectable marks in the default main chart and
   compare their IDs with the filtered full corpus. Counts or collapsed lists
-  cannot substitute for missing marks. All four or more sources must render.
+  cannot substitute for missing marks. Every source with matching scored records
+  must render; account for sources excluded by the reported-score requirement.
 - Check that filtered, visible, and unknown counts reconcile to that population.
 - Test missing fields and every source, not just a few curated fixtures.
 - Verify release-date priority, earliest-score fallback, the inclusive 2024

@@ -74,10 +74,14 @@ export function scorePopulation(benchmarks = {}, entries = [], catalog = []) {
   ];
 }
 
+function hasReportedScore(summary) {
+  return Number.isFinite(summary?.display_max) && summary.numeric_count > 0;
+}
+
 export function matchesScoreCutoff(summary, cutoff) {
-  // An unknown score is never silently treated as zero or as above the cutoff.
-  return !Number.isFinite(summary?.display_max) || !summary.numeric_count
-    || cutoff >= 100 || summary.display_max < cutoff;
+  // Frontier and its ranking show reported scores only, including genuine zeroes.
+  // "All" lifts the numeric cutoff; it does not restore unscored benchmarks.
+  return hasReportedScore(summary) && (cutoff >= 100 || summary.display_max < cutoff);
 }
 
 export function skylineModel(benchmarks = {}, entries = [], catalog = [], cutoff = 70, matchingIds = null) {
@@ -128,8 +132,10 @@ export function skylineModel(benchmarks = {}, entries = [], catalog = [], cutoff
   });
   // The requested cohort starts on 2024-01-01. Within that cohort, only score
   // and raw adoption determine dominance, before the score or search slice.
-  const comparable = (row) => row.date >= SKYLINE_START_DATE && row.score !== null && row.adoption !== null;
-  const cohort = all.filter((row) => row.date >= SKYLINE_START_DATE);
+  const comparable = (row) => hasReportedScore(row.summary) && row.date >= SKYLINE_START_DATE
+    && row.score !== null && row.adoption !== null;
+  const withinDates = all.filter((row) => row.date === null || row.date >= SKYLINE_START_DATE);
+  const cohort = withinDates.filter((row) => row.date !== null && hasReportedScore(row.summary));
   const eligible = cohort.filter(comparable);
   for (const row of all) {
     row.pareto = !comparable(row) ? null : !eligible.some((other) => other.score <= row.score && other.adoption >= row.adoption
@@ -137,18 +143,19 @@ export function skylineModel(benchmarks = {}, entries = [], catalog = [], cutoff
   }
   // Cutoff membership is shared with score browsing. Normalized reversed
   // metrics remain explicit in the tooltip; they never change source scores.
-  const visible = all.filter((row) => (row.date === null || row.date >= SKYLINE_START_DATE)
-    && (!matchingIds || matchingIds.has(row.id)) && matchesScoreCutoff(row.summary, cutoff));
+  const visible = withinDates.filter((row) => (!matchingIds || matchingIds.has(row.id))
+    && matchesScoreCutoff(row.summary, cutoff));
   const dated = visible.filter((row) => row.date !== null);
   return {
     all, visible, dated, cohort, eligible, comparable: dated.filter(comparable),
     rows: visible.filter((row) => row.plotScore !== null),
     pending: visible.filter((row) => row.plotScore === null),
     undated: visible.filter((row) => row.date === null),
-    beforeStart: all.filter((row) => row.date !== null && row.date < SKYLINE_START_DATE).length,
+    beforeStart: all.length - withinDates.length,
     population: all.length, sources: new Set(all.map((row) => row.source)).size,
     hidden: all.length - visible.length,
-    unscored: visible.filter((row) => !Number.isFinite(row.displayScore)).length,
+    // Exclusive counts: old records first, then unscored, then score/search.
+    unscored: withinDates.filter((row) => !hasReportedScore(row.summary)).length,
   };
 }
 

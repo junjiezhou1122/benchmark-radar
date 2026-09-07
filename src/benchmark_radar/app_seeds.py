@@ -270,11 +270,11 @@ def _score_browser_seed(
         row
         for row in rows
         if (row["date"][0] is None or row["date"][0] >= "2024-01-01")
-        and (
-            not (row["summary"] or {}).get("numeric_count")
-            or (row["summary"] or {}).get("display_max") is None
-            or row["summary"]["display_max"] < DEFAULT_SCORE_CUTOFF
-        )
+        and (row["summary"] or {}).get("numeric_count", 0) > 0
+        and isinstance((row["summary"] or {}).get("display_max"), (int, float))
+        and not isinstance(row["summary"]["display_max"], bool)
+        and math.isfinite(row["summary"]["display_max"])
+        and row["summary"]["display_max"] < DEFAULT_SCORE_CUTOFF
     ]
     rows.sort(key=lambda row: (-(row["summary"] or {}).get("numeric_count", 0), row["id"]))
     shown = rows[:50]

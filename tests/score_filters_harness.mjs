@@ -50,18 +50,20 @@ state.benchmarkIndex = [
 state.lscore = 70;
 const scoreNames = ['scoreRecord','matchesScoreFilter','scoreBrowseRows','frontierDefaultEntry','externalDisplayFactor'];
 const scores = new Function('state', 'scorePopulation', 'matchesScoreCutoff', 'SKYLINE_START_DATE', `${scoreNames.map(fn).join('\n')}\nreturn {${scoreNames.join(',')}};`)(state, scorePopulation, matchesScoreCutoff, SKYLINE_START_DATE);
-assert.deepEqual(scores.scoreBrowseRows().map(r=>[r.id,r.rank]), [['external',1],['curated',2],['missing',3]]);
+assert.deepEqual(scores.scoreBrowseRows().map(r=>[r.id,r.rank]), [['external',1],['curated',2]]);
 assert.equal(scores.frontierDefaultEntry(state.data.model_card_leaderboard).id,'external');
 assert.equal(scores.matchesScoreFilter(summary(69.999)),true);
 assert.equal(scores.matchesScoreFilter(summary(70)),false);
-assert.equal(scores.matchesScoreFilter(summary(60,0)),true);
+assert.equal(scores.matchesScoreFilter(summary(60,0)),false);
+assert.equal(scores.matchesScoreFilter(summary(0)),true,'zero is a reported score');
+assert.equal(scores.matchesScoreFilter(null),false);
 state.lscore=100;
-assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['at100','over70','external','curated','missing']);
+assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['at100','over70','external','curated']);
 state.lscore=90;
-assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['over70','external','curated','missing']);
+assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['over70','external','curated']);
 // An intermediate step the old three-option filter could not express.
 state.lscore=40;
-assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['missing']);
+assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), []);
 state.lscore=70;
 state.benchmarkIndex=null;
 assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['curated']);
@@ -157,9 +159,11 @@ const invalidModel = skylineModel(invalids,
   Object.keys(invalids).filter(id=>id!=='unmeasured').map(id=>entry(id,0,{released:null})),[],100);
 assert.deepEqual(invalidModel.rows.map(row=>row.id),['fraction','unmeasured','undated'],
   'unknown dates or adoption cannot remove a reported number from the main visualization');
-assert.equal(invalidModel.pending.length,7,'all incompatible and missing scores keep individual marks');
-assert.deepEqual(invalidModel.undated.map(row=>row.id),['unscored','undated'],
-  'an adoption mention does not date a benchmark; undated records remain inspectable');
+assert.equal(invalidModel.pending.length,6,'numeric scores on other scales retain individual marks');
+assert.deepEqual(invalidModel.undated.map(row=>row.id),['undated'],
+  'an adoption mention does not date a benchmark; undated scores remain inspectable');
+assert.equal(invalidModel.unscored,1,'excluded unscored records are counted separately');
+assert(!invalidModel.visible.some(row=>row.id==='unscored'));
 assert.equal(invalidModel.all.filter(row=>row.missing.includes('scale')).length,7);
 assert.equal(invalidModel.all.find(row=>row.id==='unmeasured').adoption,null,'unknown adoption is not zero');
 assert.equal(invalidModel.all.find(row=>row.id==='unscored').score,null,'unknown score is not zero');
@@ -251,12 +255,12 @@ const corpusEntries=corpus.model_card_leaderboard.entries;
 const full=skylineModel(benchmarkRecords,corpusEntries,catalog,100);
 const expected=catalog.length+Object.keys(benchmarkRecords).length;
 assert.equal(full.population,expected);
-assert.equal(full.visible.length+full.beforeStart,expected);
+assert.equal(full.visible.length+full.beforeStart+full.unscored,expected);
 assert(full.population>=1259,'principle.md: investigate a corpus smaller than 1,259 records');
 assert(full.sources>=4,'principle.md: every source belongs to the same population');
 assert.equal(new Set(full.all.map(row=>row.id)).size,expected,'source rows are never silently merged');
 assert.equal(full.all.filter(row=>row.source==='opencompass_hub').length,
-  catalog.filter(row=>row.source==='opencompass_hub').length,'unscored OpenCompass records remain present');
+  catalog.filter(row=>row.source==='opencompass_hub').length,'unscored records remain in the corpus');
 state.data=corpus;
 state.benchmarkIndex=catalog;
 for(const cutoff of [10,30,70,100]) {
@@ -265,12 +269,17 @@ for(const cutoff of [10,30,70,100]) {
   assert.deepEqual(current.visible,full.all.filter(row=>(row.date===null || row.date>=SKYLINE_START_DATE) && matchesScoreCutoff(row.summary,cutoff)));
   assert.equal(current.visible.length+current.hidden,expected);
   assert.equal(current.rows.length+current.pending.length,current.visible.length);
-  assert.equal(current.unscored,full.unscored,'unknown scores stay visible at every cutoff');
+  assert.equal(current.unscored,full.unscored,'the missing-score exclusion is independent of the cutoff');
+  assert(current.visible.every(row=>Number.isFinite(row.displayScore) && row.summary.numeric_count>0),
+    'every displayed benchmark has a numeric reported score, even with All selected');
+  assert(current.hidden-current.beforeStart-current.unscored>=0,'exclusion counts must not overlap');
   assert.deepEqual(current.visible.map(row=>row.id).sort(), scores.scoreBrowseRows().map(row=>row.id).sort(),
     'chart and browser must show exactly the same filtered record IDs');
   const rendered=chart(current,cutoff);
   const drawn=flatten(rendered);
   const marks=drawn.filter(node=>'data-benchmark-id' in node.attrs);
+  assert(!drawn.some(node=>node.tag==='text' && node.text?.startsWith('No score reported')),
+    'remove the unscored bands themselves, not only their dots');
   assert.equal(marks.length,current.visible.length,
     'principle.md: every surviving record must be drawn in the main SVG, never only counted or put in a collapsed list');
   assert.deepEqual(marks.map(node=>node.attrs['data-benchmark-id']).sort(),current.visible.map(row=>row.id).sort(),
@@ -296,11 +305,11 @@ for(const cutoff of [10,30,70,100]) {
       }
     }
     assert(current.dated.length>300,'investigate a timeline limited to a few dozen curated benchmarks');
-    assert(current.visible.length>700,'missing dates or adoption cannot silently remove most of the corpus');
-    for(const source of ['curated','llm_stats','artificial_analysis','opencompass_hub']) {
+    assert(current.visible.length>300,'excluding unscored records must preserve the scored catalog');
+    for(const source of new Set(current.visible.map(row=>row.source))) {
       const sourceIds=new Set(current.visible.filter(row=>row.source===source).map(row=>row.id));
       assert(sourceIds.size>0);
-      assert(marks.some(mark=>sourceIds.has(mark.attrs['data-benchmark-id'])),'all sources are actually drawn');
+      assert(marks.some(mark=>sourceIds.has(mark.attrs['data-benchmark-id'])),'every source with matching scores is drawn');
     }
   }
   for(const row of current.rows.filter(row=>row.score===null)) {
@@ -355,7 +364,7 @@ for(const cutoff of [10,30,70,100]) {
       if(other===mark) continue;
       const otherCap=other.children.find(node=>node.attrs.class==='skyline-pending-cap');
       assert(Math.hypot(cap.attrs.cx-otherCap.attrs.cx,cap.attrs.cy-otherCap.attrs.cy)>=11.99,
-        'every unscored benchmark is individually visible and targetable');
+        'numeric scores on other scales remain individually visible and targetable');
     }
   }
   const undatedScored=plotted.filter(node=>node.attrs['data-date-basis']==='unknown');
@@ -379,8 +388,11 @@ for(const cutoff of [10,30,70,100]) {
       `${text.text}: label anchor outside viewBox`);
   }
 }
-const selected=new Set([catalog.find(row=>row.source==='opencompass_hub').slug]);
+const selected=new Set([full.visible.find(row=>row.displayScore<70).id]);
 const querySlice=skylineModel(benchmarkRecords,corpusEntries,catalog,70,selected);
 assert.deepEqual(querySlice.visible.map(row=>row.id),[...selected]);
 assert.equal(querySlice.population,expected,'a search never redefines the universe');
+const unscoredSelection=new Set([full.all.find(row=>!Number.isFinite(row.displayScore)).id]);
+assert.equal(skylineModel(benchmarkRecords,corpusEntries,catalog,100,unscoredSelection).visible.length,0,
+  'searching for an unscored record does not restore it to the score figure');
 console.log('Full-corpus coverage, source parity, unknown measurements, score slicing, Pareto, and SVG construction passed.');
