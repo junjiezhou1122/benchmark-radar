@@ -23,9 +23,9 @@ from urllib.parse import urlsplit
 
 import yaml
 
-from .external_catalog import CATALOG_SCHEMA_VERSION, ExternalCatalogError
+from .catalog import CATALOG_SCHEMA_VERSION, CatalogError
 
-DEFAULT_LLM_STATS_IDENTITY_OVERRIDES_PATH = Path("data/external/llm_stats_identity_overrides.yml")
+DEFAULT_LLM_STATS_IDENTITY_OVERRIDES_PATH = Path("data/catalog/llm_stats_identity_overrides.yml")
 
 _RESOLUTION_STATUSES = {"resolved", "needs_review", "not_found"}
 _RESOLVED_REPO_KINDS = {
@@ -78,7 +78,7 @@ _FULL_NAME = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 _ARXIV_ID = re.compile(r"/(?:abs|pdf|html)/([0-9]{4}\.[0-9]{4,5})(?:v[0-9]+)?(?:\.pdf)?$")
 
 
-class IdentityOverrideError(ExternalCatalogError):
+class IdentityOverrideError(CatalogError):
     """Raised when a reviewed override is malformed or cannot be applied."""
 
 

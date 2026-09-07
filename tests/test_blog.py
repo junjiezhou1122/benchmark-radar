@@ -488,6 +488,7 @@ def test_dashboard_and_blog_share_the_reduced_chrome_contract(tmp_path):
         "/",
         "/cli/",
         "/leaderboard/",
+        "/saturation/",
         "/trends/",
         "/blog/",
     ]

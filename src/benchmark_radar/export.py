@@ -1,36 +1,8 @@
-"""Standalone, citable exports of the Model Card Adoption Rank (issue #88).
+"""Standalone documentation rankings from the full benchmark catalog.
 
-The ranking already exists, and until now it existed in exactly one place: a
-key inside `site/data/radar.json`, a multi-megabyte bundle that also carries the
-full daily corpus, its entity graph, and every observation. Anyone wanting to
-quote the ranking in a blog post, a README, a newsletter, or a paper appendix
-had to download all of that and know which key to read.
-
-That is the difference between a site people visit and a source people cite.
-These exports close it by publishing the same ranking as small, self-describing
-files, each one usable without the others:
-
-`leaderboard.json`
-    The ranking and its provenance, without the daily corpus.
-`leaderboard.csv`
-    One row per benchmark, for a spreadsheet or a dataframe.
-`leaderboard.md`
-    A paste-ready table for a README or a blog post.
-`leaderboard-badge.json`
-    A Shields endpoint, so a badge can track the registry instead of freezing
-    at whatever the number was when someone typed it.
-
-Every export is derived from `adoption_rank`, never from a re-read of the
-dashboard bundle or a second pass over the registry. A consumer who cites the
-CSV and a reader looking at the dashboard must not be able to see two different
-rankings, and the only way to guarantee that is for one function to produce
-both.
-
-Each file restates the `measures` caveat rather than assuming the reader
-arrived with it. These artifacts are built to travel: the CSV will be opened
-without the README beside it, and a ranking that reads as a quality ordering
-once separated from its disclaimer is precisely the misreading the registry is
-careful to prevent.
+JSON and CSV retain one row per source record, including records without scores
+or citations. Markdown declares its selected top-N. All formats use the same
+normalized document registry as the website, with source provenance intact.
 """
 
 from __future__ import annotations
@@ -41,13 +13,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .model_cards import DEFAULT_REGISTRY_PATH, build_adoption_rank
+from .query import DEFAULT_INDEX_PATH
 
 # The exports are versioned separately from the registry schema. A consumer
 # pinning to a column layout is making a different promise than the registry
 # makes about its own fields, and folding the two together would force a
 # breaking bump on every reader whenever an internal registry detail moved.
-EXPORT_SCHEMA_VERSION = 1
+EXPORT_SCHEMA_VERSION = 2
 
 # The default top-N for the Markdown table. The full ranking runs to every
 # benchmark in the registry including those no card reports, which is the right
@@ -59,10 +31,11 @@ _CSV_COLUMNS = (
     "rank",
     "benchmark_id",
     "name",
+    "source",
     "domain",
-    "card_count",
+    "document_count",
     "organization_count",
-    "adoption_share",
+    "document_share",
     "released",
     "url",
     "organizations",
@@ -87,17 +60,18 @@ def _rows(leaderboard: dict[str, Any]) -> list[dict[str, Any]]:
                 "rank": entry["rank"],
                 "benchmark_id": entry["benchmark_id"],
                 "name": entry["name"],
+                "source": entry["source"],
                 "domain": entry["domain"],
-                "card_count": entry["card_count"],
+                "document_count": entry["document_count"],
                 "organization_count": entry["organization_count"],
-                "adoption_share": entry["adoption_share"],
+                "document_share": entry["document_share"],
                 "released": entry["released"] or "",
                 "url": entry["url"] or "",
                 # Semicolon-joined, not comma-joined: a comma inside a field
                 # forces the whole cell into quotes and is the single most
                 # common way a hand-inspected CSV column looks misaligned.
                 "organizations": "; ".join(entry["organizations"]),
-                "caveat": entry["caveat"] or "",
+                "caveat": entry["caveat"] or leaderboard["measures"],
             }
         )
     return rows
@@ -119,16 +93,16 @@ def leaderboard_json(leaderboard: dict[str, Any], *, source_url: str | None = No
         # ranking asks first, and the answer here is unusual enough that
         # leaving it implicit invites the wrong assumption.
         "counting_unit": (
-            "One document, not one result row. A card reporting a benchmark in "
-            "several configurations contributes exactly one adoption."
+            "One document per benchmark source record. Repeated scores and "
+            "mentions in that document add no citations."
         ),
-        "model_card_count": leaderboard["model_card_count"],
+        "document_count": leaderboard["document_count"],
         "benchmark_count": leaderboard["benchmark_count"],
         "organization_count": leaderboard["organization_count"],
         "organizations": leaderboard["organizations"],
         "domains": leaderboard["domains"],
         "entries": leaderboard["entries"],
-        "model_cards": leaderboard["model_cards"],
+        "documents": leaderboard["documents"],
     }
     if source_url:
         document["source_url"] = source_url
@@ -177,7 +151,7 @@ def leaderboard_markdown(
     shown = entries if limit is None else entries[:limit]
 
     lines = [
-        "| Rank | Benchmark | Domain | Model cards | Organizations |",
+        "| Rank | Benchmark | Source | Source documents | Organizations |",
         "|---:|---|---|---:|---:|",
     ]
     for entry in shown:
@@ -186,18 +160,17 @@ def leaderboard_markdown(
         # as a dead link, which is worse than plain text.
         label = f"[{name}]({entry['url']})" if entry["url"] else name
         lines.append(
-            f"| {entry['rank']} | {label} | {_escape_cell(entry['domain'])} "
-            f"| {entry['card_count']} | {entry['organization_count']} |"
+            f"| {entry['rank']} | {label} | {_escape_cell(entry['source'])} "
+            f"| {entry['document_count']} | {entry['organization_count']} |"
         )
 
-    total_cards = leaderboard["model_card_count"]
+    total_cards = leaderboard["document_count"]
     total_orgs = leaderboard["organization_count"]
     footer = [
         "",
         (
-            f"Across {total_cards} curated model cards, system cards, and technical "
-            f"reports from {total_orgs} organizations. The counted unit is the "
-            f"document, not the result row."
+            f"Across {total_cards} source documents from {total_orgs} publishers. "
+            "Model reports and registry pages use the same counting rule."
         ),
         "",
         f"_{leaderboard['measures']}_",
@@ -208,7 +181,7 @@ def leaderboard_markdown(
         # instead of meeting a bare row count before knowing what it is out of.
         footer[1] += (
             f" Showing the top {len(shown)} of {len(entries)} tracked benchmarks; "
-            "benchmarks reported by no card are tracked and ranked last."
+            "records without citations remain in the catalog."
         )
     if source_url:
         footer.append("")
@@ -227,9 +200,10 @@ def leaderboard_badge(leaderboard: dict[str, Any]) -> str:
     """
     document = {
         "schemaVersion": 1,
-        "label": "model cards tracked",
+        "label": "source documents",
         "message": (
-            f"{leaderboard['model_card_count']} cards · {leaderboard['benchmark_count']} benchmarks"
+            f"{leaderboard['document_count']} documents · "
+            f"{leaderboard['benchmark_count']} benchmarks"
         ),
         "color": "blue",
     }
@@ -239,18 +213,17 @@ def leaderboard_badge(leaderboard: dict[str, Any]) -> str:
 def write_exports(
     output_dir: Path,
     *,
-    registry_path: Path = DEFAULT_REGISTRY_PATH,
+    catalog_path: Path = DEFAULT_INDEX_PATH,
     table_limit: int | None = DEFAULT_TABLE_LIMIT,
     source_url: str | None = None,
 ) -> dict[str, Path]:
-    """Build every export from one ranking and write them side by side.
-
-    `build_adoption_rank` is called exactly once. Calling it per format would
-    read and validate the registry four times for identical output, and would
-    open the door to four files disagreeing if the registry changed underneath
-    a slow run.
-    """
-    leaderboard = build_adoption_rank(registry_path)
+    """Read the complete generated catalog once; refuse missing or partial inputs."""
+    payload = json.loads(catalog_path.read_text(encoding="utf-8"))
+    leaderboard = payload["document_registry"]
+    expected = {record["slug"] for record in payload["benchmarks"]}
+    actual = {entry["benchmark_id"] for entry in leaderboard["entries"]}
+    if actual != expected or len(leaderboard["entries"]) != len(payload["benchmarks"]):
+        raise ValueError("Document registry does not cover the complete benchmark catalog")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     artifacts = {

@@ -1,231 +1,123 @@
-"""One record per model, whichever layer reported it.
-
-A model is a model. Gemini 3.1 Pro and MiMo-V2.5-Pro are both things a lab
-shipped, both carry benchmark scores, and both draw a brand glyph on a chart.
-Until now they lived in two shapes that shared exactly one field name --
-`organization` -- because the project had never modelled the *model*. It
-modelled the two things that mention one: a curated document (`model_cards.yml`,
-with a URL and a publication date) and a crawled score observation (an
-aggregator row, with a value and a rank). Asking "what models do we know about?"
-meant reading two structures and reconciling them at every call site, and every
-consumer that forgot the second one silently dropped 323 models.
-
-This module is that missing structure. One `ModelRecord` per (model,
-organization), built from both layers, with a stable id.
-
-WHAT UNIFYING DOES AND DOES NOT MEAN
-
-The record is unified; the evidence stays labelled. Every field that only one
-layer can support is carried per-source in `sources`, never flattened up into
-the record as though both layers had established it:
-
-  * A curated card establishes a document -- `url`, `published`, `retrieved_at`.
-    A crawled row has no document, and inventing one would be a wrong citation.
-  * A crawled row establishes an observation -- a value, an aggregator, a rank.
-    It records no protocol and no evaluation date, so `comparable_group` stays
-    null and two crawled values never join.
-
-So `ModelRecord.sources` is a list, and `layers` says which kinds are present.
-A model known to both layers is ONE record carrying both, which is the join the
-old shape could not express at all. What the record never does is average them,
-pick a winner, or let a crawled row inherit a curated document's authority.
-
-This is the single source of truth for "which models exist". Consumers read it
-instead of walking `model_cards` and the shards separately.
-"""
+"""Model identities and their evidence from the shared benchmark catalog."""
 
 from __future__ import annotations
 
 import json
 import re
-from collections.abc import Iterable
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
-
+SCHEMA_VERSION = 2
 DEFAULT_REGISTRY_OUTPUT = Path("site/data/models.json")
-
-CURATED = "curated"
-CRAWLED = "crawled"
 
 
 def model_key(model: str, organization: str) -> str:
-    """A stable, filesystem- and URL-safe id for a model.
-
-    Keyed on (name, organization) rather than on either alone: two labs ship
-    models whose short names collide, and one lab renames across versions.
-    """
+    """Stable display identity; each evidence row retains its source model ID."""
     slug = re.sub(r"[^a-z0-9]+", "-", f"{organization} {model}".lower()).strip("-")
     return slug or "unnamed"
 
 
 @dataclass(frozen=True)
 class ModelSource:
-    """One layer's evidence about a model.
-
-    `layer` is CURATED or CRAWLED. `payload` is that layer's own record,
-    unaltered -- the curated card or the crawled observation as it was written.
-    Nothing is renamed into a shared vocabulary, because a shared name would
-    imply the two carry the same kind of claim.
-    """
-
-    layer: str
-    source_id: str
+    source: str
+    evidence_id: str
     payload: dict[str, Any]
 
 
 @dataclass
 class ModelRecord:
-    """Everything known about one model, across every layer that reported it."""
-
     key: str
     model: str
     organization: str
     sources: list[ModelSource] = field(default_factory=list)
 
     @property
-    def layers(self) -> list[str]:
-        """Which layers reported this model, curated first."""
-        seen = {source.layer for source in self.sources}
-        return [layer for layer in (CURATED, CRAWLED) if layer in seen]
-
-    @property
-    def is_curated(self) -> bool:
-        return CURATED in self.layers
+    def provenance_sources(self) -> list[str]:
+        return sorted({entry.source for entry in self.sources})
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "key": self.key,
             "model": self.model,
             "organization": self.organization,
-            "layers": self.layers,
+            "provenance_sources": self.provenance_sources,
             "sources": [
-                {"layer": s.layer, "source_id": s.source_id, "payload": s.payload}
-                for s in self.sources
+                {"source": row.source, "evidence_id": row.evidence_id, "payload": row.payload}
+                for row in self.sources
             ],
         }
 
 
-def _curated_models(radar: dict[str, Any]) -> Iterable[tuple[str, str, str, dict]]:
-    board = radar.get("model_card_leaderboard") or {}
-    for card in board.get("model_cards") or []:
-        model = card.get("model")
-        organization = card.get("organization")
-        if model and organization:
-            yield model, organization, card.get("model_card_id") or "", card
-
-
-# Which crawled source gets to name a model the two of them both know about.
-#
-# `model_key` folds punctuation and case, so "GPT-5 High" and "GPT-5 (high)"
-# are one model with two spellings, and the first spelling seen becomes the
-# published name. Left to the shard glob that order is alphabetical by
-# filename, which is not a decision anyone made: adding a source whose slug
-# sorts earlier silently renamed 22 already-published models and orphaned their
-# frozen logo IDs, which is exactly the churn `build_logo_registry.py` exists to
-# prevent.
-#
-# So precedence is declared. llm-stats is first because it is the incumbent:
-# its spellings are the ones already published, already reviewed, and already
-# carrying logo IDs. A source absent from this list sorts last, in its own
-# name's order, so adding one is additive and never a rename.
-_CRAWLED_SOURCE_PRECEDENCE = ("llm_stats", "artificial_analysis")
-
-
-def _crawled_models(shard_dir: Path) -> Iterable[tuple[str, str, str, dict]]:
-    def rank(source: str) -> tuple[int, str]:
-        if source in _CRAWLED_SOURCE_PRECEDENCE:
-            return (_CRAWLED_SOURCE_PRECEDENCE.index(source), "")
-        return (len(_CRAWLED_SOURCE_PRECEDENCE), source)
-
-    shards = sorted(shard_dir.glob("*.json"))
-    by_source: dict[str, list[tuple[str, dict]]] = {}
-    for shard in shards:
-        payloads = json.loads(shard.read_text(encoding="utf-8")).get("scores_by_source") or {}
-        for source, payload in payloads.items():
-            by_source.setdefault(source, []).append((shard.name, payload))
-
-    for source in sorted(by_source, key=rank):
-        for _, payload in by_source[source]:
-            for row in payload.get("rows") or []:
-                model = row.get("model_name")
-                organization = row.get("organization")
-                if model and organization:
-                    yield model, organization, row.get("obs_id") or source, row
-
-
 def build_registry(radar: dict[str, Any], shard_dir: Path) -> dict[str, ModelRecord]:
-    """Every model either layer knows about, keyed by `model_key`.
+    """Read model observations and document subjects through one evidence path.
 
-    Curated sources are added first so a model present in both reads as curated
-    at a glance, but both are kept: the point of one structure is that neither
-    layer's evidence disappears because the other exists.
+    ``radar`` remains an unused positional argument for local caller compatibility.
+    The catalog now includes those reports. Reading them again would double count.
+    Display labels choose the same deterministic spelling regardless of source or
+    input order. This does not merge distinct source model IDs used by chart counts.
     """
     registry: dict[str, ModelRecord] = {}
+    seen: set[tuple[str, str]] = set()
 
-    def add(model: str, organization: str, source_id: str, payload: dict, layer: str) -> None:
+    def add(source: str, evidence_id: str, model: str, organization: str, payload: dict) -> None:
+        if not model or not organization or (source, evidence_id) in seen:
+            return
+        seen.add((source, evidence_id))
         key = model_key(model, organization)
-        record = registry.get(key)
-        if record is None:
-            record = ModelRecord(key=key, model=model, organization=organization)
-            registry[key] = record
-        record.sources.append(ModelSource(layer=layer, source_id=source_id, payload=payload))
+        record = registry.setdefault(key, ModelRecord(key, model, organization))
+        record.model = min(record.model, model, key=lambda value: (value.casefold(), value))
+        record.sources.append(ModelSource(source, evidence_id, payload))
 
-    for model, organization, source_id, card in _curated_models(radar):
-        add(model, organization, source_id, card, CURATED)
-    for model, organization, source_id, row in _crawled_models(shard_dir):
-        add(model, organization, source_id, row, CRAWLED)
-
+    for path in sorted(Path(shard_dir).glob("*.json")):
+        shard = json.loads(path.read_text(encoding="utf-8"))
+        record = shard.get("record") or {}
+        for document in record.get("documents") or []:
+            if document.get("model_name"):
+                add(
+                    document["source"],
+                    document["id"],
+                    document["model_name"],
+                    document.get("organization") or "",
+                    document,
+                )
+        for source, payload in (shard.get("scores_by_source") or {}).items():
+            for row in payload.get("rows") or []:
+                add(
+                    source,
+                    row.get("obs_id") or "",
+                    row.get("model_name") or "",
+                    row.get("organization") or "",
+                    row,
+                )
+    for record in registry.values():
+        record.sources.sort(key=lambda row: (row.source, row.evidence_id))
     return dict(sorted(registry.items()))
 
 
 def summarize(registry: dict[str, ModelRecord]) -> dict[str, Any]:
-    """The counts a consumer needs without walking every source."""
-    both = sum(1 for r in registry.values() if len(r.layers) > 1)
+    counts = Counter(source for record in registry.values() for source in record.provenance_sources)
     return {
         "schema_version": SCHEMA_VERSION,
         "model_count": len(registry),
-        "curated_only": sum(1 for r in registry.values() if r.layers == [CURATED]),
-        "crawled_only": sum(1 for r in registry.values() if r.layers == [CRAWLED]),
-        "both_layers": both,
-        "organizations": sorted({r.organization for r in registry.values()}),
+        "source_counts": dict(sorted(counts.items())),
+        "multiple_sources": sum(len(record.provenance_sources) > 1 for record in registry.values()),
+        "organizations": sorted({record.organization for record in registry.values()}),
     }
 
 
 def write_model_registry(radar_path: Path, shard_dir: Path, output: Path) -> dict[str, Any]:
-    """Build the registry and write it beside the rest of the site's data.
-
-    Raises when the shard directory holds no shards. They are derived and
-    untracked, so a fresh checkout has none until `benchmark-radar
-    normalize-external` writes them, and `_crawled_models()` reaches them with a
-    glob: both a missing directory and an empty one yield nothing rather than
-    failing. Without this check the crawled half of the registry silently
-    disappears and the file is rewritten with the 34 curated models in place of
-    all 355, which is the kind of wrong answer that reads as a real one. An
-    empty directory is checked as well as a missing one because an interrupted
-    generator leaves exactly that, and it produces the same short registry.
-    Refusing to write is the honest outcome, and the message names the command
-    that fixes it.
-    """
+    """Publish model identities; source observations and citations stay in shards."""
     shard_dir = Path(shard_dir)
     if not shard_dir.is_dir() or next(shard_dir.glob("*.json"), None) is None:
         raise FileNotFoundError(
-            f"{shard_dir} holds no benchmark shards, so the crawled half of the model "
-            "registry would be silently dropped and models.json rewritten with the "
-            "curated models alone. Run `benchmark-radar normalize-external` first."
+            f"{shard_dir} holds no benchmark shards. Run `benchmark-radar normalize-catalog` "
+            "before building the model registry; a partial corpus is not a substitute."
         )
-    radar = json.loads(Path(radar_path).read_text(encoding="utf-8"))
-    registry = build_registry(radar, shard_dir)
+    registry = build_registry({}, shard_dir)
     report = summarize(registry)
     output.parent.mkdir(parents=True, exist_ok=True)
-    # The index, not the payloads. Every source record embedded inline came to
-    # 5.1MB, which is a page-weight cost for data no reader of the index needs:
-    # a consumer asking "which models exist" wants identity and layer, and a
-    # consumer wanting one model's evidence already has radar.json and the
-    # shards. Counting sources per layer keeps the join visible without
-    # carrying it.
     output.write_text(
         json.dumps(
             {
@@ -235,11 +127,10 @@ def write_model_registry(radar_path: Path, shard_dir: Path, output: Path) -> dic
                         "key": record.key,
                         "model": record.model,
                         "organization": record.organization,
-                        "layers": record.layers,
-                        "source_counts": {
-                            layer: sum(1 for s in record.sources if s.layer == layer)
-                            for layer in record.layers
-                        },
+                        "provenance_sources": record.provenance_sources,
+                        "source_counts": dict(
+                            sorted(Counter(row.source for row in record.sources).items())
+                        ),
                     }
                     for record in registry.values()
                 ],

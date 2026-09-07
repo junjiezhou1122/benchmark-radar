@@ -2,7 +2,7 @@
 
 This module reads `data/leaderboard_snapshots.yml` and the CSV files it
 declares, and certifies that what is on disk is what the registry says is on
-disk. It does not interpret, merge, or publish anything: `external_catalog.py`
+disk. It does not interpret, merge, or publish anything: `catalog.py`
 turns the validated rows into the per-source catalog records and score
 observations the site consumes.
 

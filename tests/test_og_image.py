@@ -72,7 +72,9 @@ def test_catalog_count_includes_all_searchable_records(tmp_path):
         encoding="utf-8",
     )
     progression = og.build_score_progression(og.DEFAULT_SCORES_PATH)
-    assert og.catalog_count(progression, index) == progression["benchmark_count"] + 124
+    assert (
+        og.catalog_count(progression, index) == 3
+    )  # Count records, never stale headers or a second registry.
 
 
 def test_card_uses_the_daily_source_count():

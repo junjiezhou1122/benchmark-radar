@@ -33,8 +33,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from .external_catalog import CATALOG_SCHEMA_VERSION
-from .external_identity import IdentityIndex
+from .catalog import CATALOG_SCHEMA_VERSION
+from .catalog_identity import IdentityIndex
 
 DEFAULT_SHARD_DIR = Path("site/data/benchmarks")
 

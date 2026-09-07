@@ -11,15 +11,15 @@ already-published model fails here rather than on the site.
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 import pytest
 
-from benchmark_radar.external_catalog import (
+from benchmark_radar.catalog import (
     ARTIFICIAL_ANALYSIS_KEY_PREFIX,
     ARTIFICIAL_ANALYSIS_SNAPSHOT_ID,
     ARTIFICIAL_ANALYSIS_SOURCE,
-    LLM_STATS_SOURCE,
     normalize_snapshot,
 )
 from benchmark_radar.leaderboard_snapshots import DEFAULT_SNAPSHOTS_PATH, load_snapshots
@@ -75,18 +75,43 @@ def test_dates_are_labelled_as_model_releases_not_measurements(normalized: dict)
         assert obs["date_precision"] == "model_announcement"
 
 
-def test_a_new_source_cannot_rename_an_existing_model() -> None:
-    """`model_key` folds punctuation and case, so "GPT-5 High" and "GPT-5 (high)"
-    are one model with two spellings, and whoever is read first names it. Left
-    to the shard glob that was alphabetical by filename, which silently renamed
-    22 already-published models and orphaned their frozen logo IDs.
-    """
-    from benchmark_radar.models_registry import _CRAWLED_SOURCE_PRECEDENCE
+def test_model_labels_do_not_depend_on_source_priority(tmp_path) -> None:
+    from benchmark_radar.models_registry import build_registry
 
-    # llm-stats is the incumbent: its spellings are already published and
-    # already carry logo IDs, so it names the models it shares with a newcomer.
-    assert _CRAWLED_SOURCE_PRECEDENCE.index(LLM_STATS_SOURCE) < _CRAWLED_SOURCE_PRECEDENCE.index(
-        ARTIFICIAL_ANALYSIS_SOURCE
+    def build(order):
+        for path in tmp_path.glob("*.json"):
+            path.unlink()
+        for index, (source, name) in enumerate(order):
+            (tmp_path / f"{index}.json").write_text(
+                json.dumps(
+                    {
+                        "record": {},
+                        "scores_by_source": {
+                            source: {
+                                "rows": [
+                                    {
+                                        "obs_id": f"{source}:one",
+                                        "model_name": name,
+                                        "organization": "OpenAI",
+                                        "model_id": "one",
+                                    }
+                                ]
+                            }
+                        },
+                    }
+                )
+            )
+        return next(iter(build_registry({}, tmp_path).values())).model
+
+    sources = [("llm_stats", "GPT-5 High"), ("artificial_analysis", "GPT-5 (high)")]
+    assert build(sources) == build(list(reversed(sources)))
+    assert build(sources) == build(
+        [
+            (source, name)
+            for source, name in zip(
+                ["artificial_analysis", "llm_stats"], [name for _, name in sources], strict=True
+            )
+        ]
     )
 
 

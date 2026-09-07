@@ -33,9 +33,9 @@ from urllib.parse import urlsplit
 
 import yaml
 
+from .catalog_identity import DEFAULT_IDENTITY_PATH
+from .catalog_overrides import DEFAULT_LLM_STATS_IDENTITY_OVERRIDES_PATH
 from .corpus import artifact_alias_map, exact_artifact_key
-from .external_identity import DEFAULT_IDENTITY_PATH
-from .external_overrides import DEFAULT_LLM_STATS_IDENTITY_OVERRIDES_PATH
 from .model_cards import DEFAULT_REGISTRY_PATH
 
 METHOD_VERSION = "attention-ranking-v1"

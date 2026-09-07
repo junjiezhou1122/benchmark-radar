@@ -1,82 +1,67 @@
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BUILDER = ROOT / "scripts" / "build_system_evaluation.py"
+LATEX = ROOT / "docs" / "technical-report" / "latex"
+MANUSCRIPT = LATEX / "main.tex"
+FROZEN_DEPOSIT = ROOT / "output" / "pdf" / "benchmark-radar-technical-report-v0.9.0.pdf"
 
 
-def _assignment(name: str) -> ast.Assign:
-    tree = ast.parse(BUILDER.read_text(encoding="utf-8"))
-    return next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.Assign)
-        and any(isinstance(target, ast.Name) and target.id == name for target in node.targets)
-    )
+def test_latex_is_the_only_report_source() -> None:
+    assert MANUSCRIPT.is_file()
+    assert (LATEX / "references.bib").is_file()
+    assert (LATEX / "Makefile").is_file()
+
+    # The ReportLab builders were the previous source. Their return would give
+    # the report two sources that can disagree.
+    assert not (ROOT / "scripts" / "build_system_evaluation.py").exists()
+    assert not (ROOT / "scripts" / "build_technical_report.py").exists()
 
 
-def test_frozen_and_next_draft_outputs_are_distinct() -> None:
-    frozen = ast.literal_eval(_assignment("FROZEN_OUTPUT").value.args[0])
-    draft = ast.literal_eval(_assignment("NEXT_DRAFT_OUTPUT").value.args[0])
-
-    assert frozen == "output/pdf/benchmark-radar-technical-report-v0.9.0.pdf"
-    assert draft == "output/pdf/benchmark-radar-technical-report-next-draft.pdf"
-    assert frozen != draft
+def test_built_pdf_is_tracked_so_the_report_reads_on_github() -> None:
+    assert (LATEX / "main.pdf").is_file()
+    ignored = (LATEX / ".gitignore").read_text(encoding="utf-8").split()
+    assert "main.pdf" not in ignored
 
 
-def test_next_draft_records_contributor_name_and_affiliation() -> None:
-    source = BUILDER.read_text(encoding="utf-8")
-    draft_authors = ast.literal_eval(_assignment("NEXT_DRAFT_AUTHORS").value)
-    draft_byline = ast.literal_eval(_assignment("NEXT_DRAFT_BYLINE").value)
-    draft_affiliations = ast.literal_eval(_assignment("NEXT_DRAFT_AFFILIATIONS").value)
-    corresponding_author = ast.literal_eval(_assignment("NEXT_DRAFT_CORRESPONDING_AUTHOR").value)
+def test_manuscript_records_contributor_names_and_affiliations() -> None:
+    source = MANUSCRIPT.read_text(encoding="utf-8")
 
-    assert draft_authors == ("Koutian Wu", "Junjie Zhou", "Jiayu Wang")
-    assert draft_byline == (
-        "Koutian Wu<super>1,2,*</super>",
-        "Junjie Zhou<super>3</super>",
-        "Jiayu Wang<super>4</super>",
-    )
-    assert draft_affiliations == (
-        "<super>1</super> Independent researcher",
-        "<super>2</super> Tacite AI",
-        "<super>3</super> Hangzhou Dianzi University",
-        "<super>4</super> Xi'an Jiaotong University",
-    )
-    assert corresponding_author == "Koutian Wu, k@tacite.ai"
-    assert "Corresponding author: {corresponding_author}" in source
-    assert "WORKING DRAFT — NOT THE FROZEN v0.9.0 DEPOSIT" not in source
+    for author in ("Koutian Wu", "Junjie Zhou", "Ergan Shang", "Jiayu Wang", "Pengqian Han"):
+        assert author in source
+    for affiliation in (
+        "Tacite AI",
+        "Hangzhou Dianzi University",
+        "Carnegie Mellon University",
+        "Xi'an Jiaotong University",
+        "The University of Auckland",
+    ):
+        assert affiliation in source
+    assert "k@tacite.ai" in source
 
 
-def test_next_draft_records_real_use_case_section() -> None:
-    source = BUILDER.read_text(encoding="utf-8")
-
-    assert "6.5 Worked real use case: prior-art check for a new evaluation" in source
-    assert "github.com/ktwu01/benchmark-radar/issues/492" in source
-    assert "Contributor.</b> Jiayu Wang" in source
-
-
-def test_next_draft_embeds_use_case_screenshots() -> None:
-    source = BUILDER.read_text(encoding="utf-8")
+def test_manuscript_embeds_use_case_figures() -> None:
+    source = MANUSCRIPT.read_text(encoding="utf-8")
     names = (
         "agent-session.png",
         "artifact-status-paper.png",
         "artifact-status-code.png",
         "cross-validation.png",
         "survey-table.png",
-        "aarri-bench-manual-table.png",
+        "manual-prior-art-table.png",
     )
 
     for name in names:
-        assert f"assets/use-case-492/{name}" in source
+        assert name in source
         assert (ROOT / "assets" / "use-case-492" / name).is_file()
 
 
-def test_frozen_output_is_never_a_write_target() -> None:
-    source = BUILDER.read_text(encoding="utf-8")
-    assert "if output.resolve() == FROZEN_OUTPUT.resolve()" in source
-    assert "cannot overwrite the frozen v0.9.0 PDF" in source
-    assert "--overwrite-frozen" in source
-    assert '"[#457](https://github.com/ktwu01/benchmark-radar/issues/457)"' not in source
+def test_frozen_deposit_is_present_and_is_never_a_write_target() -> None:
+    # The artifact behind DOI 10.5281/zenodo.22167102. A new report version is
+    # deposited under a new versioned filename, never by replacing this one.
+    assert FROZEN_DEPOSIT.is_file()
+
+    for path in ROOT.joinpath("scripts").rglob("*.py"):
+        assert FROZEN_DEPOSIT.name not in path.read_text(encoding="utf-8")
+    assert FROZEN_DEPOSIT.name not in (LATEX / "Makefile").read_text(encoding="utf-8")

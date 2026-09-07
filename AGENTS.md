@@ -1,5 +1,12 @@
 # Repository Instructions
 
+Read `principle.md` before changing a benchmark-facing surface. Its full-corpus
+coverage rule applies to charts, search, tables, counts, and exports: start from
+1,259+ benchmark records across 4+ sources, and investigate any unexplained
+reduction to a few dozen. Missing measurements must not remove corpus records.
+Benchmark Frontier and its linked score ranking explicitly exclude records
+without numeric reported scores, as specified in `principle.md`.
+
 ## Glob rule: showcase and UI communication
 
 Applies to `README*`, `docs/**`, `.github/ISSUE_TEMPLATE/**`, `site/**`, and
@@ -78,37 +85,42 @@ Do not reconstruct the system from a report, the deployed site, or whatever
 generated files happen to be present in a long-lived checkout. Start with the
 sources below, run the generators in order, and measure the rebuilt outputs.
 
-### The three data layers
+### Source inputs and the shared catalog
 
 1. **Daily discovery corpus.** `config.yml` defines the collection and scoring
    configuration; connectors live under `src/benchmark_radar/`. A daily
    `benchmark-radar` run writes its durable evidence to
    `data/snapshots/YYYY-MM-DD.json`. Those dated snapshots are the source of
    truth for cumulative observations, artifacts, source health, and history.
-2. **External benchmark catalog.** `data/leaderboard_snapshots.yml` registers
+2. **Benchmark registry snapshots.** `data/leaderboard_snapshots.yml` registers
    immutable crawl inputs under `data/leaderboard_snapshots/`. The reviewed
-   join rules are `data/external/identity.yml` and
-   `data/external/llm_stats_identity_overrides.yml`. Other JSONL and validation
-   files under `data/external/` are normalization products; do not hand-edit or
+   join rules are `data/catalog/identity.yml` and
+   `data/catalog/llm_stats_identity_overrides.yml`. Cited release and first-score
+   dates missing from the crawls live in `data/catalog/benchmark_dates.yml`,
+   keyed by exact source record. Numeric first-score evidence only verifies a
+   date; it does not supply a highest score or merge records. Other JSONL and
+   validation files under `data/catalog/` are normalization products; do not hand-edit or
    treat them as a separate corpus, even when Git currently tracks a generated
    copy.
-3. **Curated measurement layer.** `data/model_cards.yml` is the reviewed model
-   report/adoption registry. `data/benchmark_scores.yml` is its matched,
+3. **Model reports.** `data/model_cards.yml` registers cited model reports
+   and every benchmark they mention. `data/benchmark_scores.yml` is its matched,
    protocol-aware score archive, and every score must cite a registry document.
-   This layer is deliberately separate from aggregator scores in the external
-   catalog.
+   Normalize these records, scores and citations into the same catalog contract
+   as every other source. Document type and protocol describe the evidence;
+   they do not establish a preferred corpus or a source ranking.
 
 ### Generator order and outputs
 
 Run these from the repository root, in this order:
 
-1. `benchmark-radar normalize-external` reads the crawl registry, raw crawl
-   files, and reviewed identity rules. It writes normalized intermediates under
-   `data/external/`, then the generated search index
+1. `benchmark-radar normalize-catalog` reads the crawl registry, raw crawl
+   files, model reports, score archives, and reviewed identity rules. It writes
+   normalized intermediates under
+   `data/catalog/`, then the generated search index
    `site/data/benchmark-index.json` and detail shards under
    `site/data/benchmarks/`.
-2. `benchmark-radar classify` reads the dated snapshots plus the external
-   shards and curated YAML files. It regenerates
+2. `benchmark-radar classify` reads the dated snapshots plus the shared
+   catalog shards and model-report YAML files. It regenerates
    `data/kw_bench_classifications.jsonl`, `site/data/radar.json`,
    `site/data/radar-bootstrap.json`, `site/data/radar-trends.json`,
    `site/data/models.json`, `site/feed.xml`, the daily brief blog under
@@ -118,7 +130,7 @@ Run these from the repository root, in this order:
    `QueryService` and writes `site/data/cli/manifest.json` plus the checksummed
    `site/data/cli/benchmark-radar-data.zip`. The manifest is published on Pages;
    the complete archive is uploaded to the rolling `cli-data` GitHub Release.
-4. `benchmark-radar export` writes the standalone curated leaderboard JSON,
+4. `benchmark-radar export` writes the full-catalog documentation ranking as JSON,
    CSV, Markdown, and badge files under `site/data/`. Pages then runs
    `scripts/generate_og_image.py` and `scripts/build_logo_registry.py` before
    tests and deployment.
@@ -126,22 +138,23 @@ Run these from the repository root, in this order:
 Most `site/data/` files and `data/kw_bench_classifications.jsonl` are derived
 and gitignored. Their absence in a fresh checkout is normal. Never patch them
 to fix a source-data problem; update the relevant snapshot, crawl input,
-identity rule, or curated YAML and regenerate. Never report counts from a stale
+identity rule, or report/score YAML and regenerate. Never report counts from a stale
 working tree: rebuild first and read the JSON that was just produced. A derived
 file that is tracked, such as `site/data/models.json` or current normalization
-outputs under `data/external/`, is still not an independent source of truth.
+outputs under `data/catalog/`, is still not an independent source of truth.
 
 ### Which artifact answers which question
 
 - `site/data/radar.json`: cumulative daily-discovery corpus, source health,
-  findings, curated adoption, and curated score progression.
-- `site/data/benchmark-index.json`: compact external-catalog search records,
-  one row per source record; reviewed identities do not silently collapse the
+  findings, and report-specific historical analyses. It is not a second
+  population to append to the benchmark catalog.
+- `site/data/benchmark-index.json`: the complete benchmark catalog and common document
+  registry, one row per source record across all sources; reviewed identities do not silently collapse the
   underlying evidence.
-- `site/data/benchmarks/<slug>.json`: external benchmark detail, provenance,
-  identity, series, and aggregator score observations.
-- `site/data/models.json`: one model registry assembled from both curated and
-  crawled layers.
+- `site/data/benchmarks/<slug>.json`: benchmark detail, provenance, identity,
+  score series, observations and cited documents through one shared contract.
+- `site/data/models.json`: one model registry assembled from the catalog, with
+  named provenance sources for each model.
 - `data/snapshots/*.json`: committed historical evidence used for local radar
   search and for rebuilding `radar.json`.
 - `site/blog/`: daily brief blog pages and full archive built from committed
@@ -149,25 +162,42 @@ outputs under `data/external/`, is still not an independent source of truth.
 - `site/data/cli/`: distributable copy of the index, shards, and snapshots for
   installed offline clients.
 
-The web benchmark-search total is not the external index count alone. It is the
-external rows in `benchmark-index.json` plus the curated score tracks in
-`radar.json`. Compute both from current generated files; do not copy a number
-from the README, a PDF, or a previous agent summary. Likewise, the count of
-curated adoption benchmarks in `model_cards.yml` is a different quantity from
-the count of curated score tracks.
+The web, CLI and exported catalog use the exact same benchmark IDs from the
+freshly generated `benchmark-index.json`. Model-report records are already in
+that index, including benchmarks with no scores or citations. Never add
+`radar.json` score tracks to that total or fall back to a smaller report registry
+when the catalog fails to load. Compute records and sources from rebuilt outputs;
+1,259+ records across 4+ sources is the minimum scale to investigate against.
+
+`normalize-catalog` is the current command. `normalize-external` remains an
+alias for existing maintainer scripts. Implementation modules use `catalog_*`
+and shared data lives under `data/catalog/`; original fields in immutable crawl
+inputs retain their source spelling.
 
 ### Technical report and deposit files
 
-- Report source/builder: `scripts/build_system_evaluation.py`
-- Report instructions and audited inputs: `docs/technical-report/README.md`
-- Zenodo metadata: `docs/technical-report/zenodo-metadata.json`
-- Generated upload file:
-  `output/pdf/benchmark-radar-technical-report-v0.9.0.pdf`
+- Report source: `docs/technical-report/latex/main.tex`. This is the single
+  source of truth for the report. Edit it directly. Nothing generates it from
+  Python, Markdown, or the running site.
+- Built PDF: `docs/technical-report/latex/main.pdf`, tracked so the report reads
+  on GitHub. Rebuild and commit it with any change to `main.tex`.
+- The four PDF figures have native TikZ sources under `latex/figures/`.
+  `make` builds them from the dated `latex/figure-data.tex` export. Refresh that
+  export only after auditing a clean corpus rebuild; review and commit the
+  figure PDFs and manuscript PDF together. The exporter writes no report prose.
+- Build instructions and audited inputs: `docs/technical-report/README.md`
+- Zenodo metadata: `docs/technical-report/zenodo-metadata.json`. It describes
+  the frozen v0.9.0 deposit, so its version and counts are a record of that
+  deposit rather than drift. A new deposit rewrites it in the same change.
+- Frozen deposit: `output/pdf/benchmark-radar-technical-report-v0.9.0.pdf`. This
+  is the artifact behind DOI 10.5281/zenodo.22167102. Nothing writes to that
+  path; leave it byte-for-byte unchanged.
 
 Before changing report claims or Zenodo metadata, run the clean-checkout CI
-sequence below and recompute claims from its outputs. Build the PDF with the DOI
-command in `docs/technical-report/README.md`, inspect the rendered PDF, and
-upload that exact file. The PDF is a dated interpretation, not a data source.
+sequence below and recompute claims from its outputs. Rebuild the PDF with `make`
+in `docs/technical-report/latex/`, inspect the rendered PDF, and commit that
+exact file. A deposit copies the reviewed PDF to a versioned name under
+`output/pdf/`. The PDF is a dated interpretation, not a data source.
 
 ## Query surfaces
 
@@ -191,9 +221,10 @@ upload that exact file. The PDF is a dated interpretation, not a data source.
   and zero token overlap uses `no_lexical_candidates`. Semantic acceptance belongs
   to the consuming Agent/Skill, which may issue focused query variants and inspect
   `show` details before making a suitability claim.
-- Catalog and Radar are different trust layers. Catalog rows are normalized
-  benchmark records; Radar rows are discovery evidence and must stay labelled as
-  such. A search result is a candidate, not a suitability claim. Agent query
+- Catalog records and daily discovery observations describe different things.
+  Label a discovery observation as evidence of a mention or release, and retain
+  the benchmark record it refers to. Source membership must not establish a
+  preferred trust tier or change the shared query ranking. A search result is a candidate, not a suitability claim. Agent query
   expansion and final relevance judgment happen in the public Skill as a small
   number of short variants and never change service-side ranking per interface.
 - Installed clients read the active version under the cross-platform
@@ -227,7 +258,7 @@ upload that exact file. The PDF is a dated interpretation, not a data source.
 
       ruff check .
       ruff format --check .
-      benchmark-radar normalize-external
+      benchmark-radar normalize-catalog
       benchmark-radar classify
       benchmark-radar build-data-release
       pytest -q
@@ -235,5 +266,5 @@ upload that exact file. The PDF is a dated interpretation, not a data source.
 - All six must pass. `ruff format --check` runs before everything else, so a
   formatting slip fails the run before a single test executes. Both generators
   run before `pytest` and in that order: `classify` reads the shard directory
-  `normalize-external` writes, while `build-data-release` packages the validated
+  `normalize-catalog` writes, while `build-data-release` packages the validated
   index, shards, and snapshots that installed clients consume.

@@ -14,8 +14,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from benchmark_radar.external_catalog import (
-    ExternalCatalogError,
+from benchmark_radar.catalog import (
+    CatalogError,
     normalize_snapshot,
     slugify,
     write_catalog,
@@ -59,7 +59,7 @@ def test_counts_match_the_declared_snapshot(normalized: dict) -> None:
 def test_search_index_carries_semantic_source_fields_without_inference(normalized: dict) -> None:
     # Regression: the first CLI search index omitted all descriptive source
     # fields, so non-name queries had nothing meaningful to match.
-    from benchmark_radar.external_catalog import build_benchmark_index
+    from benchmark_radar.catalog import build_benchmark_index
 
     index = build_benchmark_index(normalized["source_records"])
 
@@ -237,7 +237,7 @@ def _normalize_llm_stats_again() -> dict:
 
 
 def test_slugify_rejects_a_key_with_nothing_usable() -> None:
-    with pytest.raises(ExternalCatalogError):
+    with pytest.raises(CatalogError):
         slugify(":::")
 
 
@@ -285,7 +285,7 @@ def test_loader_rejects_a_file_whose_row_count_drifted(tmp_path: Path) -> None:
 
 def test_opencompass_normalizes_and_cleans_licences() -> None:
     """NOASSERTION is the absence of an identification, not a licence."""
-    from benchmark_radar.external_opencompass import normalize_opencompass
+    from benchmark_radar.catalog_opencompass import normalize_opencompass
 
     result = normalize_opencompass()
     assert result["validation"]["source_record_count"] == 461
@@ -302,7 +302,7 @@ def test_opencompass_normalizes_and_cleans_licences() -> None:
 
 def test_opencompass_publisher_is_labelled_as_the_hub_publisher() -> None:
     """publishOrg is who posted the card, often not who made the benchmark."""
-    from benchmark_radar.external_opencompass import normalize_opencompass
+    from benchmark_radar.catalog_opencompass import normalize_opencompass
 
     for record in normalize_opencompass()["source_records"]:
         if record["publisher"]:
@@ -311,7 +311,7 @@ def test_opencompass_publisher_is_labelled_as_the_hub_publisher() -> None:
 
 def test_opencompass_card_metadata_survives_round2_enrichment() -> None:
     """Round 2 enriches the card crawl; it must not replace its search text."""
-    from benchmark_radar.external_opencompass import normalize_opencompass
+    from benchmark_radar.catalog_opencompass import normalize_opencompass
 
     result = normalize_opencompass()
     records = {record["name"]: record for record in result["source_records"]}
@@ -339,19 +339,83 @@ def test_opencompass_card_metadata_survives_round2_enrichment() -> None:
 
 def test_index_has_one_row_per_source_record(normalized: dict) -> None:
     """Merging two sources into one row is a claim identity.yml has to make."""
-    from benchmark_radar.external_catalog import build_benchmark_index
-    from benchmark_radar.external_opencompass import normalize_opencompass
+    from benchmark_radar.catalog import build_benchmark_index
+    from benchmark_radar.catalog_opencompass import normalize_opencompass
 
     records = normalized["source_records"] + normalize_opencompass()["source_records"]
     index = build_benchmark_index(records, {row["key"]: row for row in normalized["score_series"]})
     assert len(index) == 1148
     assert len({row["key"] for row in index}) == 1148
     assert len({row["slug"] for row in index}) == 1148
+    by_key = {record["key"]: record for record in records}
+    for row in index:
+        provenance = by_key[row["key"]].get("provenance") or {}
+        assert row["collected_at"] == provenance.get("crawled_at")
+        assert "first_observed" not in row
+        assert row["first_score_reported_at"] is None
+        assert row["source_url"] == provenance.get("source_url")
+    # Unscored records carry collection provenance, not a fabricated score date.
+    unscored = next(row for row in index if row["source"] == "opencompass_hub")
+    assert unscored["collected_at"]
+    assert unscored["first_score_source_reference"] is None
+    assert unscored["first_score_record"] is None
+    assert unscored["score_summary"] is None
+    scored = [row for row in index if row["first_score_record"]]
+    assert len(scored) > 600, "the index must preserve dates for the whole scored catalog"
+    for row in scored:
+        assert row["first_score_record"]["date_precision"] == "model_announcement"
+        assert row["first_score_record"]["obs_id"]
+        assert row["first_score_record"]["source_url"]
+
+
+def test_first_score_record_preserves_earliest_evidence_and_date_precision():
+    from benchmark_radar.catalog import first_score_record
+
+    rows = [
+        {
+            "value": 20,
+            "reported_date": "2024-03-01",
+            "date_precision": "score_publication",
+            "obs_id": "later",
+        },
+        {
+            "value": 10,
+            "reported_date": "2023-12-31",
+            "date_precision": "document_publication",
+            "obs_id": "first",
+            "source_url": "https://example.org/report",
+        },
+        {"value": 50, "reported_date": "2018-01-01", "date_precision": "model_announcement"},
+        {"value": 30, "reported_date": "2020-01-01", "date_precision": "crawl"},
+        {"value": None, "reported_date": "2020-01-01", "date_precision": "day"},
+        {"value": True, "reported_date": "2020-01-01", "date_precision": "day"},
+        {"value": 0, "reported_date": "2023-02-29", "date_precision": "day"},
+    ]
+    expected = {
+        "reported_at": "2023-12-31",
+        "obs_id": "first",
+        "source_url": "https://example.org/report",
+        "date_precision": "document_publication",
+    }
+    assert first_score_record(rows, allow_model_dates=False) == expected
+    assert first_score_record(list(reversed(rows)), allow_model_dates=False) == expected
+    assert first_score_record(rows[2:], allow_model_dates=False) is None
+    proxy = first_score_record(rows)
+    assert proxy["reported_at"] == "2018-01-01", "choose the earliest date before any 2024 filter"
+    assert proxy["date_precision"] == "model_announcement"
+    assert first_score_record(list(reversed(rows))) == proxy
+    assert first_score_record(rows[3:]) is None, "crawl dates and non-numeric scores never qualify"
+    assert (
+        first_score_record([{"value": 0, "reported_date": "2024-02-29", "date_precision": "day"}])[
+            "reported_at"
+        ]
+        == "2024-02-29"
+    )
 
 
 @pytest.fixture(scope="module")
 def all_records(normalized: dict) -> list[dict]:
-    from benchmark_radar.external_opencompass import normalize_opencompass
+    from benchmark_radar.catalog_opencompass import normalize_opencompass
 
     return normalized["source_records"] + normalize_opencompass()["source_records"]
 
@@ -361,7 +425,7 @@ def all_records(normalized: dict) -> list[dict]:
 
 def test_candidates_only_promote_pairs_sharing_two_anchors(all_records: list[dict]) -> None:
     """A shared name is not an anchor; two independent anchors is the bar."""
-    from benchmark_radar.external_identity import _anchors, build_identity_candidates
+    from benchmark_radar.catalog_identity import _anchors, build_identity_candidates
 
     candidates = build_identity_candidates(all_records)
     by_key = {record["key"]: record for record in all_records}
@@ -376,7 +440,7 @@ def test_name_only_block_is_cross_source_and_not_anchor_backed(
     all_records: list[dict],
 ) -> None:
     """The MMLU-Pro-twice case: same name across crawls, no shared anchor."""
-    from benchmark_radar.external_identity import _anchors, build_identity_candidates
+    from benchmark_radar.catalog_identity import _anchors, build_identity_candidates
 
     candidates = build_identity_candidates(all_records)
     by_key = {record["key"]: record for record in all_records}
@@ -390,7 +454,7 @@ def test_name_only_block_is_cross_source_and_not_anchor_backed(
 
 def test_llm_stats_records_have_no_anchors(all_records: list[dict]) -> None:
     """llm-stats carries no artifacts, so no llm-stats pair can ever auto-merge."""
-    from benchmark_radar.external_identity import _anchors
+    from benchmark_radar.catalog_identity import _anchors
 
     for record in all_records:
         if record["source"] == "llm_stats":
@@ -408,7 +472,7 @@ def _write_identity(tmp_path: Path, payload: dict) -> Path:
 
 def test_identity_seed_loads_against_the_records(all_records: list[dict]) -> None:
     """The checked-in seed must resolve against the real records or the build lies."""
-    from benchmark_radar.external_identity import DEFAULT_IDENTITY_PATH, load_identity
+    from benchmark_radar.catalog_identity import DEFAULT_IDENTITY_PATH, load_identity
 
     identity = load_identity(all_records, DEFAULT_IDENTITY_PATH)
     # Every seed variant is cross-linked both ways as a sibling.
@@ -420,7 +484,7 @@ def test_loader_rejects_equivalent_group_with_one_anchor(
     all_records: list[dict], tmp_path: Path
 ) -> None:
     """One anchor is a candidate, not an equivalence. This is the enforcement point."""
-    from benchmark_radar.external_identity import IdentityError, load_identity
+    from benchmark_radar.catalog_identity import IdentityError, load_identity
 
     member = all_records[0]["key"]
     other = all_records[1]["key"]
@@ -438,7 +502,7 @@ def test_loader_rejects_equivalent_group_with_one_anchor(
 def test_loader_rejects_member_that_is_not_a_record(
     all_records: list[dict], tmp_path: Path
 ) -> None:
-    from benchmark_radar.external_identity import IdentityError, load_identity
+    from benchmark_radar.catalog_identity import IdentityError, load_identity
 
     path = _write_identity(
         tmp_path,
@@ -458,7 +522,7 @@ def test_loader_rejects_member_that_is_not_a_record(
 
 
 def test_loader_rejects_duplicate_group_id(all_records: list[dict], tmp_path: Path) -> None:
-    from benchmark_radar.external_identity import IdentityError, load_identity
+    from benchmark_radar.catalog_identity import IdentityError, load_identity
 
     a, b, c = (record["key"] for record in all_records[:3])
     group = {"members": [a, b], "anchors": ["arxiv:1", "gh:a/b"]}
@@ -479,7 +543,7 @@ def test_loader_rejects_duplicate_group_id(all_records: list[dict], tmp_path: Pa
 def test_loader_rejects_key_in_two_equivalent_groups(
     all_records: list[dict], tmp_path: Path
 ) -> None:
-    from benchmark_radar.external_identity import IdentityError, load_identity
+    from benchmark_radar.catalog_identity import IdentityError, load_identity
 
     a, b, c = (record["key"] for record in all_records[:3])
     path = _write_identity(
@@ -497,7 +561,7 @@ def test_loader_rejects_key_in_two_equivalent_groups(
 
 
 def test_loader_rejects_wrong_schema_version(all_records: list[dict], tmp_path: Path) -> None:
-    from benchmark_radar.external_identity import IdentityError, load_identity
+    from benchmark_radar.catalog_identity import IdentityError, load_identity
 
     path = _write_identity(tmp_path, {"schema_version": 99, "equivalent": []})
     with pytest.raises(IdentityError, match="schema_version"):
@@ -506,7 +570,7 @@ def test_loader_rejects_wrong_schema_version(all_records: list[dict], tmp_path: 
 
 def test_missing_identity_file_is_not_an_error(all_records: list[dict], tmp_path: Path) -> None:
     """The identity layer is the one piece the catalog can ship without."""
-    from benchmark_radar.external_identity import load_identity
+    from benchmark_radar.catalog_identity import load_identity
 
     identity = load_identity(all_records, tmp_path / "absent.yml")
     assert identity.siblings_for(all_records[0]["key"]) == []
@@ -526,7 +590,7 @@ def test_reviewer_asserted_group_clears_with_one_donor_anchor(
     all_records: list[dict], tmp_path: Path
 ) -> None:
     """A signed hand review is the second warrant; one donor anchor is the floor."""
-    from benchmark_radar.external_identity import load_identity
+    from benchmark_radar.catalog_identity import load_identity
 
     llm, oc = _llm_and_oc(all_records)
     path = _write_identity(
@@ -552,7 +616,7 @@ def test_reviewer_asserted_group_clears_with_one_donor_anchor(
 
 
 def test_reviewer_asserted_group_needs_a_signature(all_records: list[dict], tmp_path: Path) -> None:
-    from benchmark_radar.external_identity import IdentityError, load_identity
+    from benchmark_radar.catalog_identity import IdentityError, load_identity
 
     llm, oc = _llm_and_oc(all_records)
     path = _write_identity(
@@ -577,7 +641,7 @@ def test_reviewer_asserted_group_needs_a_donor_anchor(
     all_records: list[dict], tmp_path: Path
 ) -> None:
     """Human review relaxes the bar to one anchor, not to a pure-name match."""
-    from benchmark_radar.external_identity import IdentityError, load_identity
+    from benchmark_radar.catalog_identity import IdentityError, load_identity
 
     llm, oc = _llm_and_oc(all_records)
     path = _write_identity(
@@ -603,7 +667,7 @@ def test_reviewer_asserted_group_needs_a_donor_anchor(
 def test_loader_rejects_inherit_from_that_is_not_a_member(
     all_records: list[dict], tmp_path: Path
 ) -> None:
-    from benchmark_radar.external_identity import IdentityError, load_identity
+    from benchmark_radar.catalog_identity import IdentityError, load_identity
 
     llm, oc = _llm_and_oc(all_records)
     path = _write_identity(
@@ -631,7 +695,7 @@ def test_inheritance_fills_empty_identity_and_attributes_the_donor(
     all_records: list[dict], tmp_path: Path
 ) -> None:
     """The llm-stats record shows the donor's publisher, flagged as borrowed."""
-    from benchmark_radar.external_identity import apply_inherited_identity, load_identity
+    from benchmark_radar.catalog_identity import apply_inherited_identity, load_identity
 
     llm = "llm-stats:gpqa"
     oc = "opencompass:1135"
@@ -671,7 +735,7 @@ def test_inheritance_never_touches_scores_or_other_records(
     normalized: dict, all_records: list[dict], tmp_path: Path
 ) -> None:
     """Only the recipient changes, and only its identity: no series, no donor edit."""
-    from benchmark_radar.external_identity import apply_inherited_identity, load_identity
+    from benchmark_radar.catalog_identity import apply_inherited_identity, load_identity
 
     llm = "llm-stats:gpqa"
     oc = "opencompass:1135"
@@ -709,7 +773,7 @@ def test_seed_inherits_gpqa_identity_and_leaves_near_matches_alone(
     all_records: list[dict],
 ) -> None:
     """The checked-in seed resolves GPQA's donor and keeps mmbench-v1.1 a variant."""
-    from benchmark_radar.external_identity import (
+    from benchmark_radar.catalog_identity import (
         DEFAULT_IDENTITY_PATH,
         apply_inherited_identity,
         load_identity,
@@ -735,7 +799,7 @@ def test_all_twenty_one_exact_name_pairs_inherit_a_publisher_or_artifacts(
     all_records: list[dict],
 ) -> None:
     """Every #262 exact-name recipient stops reading 'not established' somewhere."""
-    from benchmark_radar.external_identity import (
+    from benchmark_radar.catalog_identity import (
         DEFAULT_IDENTITY_PATH,
         apply_inherited_identity,
         load_identity,
@@ -757,7 +821,7 @@ def test_all_twenty_one_exact_name_pairs_inherit_a_publisher_or_artifacts(
 
 @pytest.fixture(scope="module")
 def shard_inputs(normalized: dict, all_records: list[dict]) -> dict:
-    from benchmark_radar.external_identity import DEFAULT_IDENTITY_PATH, load_identity
+    from benchmark_radar.catalog_identity import DEFAULT_IDENTITY_PATH, load_identity
 
     return {
         "records": all_records,
@@ -768,7 +832,7 @@ def shard_inputs(normalized: dict, all_records: list[dict]) -> dict:
 
 
 def _build_all_shards(shard_inputs: dict, output_dir: Path) -> dict:
-    from benchmark_radar.external_shards import write_shards
+    from benchmark_radar.catalog_shards import write_shards
 
     return write_shards(
         shard_inputs["records"],
@@ -847,8 +911,8 @@ def test_resolved_shard_serializes_the_inheritance_note(shard_inputs: dict, tmp_
     """The #262 note reaches disk as JSON, dates and all, and names its donor."""
     import json
 
-    from benchmark_radar.external_identity import apply_inherited_identity
-    from benchmark_radar.external_shards import write_shards
+    from benchmark_radar.catalog_identity import apply_inherited_identity
+    from benchmark_radar.catalog_shards import write_shards
 
     resolved = apply_inherited_identity(shard_inputs["records"], shard_inputs["identity"])
     write_shards(
@@ -895,7 +959,7 @@ def test_vendor_organization_aliases_are_merged_to_one_canonical_name():
     site. `Alibaba Cloud / Qwen Team` and `Qwen` were the two largest crawled
     publishers between them, and neither drew a mark.
     """
-    from benchmark_radar.external_catalog import (
+    from benchmark_radar.catalog import (
         CANONICAL_ORGANIZATIONS,
         canonical_organization,
     )

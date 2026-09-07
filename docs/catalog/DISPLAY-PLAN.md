@@ -1,10 +1,14 @@
 # Display plan
 
+Historical design, superseded by [the shared catalog contract](STRUCTURE.md)
+and [principle.md](../../principle.md). Source priority, separate corpora and
+report-only fallbacks described below must not guide new work.
+
 How the merged catalog reaches the reader. Deliberately small: this is a search box, a
 result row, and a detail panel over data that already exists. If a step here starts
 looking like a framework, cut it.
 
-Prerequisite state: `benchmark-radar normalize-external` emits the llm-stats layer today
+Prerequisite state: `benchmark-radar normalize-catalog` emits the llm-stats layer today
 (687 records, 5,544 observations). OpenCompass round 2 is still running and supplies the
 identity column. See `AUDIT.md` §4 for why the two sources are not interchangeable.
 
@@ -21,7 +25,7 @@ crawled benchmarks. That is the gap.
 
 ## Step 1: build artifacts
 
-Extend `normalize-external` to emit two more things from data it already has in memory.
+Extend `normalize-catalog` to emit two more things from data it already has in memory.
 
 `site/data/benchmark-index.json`, one entry per source record, not per merged group.
 Merging happens at render time from `identity.yml`, so a bad group is a display bug rather
@@ -49,7 +53,7 @@ The partition lives in the payload rather than in render code. A flat array with
 object is not sortable into one without deliberately writing the merge.
 
 Both are gitignored like `radar.json` and the existing `leaderboard.*` exports, per the
-policy already stated in `.gitignore`. `data/external/` is already covered.
+policy already stated in `.gitignore`. `data/catalog/` is already covered.
 
 ## Step 2: search surface
 
@@ -150,7 +154,7 @@ This is the part that most needs to survive implementation.
 | Saturation stays editorial | Never computed from crawled scores. It remains the per-benchmark `caveat` in `model_cards.yml`, per the header of `data/benchmark_scores.yml` |
 | Third-party HTML is escaped | Descriptions and README excerpts go through `element({text})`, never `innerHTML` |
 
-The first three are already pinned at 100% by `tests/test_external_catalog.py`. The render
+The first three are already pinned at 100% by `tests/test_catalog.py`. The render
 side needs its own tests, below.
 
 ## Tests
@@ -190,4 +194,4 @@ column. The demo needs both.
   separate index plus shards. `radar.json` is 22 MB already and the search index needs to
   load before the reader types, while shards must not.
 - The issue's acceptance criterion 4 names `tests/test_leaderboard_snapshots.py`. Replace
-  with `tests/test_external_catalog.py` plus the render tests above.
+  with `tests/test_catalog.py` plus the render tests above.

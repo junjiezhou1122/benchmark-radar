@@ -191,7 +191,7 @@ def test_deploy_and_ci_build_the_downloadable_release_after_its_inputs() -> None
     ci = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     for workflow in (pages, ci):
         assert (
-            workflow.index("benchmark-radar normalize-external")
+            workflow.index("benchmark-radar normalize-catalog")
             < workflow.index("benchmark-radar classify")
             < workflow.index("benchmark-radar build-data-release")
         )

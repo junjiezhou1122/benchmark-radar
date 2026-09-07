@@ -6,7 +6,7 @@ def source(path: str) -> str:
     return Path(path).read_text(encoding="utf-8")
 
 
-def test_external_aime_2025_has_a_source_ranked_record_sequence():
+def test_catalog_aime_2025_has_a_source_ranked_record_sequence():
     """Issue #312: 115 drawable dots cannot silently produce no record path."""
     shard = json.loads(
         Path("site/data/benchmarks/llm-stats-aime-2025.json").read_text(encoding="utf-8")
@@ -46,30 +46,11 @@ def test_external_aime_2025_has_a_source_ranked_record_sequence():
 
 
 def test_the_frontier_opens_on_the_benchmark_the_page_ranks_first():
-    """The figure answers the question the ranking above it just raised.
-
-    It used to open on the NEWEST scored instrument, which put AutomationBench
-    under a page headed "most reported in model cards" -- a benchmark the
-    reader had not seen named anywhere above the figure. The ranking and the
-    default now agree by construction: `scored` is already in adoption_rank
-    order, so the first drawable entry is rank 1.
-    """
+    """The highest observation-count candidate is both rank 1 and the default chart."""
     script = source("site/assets/app.js")
-
-    default_entry = script.split("function frontierDefaultEntry(board)", 1)[1].split(
-        "\nconst BENCHMARK_TASK_SHAPES", 1
-    )[0]
-    # Read in rank order, never re-sorted -- a second sort here could drift
-    # from the ranking the page prints five lines of.
-    assert "(drawable.length ? drawable : scored)[0]" in default_entry
-    assert ".sort(" not in default_entry
-    assert "isNewBenchmark" not in default_entry
-    # A one-point plot says nothing visually, so a higher-ranked benchmark with
-    # a single dated reading is still passed over.
-    assert "datedCount(entry) >= 2" in default_entry
-    # And every candidate has a score record, so the default can never be a
-    # benchmark the panel cannot draw.
-    assert "entry.card_count > 0 && scoreRecord(entry.benchmark_id)" in default_entry
+    default = script.split("function frontierDefaultEntry(board)", 1)[1].split("\n}", 1)[0]
+    assert "saturationRows()[0]" in default
+    assert "if (!state.lfrontierExplicit) state.lfrontier = defaultEntry?.id" in script
 
 
 def test_a_thin_history_no_longer_falls_back_to_an_adoption_stepper():
@@ -139,9 +120,9 @@ def test_trajectory_points_expose_and_pin_record_details():
     assert 'record.unit === "percent" ? "%" : ` ${record.unit}`' in script
     assert 'role: "group"' in script
     assert 'event.key === "Escape" && selectedFrontierPoint' in script
-    assert 'view !== "leaderboard" && selectedFrontierPoint' in script
+    assert "if (selectedFrontierPoint || describedFrontierPoint)" in script
     assert 'pinned ? "dialog" : "tooltip"' in script
-    assert 'text: t("Open source record ↗")' in script
+    assert 'details.urlLabel || t("Open source record ↗")' in script
     # Resolved from the point's own chart, not by a document-wide id: the
     # crawled panel mounts a second tooltip and getElementById returned that
     # one, which is what killed hover and click on the curated chart (#261).
@@ -264,63 +245,37 @@ def test_issue_240_sections_default_collapsed_but_visible():
     assert "panel.hidden = false" in renderer
 
 
-def test_lfrontier_resolves_slug_first_then_canonical_id_then_default():
-    # Display plan step 6's permalink contract, in this order: an exact
-    # external slug (which is what gives the crawled-only benchmarks a URL),
-    # then a canonical registry id so pre-widening shared links keep working,
-    # then the auto-picked default.
+def test_all_permalink_ids_resolve_through_the_same_catalog():
     script = source("site/assets/app.js")
-
-    dispatch = script.split("function renderAdoptionFrontier(board)", 1)[1].split(
-        "const events = frontierEvents(entry)", 1
-    )[0]
-    slug_check = dispatch.index("record.slug === state.lfrontier")
-    canonical_check = dispatch.index("candidate.benchmark_id === state.lfrontier")
-    default_pick = dispatch.index("state.lfrontier = defaultEntry.benchmark_id")
-    assert slug_check < canonical_check < default_pick
-    # Only the default pick clears the reader's explicitness flag: the flag is
-    # cleared exactly once in the dispatch, and only after the default is taken.
-    assert dispatch.count("state.lfrontierExplicit = false") == 1
-    assert dispatch.index("state.lfrontierExplicit = false") > default_pick
+    dispatch = script.split("function renderAdoptionFrontier(board)", 1)[1].split("\n// ---", 1)[0]
+    assert "state.benchmarkIndex.find((row) => row.slug === state.lfrontier)" in dispatch
+    assert "renderCatalogBenchmark(board, scored, record)" in dispatch
+    assert "scoreRecord(" not in dispatch
+    assert "board.entries" not in dispatch
+    assert "if (!state.lfrontierExplicit)" in dispatch
 
 
-def test_a_slug_permalink_survives_the_index_fetch():
-    # While the index is on the wire the panel holds a loading state instead of
-    # snapping to the default, which would rewrite the reader's URL before the
-    # slug could be checked. When the fetch settles, the panel re-renders.
+def test_a_slug_permalink_survives_loading_and_failed_catalog_fetches():
     script = source("site/assets/app.js")
-
-    dispatch = script.split("function renderAdoptionFrontier(board)", 1)[1].split(
-        "const events = frontierEvents(entry)", 1
-    )[0]
-    # The still-loading branch holds the selection in a loading shell and
-    # returns before the default pick can rewrite the reader's URL.
-    loading = dispatch.split("!state.benchmarkIndexLoaded", 1)[1].split("return;", 1)[0]
-    assert "state.lfrontier = defaultEntry.benchmark_id" not in loading
+    dispatch = script.split("function renderAdoptionFrontier(board)", 1)[1].split("\n// ---", 1)[0]
+    loading = dispatch.split("if (!state.benchmarkIndex)", 1)[1].split("return;", 1)[0]
     assert "Loading benchmark details" in loading
-    # The fetch-failed branch ("!state.benchmarkIndex)" with the closing paren,
-    # to tell it apart from the Loaded flag above) says so explicitly rather
-    # than snapping to the default either.
-    failed = dispatch.split("!state.benchmarkIndex)", 1)[1].split("return;", 1)[0]
-    assert "state.lfrontier = defaultEntry.benchmark_id" not in failed
-    assert "Could not load details for this benchmark." in failed
-
-    init = script.split("function initBenchmarkSearch()", 1)[1].split(
-        "function renderBenchmarkNavigator", 1
-    )[0]
+    assert "Full benchmark catalog could not be loaded." in loading
+    assert "state.lfrontier =" not in loading
+    init = script.split("function initBenchmarkSearch()", 1)[1].split("\n// ---", 1)[0]
     assert "state.benchmarkIndexLoaded = true" in init
-    assert "renderAdoptionFrontier(board)" in init
+    assert "renderLeaderboard();" in init
 
 
 def test_detail_panel_renders_for_any_selected_record():
     script = source("site/assets/app.js")
 
     for fn in (
-        "function renderExternalBenchmark(board, scored, record)",
-        "function externalIdentityBlock(detail)",
-        "function externalOpennessBlock(detail)",
-        "function externalSizesBlock(detail)",
-        "function externalScoresBlock(shard)",
+        "function renderCatalogBenchmark(board, scored, record)",
+        "function catalogIdentityBlock(detail)",
+        "function catalogOpennessBlock(detail)",
+        "function catalogSizesBlock(detail)",
+        "function catalogScoresBlock(shard)",
         "function loadBenchmarkShard(slug)",
     ):
         assert fn in script
@@ -346,11 +301,11 @@ def test_search_selection_updates_the_detail_panel():
         "function renderBenchmarkSearch", 1
     )[0]
     assert "selectFrontier(record.slug)" in row
-    assert "renderAdoptionFrontier(board)" in row
+    assert "renderAdoptionFrontier(catalogDocumentBoard())" in row
     # Issue #245 added a `navigate` path for rows rendered outside the
     # leaderboard, where updating the panel in place would look like the click
     # did nothing. It must not replace the in-place update the panel relies on.
-    assert 'setView("leaderboard")' in row
+    assert 'setView("saturation")' in row
 
 
 def test_crawled_scores_are_partitioned_by_source_with_no_merge_path():
@@ -359,12 +314,12 @@ def test_crawled_scores_are_partitioned_by_source_with_no_merge_path():
     # sources exists anywhere in this code path to be sorted into a ranking.
     script = source("site/assets/app.js")
 
-    section = script.split("function externalScoresBlock(shard)", 1)[1].split(
+    section = script.split("function catalogScoresBlock(shard)", 1)[1].split(
         "// Identity siblings", 1
     )[0]
     assert "shard.scores_by_source" in section
     assert "Object.keys(bySource)" in section
-    assert "sources.map((source) => externalSourceTable(source, bySource[source]))" in section
+    assert "sources.map((source) => catalogSourceTable(source, bySource[source]))" in section
     assert ".concat(" not in section
     assert "[...rows" not in section
     # element() appends children verbatim, so the per-source tables are spread
@@ -381,7 +336,7 @@ def test_crawled_scores_never_render_a_percentage_or_scale():
     # is printed as a claim about the source, never used as a denominator.
     script = source("site/assets/app.js")
 
-    section = script.split("function externalPlottedRows(payload)", 1)[1].split(
+    section = script.split("function catalogPlottedRows(payload)", 1)[1].split(
         "// Identity siblings", 1
     )[0]
     assert "row.raw_value" in section
@@ -401,14 +356,14 @@ def test_every_crawled_score_is_a_plotted_point():
     # table added nothing the chart's point titles did not already say.
     script = source("site/assets/app.js")
 
-    chart = script.split("function externalPlottedRows(payload)", 1)[1].split(
-        "\nfunction externalSourceTable", 1
+    chart = script.split("function catalogPlottedRows(payload)", 1)[1].split(
+        "\nfunction catalogSourceTable", 1
     )[0]
-    table = script.split("function externalSourceTable(source, payload)", 1)[1].split(
+    table = script.split("function catalogSourceTable(source, payload)", 1)[1].split(
         "// Identity siblings", 1
     )[0]
 
-    assert "externalScoreChart(source, payload)" in table
+    assert "catalogScoreChart(source, payload)" in table
     assert "<table" not in table.replace('"table"', "").replace("'table'", "")
     assert "(payload.rows || [])" in chart
     # A value that did not parse into a number has no position on an axis, so it
@@ -439,7 +394,7 @@ def test_every_crawled_score_is_a_plotted_point():
     # date and stops, and into the source's (i) provenance note. The rows are
     # still counted and still stated; only where they are said changed.
     assert "undatedCount" not in chart, "the axis label no longer carries the count"
-    table = script.split("function externalSourceTable(source, payload)", 1)[1].split(
+    table = script.split("function catalogSourceTable(source, payload)", 1)[1].split(
         "\nfunction ", 1
     )[0]
     assert "const undated = (payload.rows || []).filter(" in table
@@ -464,8 +419,8 @@ def test_the_crawled_chart_axis_is_release_date_and_says_so():
     # into being presented as one.
     script = source("site/assets/app.js")
 
-    chart = script.split("function externalPlottedRows(payload)", 1)[1].split(
-        "\nfunction externalSourceTable", 1
+    chart = script.split("function catalogPlottedRows(payload)", 1)[1].split(
+        "\nfunction catalogSourceTable", 1
     )[0]
 
     # Positioned by date, so a burst of releases in one month reads as a burst
@@ -495,7 +450,7 @@ def test_the_crawled_chart_axis_is_release_date_and_says_so():
     # `plotted` is in date order, so the last element is the newest model, not
     # the best score. Best follows the normalized higher-is-better contract;
     # source rank is only the deterministic tie break.
-    assert 'source === "llm_stats" ? "higher_is_better" : null' in chart
+    assert "payload.series?.direction || null" in chart
     assert 'const descends = recordDirection === "lower_is_better";' in chart
     assert "row.value > best.value" in chart
     assert "row.rank_in_source_response ?? Number.MAX_SAFE_INTEGER" in chart
@@ -506,7 +461,7 @@ def test_the_crawled_chart_axis_is_release_date_and_says_so():
     # evaluation-time trend. Its direction comes from the normalized series
     # contract rather than being reverse-engineered in the renderer.
     assert "payload.series?.direction ||" in chart
-    assert "const recordSetters = externalRecordSetters(plotted, recordDirection);" in chart
+    assert "const recordSetters = catalogRecordSetters(plotted, recordDirection);" in chart
     assert "if (hasRecordPath)" in chart
     assert 'class: "score-frontier-line"' in chart
 
@@ -519,8 +474,8 @@ def test_the_crawled_chart_reuses_the_curated_chart_classes():
     # chart style for a second kind of evidence.
     script = source("site/assets/app.js")
 
-    chart = script.split("function externalPlottedRows(payload)", 1)[1].split(
-        "\nfunction externalSourceTable", 1
+    chart = script.split("function catalogPlottedRows(payload)", 1)[1].split(
+        "\nfunction catalogSourceTable", 1
     )[0]
 
     for shared_class in [
@@ -533,21 +488,19 @@ def test_the_crawled_chart_reuses_the_curated_chart_classes():
         "score-best-label",
     ]:
         assert shared_class in chart, shared_class
-    assert "external-field" not in chart
+    assert "catalog-field" not in chart
 
 
 def test_the_crawled_chart_is_drawn_per_source_block():
     # One chart per source block, built from that block's own rows. The chart is
-    # called from inside externalSourceTable, which the keyed scores_by_source
+    # called from inside catalogSourceTable, which the keyed scores_by_source
     # object already partitions, so there is no path by which two sources' values
     # land on one axis.
     script = source("site/assets/app.js")
 
-    block = script.split("function externalScoresBlock(shard)", 1)[1].split(
-        "\n// --- The reported field", 1
-    )[0]
+    block = script.split("function catalogScoresBlock(shard)", 1)[1].split("\n}\n", 1)[0]
 
-    assert "externalScoreChart" not in block
+    assert "catalogScoreChart" not in block
 
 
 def test_every_crawled_score_has_the_curated_charts_pinned_tooltip():
@@ -556,13 +509,13 @@ def test_every_crawled_score_has_the_curated_charts_pinned_tooltip():
     # (e.g. llm-stats-researchclawbench) saw a dot and nothing else. Every
     # crawled point now goes through makeFrontierPointInteractive, the exact
     # system the curated chart's points use: role="button", data-frontier-point,
-    # and a pinned card on click. externalSourceTable mounts its own
+    # and a pinned card on click. catalogSourceTable mounts its own
     # frontierTooltip() instance beside the chart so that card has somewhere to
     # render (external records hide the curated #frontier-chart entirely).
     script = source("site/assets/app.js")
 
-    chart = script.split("function externalPlottedRows(payload)", 1)[1].split(
-        "\nfunction externalSourceTable", 1
+    chart = script.split("function catalogPlottedRows(payload)", 1)[1].split(
+        "\nfunction catalogSourceTable", 1
     )[0]
     assert "makeFrontierPointInteractive(group" in chart
     assert 'role: "button"' in chart
@@ -571,11 +524,11 @@ def test_every_crawled_score_has_the_curated_charts_pinned_tooltip():
     # Only fields a crawled row actually carries -- no Instrument, Protocol,
     # Date or Read-from row, which do not exist in this source and would print
     # as "not recorded" filler beside the curated card's real ones.
-    assert 't("Instrument")' not in chart
-    assert 't("Protocol")' not in chart
+    assert '...(row.instrument ? [{ label: t("Instrument")' in chart
+    assert '...(row.protocol ? [{ label: t("Protocol")' in chart
     assert 't("Date")' not in chart
 
-    table_fn = script.split("function externalSourceTable(source, payload)", 1)[1].split(
+    table_fn = script.split("function catalogSourceTable(source, payload)", 1)[1].split(
         "\n// Identity siblings", 1
     )[0]
     assert 'element("div", { className: "frontier-chart" }, [chart, frontierTooltip()])' in table_fn
@@ -587,7 +540,7 @@ def test_the_pinned_tooltip_positions_against_its_own_parent_not_a_fixed_id():
     # Deriving the host from the tooltip's own parentElement is what lets one
     # tooltip implementation serve both the curated chart (mounted inside
     # #frontier-chart) and the crawled chart (mounted inside a lookalike
-    # .frontier-chart div under #frontier-external).
+    # .frontier-chart div under #frontier-catalog).
     script = source("site/assets/app.js")
 
     position_fn = script.split("function positionFrontierTooltip(tooltip, group)", 1)[1].split(
@@ -603,7 +556,7 @@ def test_crawled_third_party_text_never_enters_the_dom_as_markup():
     # textContent.
     script = source("site/assets/app.js")
 
-    section = script.split("// --- External catalog detail", 1)[1].split(
+    section = script.split("// --- Catalog detail", 1)[1].split(
         "function renderBenchmarkNavigator", 1
     )[0]
     assert "innerHTML" not in section
@@ -616,8 +569,8 @@ def test_related_records_are_cross_links_never_merges():
     # merge.
     script = source("site/assets/app.js")
 
-    section = script.split("function externalSiblingsBlock(shard)", 1)[1].split(
-        "function externalBenchmarkDetail", 1
+    section = script.split("function catalogSiblingsBlock(shard)", 1)[1].split(
+        "function catalogBenchmarkDetail", 1
     )[0]
     assert "selectFrontier(sibling.slug)" in section
 
@@ -627,7 +580,7 @@ def test_shard_fetch_failure_keeps_the_selection_and_the_row():
     # panel and does not clear the selection or throw into the router.
     script = source("site/assets/app.js")
 
-    assert "fetch(`/data/benchmarks/${slug}.json`)" in script
+    assert 'fetch(`/data/benchmarks/${slug}.json`, { cache: "no-cache" })' in script
     handler = script.split("loadBenchmarkShard(record.slug).then((shard) =>", 1)[1]
     assert "state.lfrontier !== record.slug" in handler
     assert "Could not load details for this benchmark." in handler
@@ -637,7 +590,7 @@ def test_each_chart_owns_its_tooltip_rather_than_sharing_one_id():
     """Issue #261: hover and click looked dead on the curated chart.
 
     Both charts mounted a tooltip with the same hardcoded id, and
-    #frontier-external sits above #frontier-chart in index.html. Every
+    #frontier-catalog sits above #frontier-chart in index.html. Every
     getElementById therefore resolved to the crawled panel's node, so the
     curated chart's card was written into a hidden element -- the handlers
     fired correctly and painted somewhere invisible.
@@ -647,7 +600,7 @@ def test_each_chart_owns_its_tooltip_rather_than_sharing_one_id():
 
     # The container order that made a shared id unresolvable is still the
     # order the page ships; the fix must not depend on changing it.
-    assert html.index('id="frontier-external"') < html.index('id="frontier-chart"')
+    assert html.index('id="frontier-catalog"') < html.index('id="frontier-chart"')
 
     # No document-wide lookup survives anywhere in the tooltip machinery.
     assert 'byId("frontier-tooltip")' not in script
@@ -686,8 +639,8 @@ def test_the_crawled_chart_ticks_label_real_values_not_padded_bounds():
     are not in the data and cannot be.
     """
     script = source("site/assets/app.js")
-    chart = script.split("function externalPlottedRows(payload)", 1)[1].split(
-        "\nfunction externalSourceTable", 1
+    chart = script.split("function catalogPlottedRows(payload)", 1)[1].split(
+        "\nfunction catalogSourceTable", 1
     )[0]
 
     # The tick set starts from the real extremes, and issue #298 added
@@ -703,64 +656,58 @@ def test_the_crawled_chart_ticks_label_real_values_not_padded_bounds():
     assert "band = { low: low - pad, high: high + pad }" in chart
 
 
-def test_the_shortlist_says_what_it_ranks_by_behind_an_info_toggle():
-    """Issue #269: "Most reported" invited a comparison it does not make.
-
-    The list ranks by how many curated model cards report a benchmark. A
-    crawled score count answers a different question, so AIME 2025's 115
-    crawled scores losing to GPQA Diamond's 26 model cards is two measures
-    being confused, not a ranking bug. The heading now says so, and the
-    explanation sits behind the same (i) toggle the crawled source blocks use.
-    """
+def test_benchmark_skyline_leads_the_ranked_list_and_states_its_coverage():
     html = source("site/index.html")
+    # The tooltip resolves through .closest(".frontier-chart"), so that class on
+    # the mount is a contract, not styling.
+    assert 'class="frontier-chart skyline-chart" id="benchmark-skyline-chart"' in html
+    assert html.index('id="benchmark-skyline"') < html.index('id="score-ranking-list"')
+    assert 'data-i18n="Benchmark Frontier"' in html
     script = source("site/assets/app.js")
-    styles = source("site/assets/styles.css")
-
-    assert 'data-i18n="Most reported benchmarks in model cards"' in html
-    assert 'id="benchmark-example-info"' in html
-    # Reuses infoDisclosure rather than inventing a second (i) pattern.
-    assert "infoDisclosure(" in script.split("function renderBenchmarkNavigator", 1)[1][:1200]
-    assert "measures vendor reporting convention" in script
-
-    # Hover opens it as well as click. A closed <details> hides its body by not
-    # generating a box, so any `display` on that body pins the panel open --
-    # the reveal runs on visibility/opacity instead.
-    assert ".info-disclosure:hover > .info-disclosure-body" in styles
-    body = styles.split(".info-disclosure > .info-disclosure-body", 1)[1][:200]
-    assert "visibility: hidden" in body
-
-    # And it escapes the navigator's scroll container rather than being clipped.
-    pinned = styles.split(".benchmark-example-heading .info-disclosure-body", 1)[1][:200]
-    assert "position: fixed" in pinned
+    # principle.md: a count in a footnote cannot replace the missing records.
+    # Every source participates; incomplete records have inspectable marks.
+    assert "scorePopulation(" in script
+    assert "skyline-pending-point" in script
+    assert "{n} benchmarks · {s} sources" in script
+    assert 'id="benchmark-skyline-note"' in html
+    assert "lower-is-better percentages become 100 minus the original value" in html
 
 
-def test_a_benchmark_with_no_adopters_answers_for_itself():
-    # Issue #287: ?lfrontier=rsi_bench drew AutomationBench's chart. `adopted`
-    # is gated on card_count > 0, so a benchmark recorded before any model card
-    # reports it was filtered out before the unscored guard could see it. It
-    # matched no branch, fell through to the default entry, and the page
-    # printed another benchmark's track, its 31.8% best-on-record figure and
-    # its model points under a URL still reading rsi_bench, saying nothing.
+def test_no_surface_calls_a_benchmark_external():
+    # design.md, "Show all the data, unify the vocabulary": "external" describes
+    # where a record was collected, not what it is, and it invites a reader to
+    # discount most of the corpus. The source name carries the provenance.
     script = source("site/assets/app.js")
-    body = script.split("function renderAdoptionFrontier(board)", 1)[1].split("\nfunction ", 1)[0]
-
-    # Resolved against every registry entry, not just the adopted subset.
-    guard = body.split("const unscoredEntry", 1)[1].split("if (unscoredEntry)", 1)[0]
-    assert "(board.entries || []).find(" in guard
-    assert "adopted.find(" not in guard
-
-    # Zero adopters and "adopters but no readable score" are different answers,
-    # and a reader chasing a brand-new benchmark wants to know which one it is.
-    assert "No model card in this registry reports this benchmark yet" in body
-    assert "unscoredEntry.card_count" in body
-
-    # The picker lists only scored benchmarks, so an unscored selection matches
-    # no option and the browser shows the first one instead: a <select> reading
-    # AA-LCR beside a panel headed RSI-Bench is lying about the state.
-    assert "prependOption" in body
+    html = source("site/index.html")
+    assert 't("External benchmark")' not in script
+    assert '"External benchmark":' not in script, "no zh entry for a label nothing renders"
+    assert "External benchmark" not in html
 
 
-def test_issue_256_the_ranking_leads_the_page_it_names():
+def test_score_ranking_and_adoption_state_their_distinct_measures():
+    html = source("site/index.html")
+    # The score ranking is labelled by its own column headers rather than a
+    # paragraph of prose, so the two rankings stay distinguishable by structure.
+    assert 'data-i18n="Data points"' in html
+    assert 'data-i18n="Most documented benchmarks"' in html
+    assert html.index('id="score-ranking-list"') < html.index('id="leaderboard-top-list"')
+    script = source("site/assets/app.js")
+    adoption = script.split("function renderLeaderboardTop(board)", 1)[1].split("\nfunction ", 1)[0]
+    assert "board.measures" in adoption
+    assert "infoDisclosure(" in adoption
+
+
+def test_a_benchmark_without_documents_or_scores_uses_its_own_catalog_detail():
+    script = source("site/assets/app.js")
+    body = script.split("function renderAdoptionFrontier(board)", 1)[1].split("\n// ---", 1)[0]
+    assert "state.benchmarkIndex.find(" in body
+    assert "renderCatalogBenchmark(board, scored, record);" in body
+    assert "card_count" not in body and "scoreRecord(" not in body
+    detail = script.split("function renderCatalogBenchmark(", 1)[1].split("\nfunction ", 1)[0]
+    assert "picker.prepend(option(record.slug" in detail
+
+
+def test_leaderboard_keeps_its_rankings_and_saturation_owns_the_workbench():
     """The tab is called Leaderboard and the ranking was the sixth block on it.
 
     A reader opening it passed a method note, an evidence strip, a findings
@@ -780,13 +727,18 @@ def test_issue_256_the_ranking_leads_the_page_it_names():
     # laptop, entirely below the fold, behind ~1180px of KPI cards, a findings
     # accordion and the full 80-row table. It now begins at y=824.
     order = [
+        'id="score-ranking-list"',
         'class="leaderboard-top"',
-        'class="benchmark-workbench"',
         'id="leaderboard-insights"',
         'id="benchmark-findings"',
         'id="adoption-table"',
         'aria-labelledby="leaderboard-cards-heading"',
     ]
+    leaderboard = html.split('id="leaderboard-view"', 1)[1].split('id="saturation-view"', 1)[0]
+    saturation = html.split('id="saturation-view"', 1)[1].split('id="trends-view"', 1)[0]
+    assert 'class="benchmark-workbench"' not in leaderboard
+    assert 'class="benchmark-workbench"' in saturation
+    assert 'id="score-ranking-list"' not in saturation
     positions = [html.index(marker) for marker in order]
     assert positions == sorted(positions), (
         "leaderboard blocks are out of order: "
@@ -800,7 +752,7 @@ def test_issue_256_the_ranking_leads_the_page_it_names():
     assert "const LEADERBOARD_TOP_LIMIT = 5;" in script
     # One measure. No domain, no organization count, no release year, no bar:
     # those are what made the full table a wall rather than a few lines.
-    assert 'metricLabel(entry.card_count, "model card")' in renderer
+    assert 'metricLabel(entry.card_count, "source document")' in renderer
     for absent in ("entry.domain", "organization_count", "entry.released", "adoptionBar("):
         assert absent not in renderer, f"{absent} belongs to the full table, not the summary"
 
@@ -811,7 +763,7 @@ def test_issue_256_the_ranking_leads_the_page_it_names():
     assert ".sort(" not in renderer
 
     # A registry with nothing reported yet says so rather than drawing blanks.
-    assert "No model card in this registry reports a benchmark yet." in renderer
+    assert "No source documents record a benchmark yet." in renderer
 
     # The full ranking is still one click away and still collapsed by default,
     # so #240's contract holds for the bulk material it was written about.
@@ -835,7 +787,7 @@ def test_issue_256_the_figure_region_carries_no_pipeline_coverage_count():
     navigator = script.split("function renderBenchmarkNavigator(board)", 1)[1].split(
         "\nfunction ", 1
     )[0]
-    assert 'metricLabel(entry.card_count, "model card")' in navigator
+    assert "saturationRows()" in navigator
     assert "score read from a document" not in navigator
     # The keys the helper used are still live for the search rows and the score
     # readout, so removing the helper must not have taken them with it.
@@ -852,45 +804,41 @@ def test_issue_298_a_crawled_record_names_itself_once():
     selection because a <select> disagreeing with the panel is a lie about
     state rather than a duplicate.
     """
-    html = source("site/index.html")
     script = source("site/assets/app.js")
 
-    external = script.split("function renderExternalBenchmark(board, scored, record)", 1)[1].split(
+    external = script.split("function renderCatalogBenchmark(board, scored, record)", 1)[1].split(
         "\nfunction ", 1
     )[0]
     # No eyebrow and no badge on this path; both are passed empty and hidden.
     assert 'eyebrow: ""' in external
     assert 'badge: ""' in external
     assert 'eyebrow: t("External catalog record")' not in script
-    assert "subline: externalSubline(record, meta)" in external
+    assert "subline: catalogSubline(record, meta)" in external
 
-    shell = script.split("function renderExternalShell(", 1)[1].split("\nfunction ", 1)[0]
+    shell = script.split("function renderCatalogShell(", 1)[1].split("\nfunction ", 1)[0]
     # Empty means hidden, not rendered blank.
     assert "eyebrowNode.hidden = !eyebrow;" in shell
     assert "stage.hidden = !badge;" in shell
 
     # Neither the block nor its per-source renderer carries a heading now.
-    scores = script.split("function externalScoresBlock(shard)", 1)[1].split("\n}\n", 1)[0]
+    scores = script.split("function catalogScoresBlock(shard)", 1)[1].split("\n}\n", 1)[0]
     assert 'element("h3", { text: t("Scores") })' not in scores
-    table = script.split("function externalSourceTable(source, payload)", 1)[1].split(
+    table = script.split("function catalogSourceTable(source, payload)", 1)[1].split(
         "\nfunction ", 1
     )[0]
-    assert "external-source-heading" not in table
+    assert "catalog-source-heading" not in table
     assert 'element("h4"' not in table
-    # But the provenance note survives, moved to the (i) beside the title.
-    assert 'byId("frontier-heading-info")' in table
+    # One collapsed provenance note follows the figure it explains.
+    assert 'byId("frontier-heading-info")' not in table
     assert "infoDisclosure(notes.join" in table
-    assert 'id="frontier-heading-info"' in html
-    # The (i) sits with the title rather than in a separate block.
-    assert html.index('id="frontier-heading"') < html.index('id="frontier-heading-info"')
-    assert html.index('id="frontier-heading-info"') < html.index('id="frontier-benchmark"')
+    assert table.index('className: "frontier-chart"') < table.index("infoDisclosure(notes.join")
 
 
 def test_issue_298_the_crawled_axes_can_be_read_rather_than_inferred():
     """Two y ticks and two x ticks made the reader interpolate every position."""
     script = source("site/assets/app.js")
-    chart = script.split("function externalPlottedRows(payload)", 1)[1].split(
-        "\nfunction externalSourceTable", 1
+    chart = script.split("function catalogPlottedRows(payload)", 1)[1].split(
+        "\nfunction catalogSourceTable", 1
     )[0]
 
     # Intermediate score ticks, bounded by the real observed extremes.
@@ -912,26 +860,13 @@ def test_issue_298_the_crawled_axes_can_be_read_rather_than_inferred():
 
 
 def test_issue_298_the_sidebar_row_leads_with_the_benchmark_name():
-    """Every row printed domain, year, a source chip and a score count.
-
-    Four grey fields per row, repeated down the list, so finding a name meant
-    reading past them. The count stays because it is the measure this registry
-    is built on. What the search MATCHES is unchanged -- domain, publisher and
-    modality are still queried, they are simply not printed.
-    """
     script = source("site/assets/app.js")
-    signature = "function curatedResultRow(entry, { navigate = false, inert = false } = {})"
-    row = script.split(signature, 1)[1].split("\nfunction ", 1)[0]
-
-    assert 'metricLabel(entry.card_count, "model", "models")' in row
-    for absent in ("benchmark-result-meta", "Curated registry", "benchmark-result-scores"):
-        assert absent not in row, f"{absent} is the grey wall this removed"
-    assert "entry.domain" not in row
-    assert "entry.released" not in row
-
-    # Matching is untouched: the fields left the display, not the query.
-    matcher = script.split("function searchCuratedEntries(", 1)[1].split("\nfunction ", 1)[0]
-    assert "domain" in matcher
+    row = script.split("function benchmarkResultRow(record", 1)[1].split("\nfunction ", 1)[0]
+    assert 'className: "benchmark-result-name"' in row
+    assert "record.domain" not in row
+    assert "record.released" not in row
+    matcher = script.split("function searchBenchmarkIndex(", 1)[1].split("\nfunction ", 1)[0]
+    assert "record.categories" in matcher
 
 
 def test_issue_288_the_charts_draw_a_running_best_not_an_invented_cost_axis():
@@ -981,13 +916,13 @@ def test_issue_288_the_charts_draw_a_running_best_not_an_invented_cost_axis():
 
     # The crawled layer now draws successive reported highs. Direction is a
     # normalized LLM Stats property, not a browser inference.
-    crawled = script.split("function externalPlottedRows(payload)", 1)[1].split(
-        "\nfunction externalSourceTable", 1
+    crawled = script.split("function catalogPlottedRows(payload)", 1)[1].split(
+        "\nfunction catalogSourceTable", 1
     )[0]
     assert "payload.series?.direction" in crawled
-    assert 'source === "llm_stats" ? "higher_is_better" : null' in crawled
+    assert "payload.series?.direction || null" in crawled
     assert "sourceRankDirection" not in script
-    assert "externalRecordSetters(plotted, recordDirection)" in crawled
+    assert "catalogRecordSetters(plotted, recordDirection)" in crawled
     assert "score-frontier-line" in crawled
     assert "runningBestSteps" not in crawled
 
@@ -1039,52 +974,18 @@ def test_the_ranking_expands_and_the_intro_condensed_into_one_toggle():
     assert "state.leaderboardTopExpanded = !state.leaderboardTopExpanded;" in toggle
 
 
-def test_issue_304_an_unresolved_slug_stops_naming_itself_in_the_url():
-    """A shared link must not name one benchmark while the panel shows another.
-
-    `?lfrontier=<gone>` falls back to the default, which is right -- an empty
-    panel is worse. What is not right is leaving the dead slug in the address
-    bar, because the link then reads as evidence about a benchmark nobody is
-    looking at. That is the defect #287 fixed for canonical ids, and crawled
-    slugs could reach it too.
-    """
+def test_an_unresolved_permalink_reports_the_missing_record_without_substitution():
     script = source("site/assets/app.js")
-    dispatch = script.split("function renderAdoptionFrontier(board)", 1)[1].split("\nfunction ", 1)[
-        0
-    ]
-
-    # The substitution and the repair are in the same block, so no caller can
-    # perform one without the other. Three paths reach it: first load, the
-    # re-render after the crawled index settles, and Back.
-    fallback = dispatch.split("if (!entry) {", 1)[1].split("}", 1)[0]
-    assert "const substituted = Boolean(state.lfrontier);" in fallback
-    assert "state.lfrontier = defaultEntry.benchmark_id;" in fallback
-    assert 'if (substituted && state.view === "leaderboard") writeUrl();' in fallback
-
-    # replaceState, never push: the reader did not navigate, an address that
-    # was already wrong got corrected. A push would put the dead slug into
-    # history and make Back return to it.
-    assert 'writeUrl("push")' not in fallback
-
-    # A selection the reader never made stays out of the URL entirely.
-    assert "state.lfrontierExplicit = false;" in fallback
-
-    # The two absences that must NOT substitute silently: an index still on the
-    # wire holds the selection, and a failed index says so outright rather than
-    # showing the default under the reader's own slug.
-    assert "!state.benchmarkIndexLoaded" in dispatch
-    assert "Could not load details for this benchmark." in dispatch
+    dispatch = script.split("function renderAdoptionFrontier(board)", 1)[1].split("\n// ---", 1)[0]
+    unresolved = dispatch.split("if (record)", 1)[1].split("return;", 1)[1]
+    assert "This benchmark is not in the loaded catalog." in unresolved
+    assert "heading: state.lfrontier" in unresolved
+    assert "state.lfrontier =" not in unresolved
+    assert "writeUrl(" not in unresolved
 
 
-def test_issue_313_the_title_is_half_size_and_its_info_is_anchored():
-    """The h1 was the largest object on the page and its (i) floated away.
-
-    At 48px uppercase the heading wrapped and filled its max-width box, so the
-    info toggle rendered hundreds of pixels right of the last glyph with
-    nothing to explain. Half scale fits the title on one line, which is what
-    lets flexbox anchor the toggle immediately after it; wrap keeps that true
-    by stacking on narrow screens instead of drifting.
-    """
+def test_document_ranking_keeps_a_compact_heading_and_its_note_below():
+    """Show the ranked evidence first, with its explanation below the figure."""
     styles = source("site/assets/styles.css")
     html = source("site/index.html")
 
@@ -1102,9 +1003,37 @@ def test_issue_313_the_title_is_half_size_and_its_info_is_anchored():
     assert "flex-wrap: wrap;" in heading
     assert "align-items: center;" in heading
 
-    # The toggle stays a sibling of the heading inside one flex row.
-    row = html.split('class="leaderboard-top-heading"', 1)[1].split("</div>", 1)[0]
-    assert row.index('id="leaderboard-heading"') < row.index('id="leaderboard-top-info"')
+    assert html.index('id="leaderboard-top-list"') < html.index('id="leaderboard-top-info"')
+
+
+def test_chart_legends_and_secondary_notes_follow_their_figures():
+    html = source("site/index.html")
+    styles = source("site/assets/styles.css")
+    for figure, legend in (
+        ("benchmark-skyline-chart", "benchmark-skyline-legend"),
+        ("frontier-chart", "frontier-legend"),
+        ("trend-chart", "trend-legend"),
+    ):
+        assert html.index(f'id="{figure}"') < html.index(f'id="{legend}"')
+    note = html.split('id="benchmark-skyline-method"', 1)[1].split("</details>", 1)[0]
+    assert "open" not in note.split(">", 1)[0]
+    for fact in ("count", "note", "sources", "coverage", "pareto"):
+        assert f'id="benchmark-skyline-{fact}"' in note
+    assert ".skyline-method:not([open]) > .skyline-method-body { display: none; }" in styles
+    closed = styles.split(".info-disclosure:not([open]) > .info-disclosure-body {", 1)[1].split(
+        "}", 1
+    )[0]
+    assert "display: none;" in closed
+    assert ".info-disclosure:focus-within > .info-disclosure-body" not in styles
+
+
+def test_document_ranking_expansion_keeps_the_common_corpus():
+    script = source("site/assets/app.js")
+    action = script.split('byId("leaderboard-top-more").addEventListener', 1)[1].split(
+        "\n  });", 1
+    )[0]
+    assert "catalogDocumentBoard()" in action
+    assert "model_card_leaderboard" not in action
 
 
 def test_issue_341_a_fractional_series_is_drawn_on_a_zero_to_hundred_axis():
@@ -1115,30 +1044,23 @@ def test_issue_341_a_fractional_series_is_drawn_on_a_zero_to_hundred_axis():
 
     The remedy is a change of units and nothing more. Multiplying a whole
     series by a constant preserves every ordering and every ratio in it and
-    asserts nothing about a ceiling, which is the distinction `external_catalog`
+    asserts nothing about a ceiling, which is the distinction `catalog`
     cares about: it refuses to emit a `display_scale` because a declared maximum
     is not a bound, and that refusal still stands. So there is no bar, no `%`
     and no "out of 100" here -- an Elo series stays in Elo.
     """
     script = source("site/assets/app.js")
-    helper = script.split("function externalDisplayFactor(values, series)", 1)[1].split(
-        "\nfunction ", 1
-    )[0]
+    helper = script.split("function catalogDisplayFactor(series)", 1)[1].split("\nfunction ", 1)[0]
 
-    # A source that carries values above its own declared maximum has told us
-    # its bound is not a bound, which disqualifies the series outright.
-    assert "if (series?.max_score_contradicted) return 1;" in helper
-    # A declared ceiling above 1 means the series is not on a 0-1 scale, so a
-    # crawl that happens to hold only small values is left alone.
-    assert "if (Number.isFinite(declaredMax) && declaredMax > 1) return 1;" in helper
-    assert "values.every((value) => value >= 0 && value <= 1) ? 100 : 1" in helper
-
-    chart = script.split("function externalPlottedRows(payload)", 1)[1].split(
-        "\nfunction externalSourceTable", 1
+    # Scale is now generated once from all numeric rows, including undated ones.
+    # Threshold and contradicted-bound cases are exercised in test_score_filters.
+    assert "series?.score_summary?.display_multiplier" in helper
+    chart = script.split("function catalogPlottedRows(payload)", 1)[1].split(
+        "\nfunction catalogSourceTable", 1
     )[0]
     # Display only. Geometry still takes raw values, so applying the factor
     # cannot move a single point.
-    assert "const factor = externalDisplayFactor(values, payload.series);" in chart
+    assert "const factor = catalogDisplayFactor(payload.series);" in chart
     assert "const scoreY = (value) => {" in chart
     assert "scoreY(shown(" not in chart
     assert "shown(bestValue)" in chart
@@ -1146,11 +1068,11 @@ def test_issue_341_a_fractional_series_is_drawn_on_a_zero_to_hundred_axis():
     for claim in ('"%"', "out of 100", "percent"):
         assert claim not in chart
 
-    table = script.split("function externalSourceTable(source, payload)", 1)[1].split(
+    table = script.split("function catalogSourceTable(source, payload)", 1)[1].split(
         "\nfunction ", 1
     )[0]
     # Stated where the reader can see it, beside the other provenance notes.
-    assert "externalDisplayFactor(plottedValues, series) !== 1" in table
+    assert "catalogDisplayFactor(series) !== 1" in table
     assert "multiplies them by 100" in table
     # And the number the source actually published stays one click away.
     assert 't("Score as reported"), value: String(row.raw_value ?? row.value)' in chart

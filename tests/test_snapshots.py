@@ -343,6 +343,18 @@ def test_rebuild_writes_the_sitemap_at_the_site_root(tmp_path, site_shell):
     for slug in ("alpha-bench", "zeta-bench"):
         (shard_dir / f"{slug}.json").write_text("{}", encoding="utf-8")
 
+    data_output.parent.mkdir(parents=True, exist_ok=True)
+    (data_output.parent / "benchmark-index.json").write_text(
+        json.dumps(
+            {
+                "benchmarks": [],
+                "document_registry": {
+                    "entries": [{"rank": 1, "name": "Alpha", "document_count": 1}]
+                },
+            }
+        )
+    )
+
     rebuild_dashboard(
         snapshot_dir,
         data_output,

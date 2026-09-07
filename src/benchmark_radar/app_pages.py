@@ -35,6 +35,7 @@ crawler is lying to one of them.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -44,7 +45,7 @@ from .feed import SITE_URL
 from .site_shell import breadcrumb_schema, esc, json_ld, webpage_schema
 
 # Published in this order. "map" is the view key; its path is /explore/.
-APP_VIEWS: tuple[str, ...] = ("leaderboard", "trends", "map")
+APP_VIEWS: tuple[str, ...] = ("leaderboard", "saturation", "trends", "map")
 UTILITY_PAGES: tuple[str, ...] = ("cli", "cite", "rubric")
 UNLISTED_ROUTES = frozenset({"map", "rubric"})
 
@@ -63,6 +64,7 @@ HOME_NAV_INACTIVE = (
 # Breadcrumb names, matching the navigation labels a reader clicked to get here.
 VIEW_LABELS = {
     "leaderboard": "Leaderboard",
+    "saturation": "Saturation",
     "trends": "Trends",
     "map": "Explore",
 }
@@ -335,7 +337,19 @@ def write_app_pages(
     seo = load_view_seo(app_js)
     utility_seo = load_utility_seo(app_js)
     palette = load_category_colors(site_dir / "assets" / "glyphs.js")
-    seeds = view_seeds(dashboard, palette)
+    index_path = site_dir / "data" / "benchmark-index.json"
+    catalog = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else {}
+    catalog_index = catalog.get("benchmarks", [])
+    documents = catalog.get("document_registry")
+    seed_dashboard = dict(dashboard)
+    seed_dashboard["model_card_leaderboard"] = {
+        **(documents or {}),
+        "entries": [
+            {**entry, "card_count": entry["document_count"]}
+            for entry in (documents or {}).get("entries", [])
+        ],
+    }
+    seeds = view_seeds(seed_dashboard, palette, catalog_index)
     dialog_seeds = utility_seeds(dashboard)
     written: list[Path] = []
     published: list[str] = []

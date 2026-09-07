@@ -466,7 +466,8 @@ main {
    y=1356, entirely below the fold, behind KPI cards and accordions that
    summarise it. Those moved below the figure; this recovers the last of the
    gap so the visualization is visibly underway on load. */
-#leaderboard-view {
+#leaderboard-view,
+#saturation-view {
   padding-top: clamp(1.25rem, 2vw, 1.75rem);
 }
 
@@ -2932,13 +2933,14 @@ td a {
 
 .frontier-tooltip-details {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
   gap: 0.2rem 0.65rem;
   margin: 0;
 }
 
 .frontier-tooltip-details dt {
   color: #97a5ac;
+  overflow-wrap: anywhere;
 }
 
 .frontier-tooltip-details dd {
@@ -4180,10 +4182,7 @@ footer {
 
   .benchmark-navigator {
     position: static;
-  }
-
-  .frontier-panel {
-    order: -1;
+    max-height: min(50vh, 24rem);
   }
 
   .health-panel {
@@ -4712,35 +4711,35 @@ footer {
 
 /* External catalog detail (display plan step 4). Lives inside the dark
    frontier panel, so the palette follows the panel's, not the page's. */
-.frontier-external {
+.frontier-catalog {
   margin-top: 0.9rem;
 }
 
-.external-block {
+.catalog-block {
   margin-top: 1.3rem;
   padding-top: 1.1rem;
   border-top: 1px solid #39464c;
 }
 
-.external-block:first-child {
+.catalog-block:first-child {
   margin-top: 0;
   padding-top: 0;
   border-top: 0;
 }
 
-.external-block h3 {
+.catalog-block h3 {
   margin: 0 0 0.7rem;
   font-family: var(--display);
   font-size: 1.1rem;
 }
 
-.external-block h4 {
+.catalog-block h4 {
   margin: 0.9rem 0 0.3rem;
   font-size: 0.95rem;
 }
 
-.external-description,
-.external-basis {
+.catalog-description,
+.catalog-basis {
   max-width: 75ch;
   margin: 0 0 0.8rem;
   color: #d6e0e3;
@@ -4749,7 +4748,7 @@ footer {
 
 /* The #262 inheritance note: a borrowed identity is flagged, never silent. A
    left rule and muted panel set it apart from the record's own description. */
-.external-inherited {
+.catalog-inherited {
   max-width: 75ch;
   margin: 0 0 0.8rem;
   padding: 0.5rem 0.7rem;
@@ -4760,11 +4759,11 @@ footer {
   font-size: 0.8rem;
 }
 
-.external-openness-chip {
+.catalog-openness-chip {
   margin: 0 0 0.7rem;
 }
 
-.external-facts {
+.catalog-facts {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   gap: 0.25rem 1rem;
@@ -4772,24 +4771,24 @@ footer {
   font-size: 0.82rem;
 }
 
-.external-facts dt {
+.catalog-facts dt {
   color: #aebcc1;
 }
 
-.external-facts dd {
+.catalog-facts dd {
   margin: 0;
 }
 
-.external-empty {
+.catalog-empty {
   margin: 0;
   color: #aebcc1;
   font-size: 0.82rem;
   font-style: italic;
 }
 
-.external-artifacts,
-.external-sizes,
-.external-siblings {
+.catalog-artifacts,
+.catalog-sizes,
+.catalog-siblings {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -4799,23 +4798,23 @@ footer {
   list-style: none;
 }
 
-.external-artifacts a {
+.catalog-artifacts a {
   color: white;
 }
 
-.external-artifacts a:hover,
-.external-artifacts a:focus-visible {
+.catalog-artifacts a:hover,
+.catalog-artifacts a:focus-visible {
   text-decoration: underline;
 }
 
-.external-sizes li {
+.catalog-sizes li {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: baseline;
 }
 
-.external-evidence-link {
+.catalog-evidence-link {
   color: #7fc7bc;
   font-size: 0.76rem;
 }
@@ -4875,41 +4874,38 @@ footer {
   line-height: 1.5;
 }
 
-/* externalScoreChart (the crawled-score figure) draws entirely with the
-   curated chart's own classes -- frontier-grid, frontier-tick,
-   frontier-axis-label, score-point*, score-best-line/label -- so it carries no
-   styling of its own here. */
+/* Every score source uses the same chart classes and visual treatment. */
 
-.external-scores-wrap {
+.catalog-scores-wrap {
   max-height: 26rem;
   overflow: auto;
   border: 1px solid #39464c;
   border-radius: 6px;
 }
 
-.external-scores {
+.catalog-scores {
   min-width: 0;
   font-size: 0.8rem;
 }
 
-.external-scores th,
-.external-scores td {
+.catalog-scores th,
+.catalog-scores td {
   padding: 0.35rem 0.7rem;
   text-align: left;
 }
 
-.external-scores thead th {
+.catalog-scores thead th {
   position: sticky;
   top: 0;
   background: #0d1519;
   color: #aebcc1;
 }
 
-.external-scores tbody tr + tr {
+.catalog-scores tbody tr + tr {
   border-top: 1px solid #223036;
 }
 
-.external-sibling-link {
+.catalog-sibling-link {
   padding: 0;
   border: 0;
   background: none;
@@ -4920,7 +4916,7 @@ footer {
   text-underline-offset: 2px;
 }
 
-.external-sibling-meta {
+.catalog-sibling-meta {
   margin-left: 0.5rem;
   color: #aebcc1;
   font-size: 0.76rem;
@@ -4951,36 +4947,9 @@ footer {
   margin: 0;
 }
 
-/* Hover reveals it too, not only click (issue #269).
-
-   A closed <details> hides its body by not generating a box for it, and any
-   `display` declared on that body overrides the hiding rather than adding to
-   it -- which pins the panel permanently open. So the reveal is driven by
-   visibility and opacity on a box that is always generated: the body is laid
-   out but transparent and non-interactive until hover, focus, or the open
-   state. Click still works and is what keeps it up while the pointer travels
-   onto the text; coarse pointers get the click path alone, which is right. */
-.info-disclosure > .info-disclosure-body {
-  display: block;
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 90ms ease-out;
-}
-
-.info-disclosure[open] > .info-disclosure-body,
-.info-disclosure:focus-within > .info-disclosure-body {
-  visibility: visible;
-  opacity: 1;
-  pointer-events: auto;
-}
-
-@media (hover: hover) {
-  .info-disclosure:hover > .info-disclosure-body {
-    visibility: visible;
-    opacity: 1;
-    pointer-events: auto;
-  }
+/* A closed note stays closed, including while its toggle has keyboard focus. */
+.info-disclosure:not([open]) > .info-disclosure-body {
+  display: none;
 }
 
 /* --- Rounded surfaces (issue #333) ------------------------------------------
@@ -5052,7 +5021,7 @@ dialog {
    surfaces that show crawled text; the site's own copy never needs it. */
 .record-card,
 .map-detail,
-.external-block {
+.catalog-block {
   overflow-wrap: anywhere;
 }
 
@@ -5062,4 +5031,184 @@ dialog {
 .map-insight-card,
 .domain-card {
   border-radius: var(--radius);
+}
+
+/* Score browsing leads the page; adoption remains a separate view below it. */
+.score-browse-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: .5rem;
+}
+.score-browse-header h1 {
+  margin: 0;
+  font-size: clamp(1.25rem, 2vw, 1.5rem);
+  max-width: none;
+}
+.score-filter { display: flex; align-items: center; gap: .6rem; margin-bottom: 1.25rem; }
+.score-filter input[type="range"] { flex: 1 1 auto; max-width: 20rem; accent-color: var(--blue); }
+.score-filter output {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-width: 2.5rem;
+}
+/* Time × score × the selected raw count. */
+.benchmark-skyline { margin: 0 0 2rem; }
+.skyline-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.skyline-heading h2 { font-size: 1.5rem; margin: 0; }
+.skyline-subtitle { margin: .15rem 0 0; color: var(--muted); font-size: 1rem; }
+.skyline-count { color: #876014; font-size: .9rem; font-weight: 600; white-space: nowrap; }
+.skyline-height-control { display: flex; align-items: center; gap: .6rem; margin-top: .85rem; color: var(--muted); font-size: .875rem; }
+.skyline-height-control select { max-width: 100%; padding: .4rem 1.7rem .4rem .6rem; color: var(--ink); background: var(--panel); border: 1px solid var(--edge); border-radius: 6px; font: inherit; }
+.skyline-chart { overflow-x: auto; margin-top: .5rem; }
+.skyline-chart svg { display: block; width: 100%; min-width: 1100px; max-width: 1300px; margin: 0 auto; }
+.skyline-chart svg.skyline-has-undated { min-width: 1500px; max-width: 1830px; }
+.skyline-panel-divider { stroke: var(--edge); stroke-width: 1; }
+.skyline-chart:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.skyline-note { font-size: .875rem; color: var(--muted); margin: .65rem 0; max-width: 95ch; }
+.skyline-method { font-size: .875rem; color: var(--muted); max-width: 95ch; }
+.skyline-method summary { cursor: pointer; color: var(--ink); }
+.skyline-method p { margin: .6rem 0; }
+.skyline-floor { fill: #edf2f5; stroke: var(--edge); stroke-width: 1; }
+.skyline-wall { fill: #f7f9fa; stroke: var(--edge); stroke-width: 1; }
+.skyline-grid { stroke: #b7c6ce; stroke-width: .7; opacity: .5; }
+.skyline-axis { stroke: var(--muted); stroke-width: 1; }
+.skyline-axis-arrowhead { fill: var(--muted); }
+.skyline-tick { fill: var(--muted); font-size: 16px; }
+.skyline-score-tick-left { font-size: 14px; }
+.skyline-year { font-weight: 600; fill: var(--ink); }
+.skyline-quarter { fill: var(--muted); font-size: 12px; }
+.skyline-measurement-note { fill: var(--muted); font-size: 13px; }
+.skyline-axis-title { fill: var(--ink); font-size: 16px; font-weight: 500; }
+.skyline-region { fill: var(--muted); opacity: .5; font-size: 17px; font-style: italic; pointer-events: none; }
+.skyline-slice { fill: var(--blue); fill-opacity: .025; stroke: var(--blue); stroke-opacity: .18; stroke-dasharray: 4 6; }
+.skyline-slice-edge { stroke: var(--blue); stroke-width: 1; stroke-dasharray: 4 6; opacity: .6; }
+.skyline-slice-label { fill: var(--blue); font-size: 16px; }
+.skyline-unknown-plane { fill: #f7f9fa; fill-opacity: .4; stroke: #879ca9; stroke-width: 1; stroke-dasharray: 3 5; }
+.skyline-domain-code { --skyline-color: #255ea8; }
+.skyline-domain-science { --skyline-color: #28796d; }
+.skyline-domain-agent { --skyline-color: #c95532; }
+.skyline-domain-multimodal { --skyline-color: #7860ad; }
+.skyline-domain-other { --skyline-color: #71818c; }
+.skyline-point { cursor: pointer; }
+.skyline-pending-point { cursor: pointer; }
+.skyline-pending-point:focus { outline: none; }
+.skyline-pending-cap { fill: var(--skyline-color); stroke: var(--panel); stroke-width: .8; }
+.skyline-pending-point:hover .skyline-pending-cap,
+.skyline-pending-point:focus .skyline-pending-cap,
+.skyline-pending-point.is-selected .skyline-pending-cap { stroke: var(--ink); stroke-width: 2; }
+.skyline-point:focus { outline: none; }
+.skyline-mark { opacity: .3; }
+.skyline-stem { stroke: var(--skyline-color); stroke-width: 2.5; stroke-linecap: round; }
+.skyline-cap-connector { stroke: var(--skyline-color); stroke-width: 1; }
+.skyline-cap, .skyline-foot { fill: var(--skyline-color); }
+.skyline-cap { stroke: var(--panel); stroke-width: 1; }
+.skyline-point.is-unverified .skyline-cap { fill: var(--panel); stroke: var(--skyline-color); stroke-width: 1.5; opacity: .75; }
+.skyline-point[data-date-basis="score_record_proxy"] .skyline-cap { stroke-dasharray: 2 1; }
+.skyline-point.is-pareto .skyline-mark,
+.skyline-point:hover .skyline-mark,
+.skyline-point:focus .skyline-mark,
+.skyline-point.is-selected .skyline-mark { opacity: 1; }
+.skyline-ring { fill: none; stroke: #b57d18; stroke-width: 2.5; display: none; }
+.skyline-point.is-pareto .skyline-ring { display: inline; }
+.skyline-pending-point.is-pareto .skyline-ring { display: inline; }
+.skyline-point:hover .skyline-ring,
+.skyline-point:focus .skyline-ring,
+.skyline-point.is-selected .skyline-ring { display: inline; stroke: var(--ink); stroke-width: 2.5; }
+.skyline-pareto-path { fill: none; stroke: #b57d18; stroke-width: 2.2; stroke-linejoin: round; }
+.skyline-projection { fill: var(--skyline-color); opacity: .38; }
+.skyline-projection.is-unverified { fill: var(--panel); stroke: var(--skyline-color); stroke-width: 1; }
+.skyline-projection.is-pareto { opacity: 1; stroke: #b57d18; stroke-width: 2; }
+.skyline-guide, .skyline-guide-tip { display: none; pointer-events: none; }
+.skyline-guide { stroke: var(--skyline-color); stroke-width: 1.5; stroke-dasharray: 5 5; }
+.skyline-guide-tip { fill: var(--panel); stroke: var(--skyline-color); stroke-width: 2; }
+.skyline-labels { pointer-events: none; }
+.skyline-label { font-size: 16px; font-weight: 600; fill: var(--ink); stroke: var(--panel); stroke-width: 4; paint-order: stroke; pointer-events: none; }
+.skyline-label-leader { stroke: #b57d18; stroke-width: 1; opacity: .6; }
+.skyline-point .skyline-label, .skyline-pending-point .skyline-label { display: none; }
+.skyline-date-guide { display: none; stroke: var(--skyline-color); stroke-width: 1; stroke-dasharray: 3 4; pointer-events: none; }
+.skyline-date-label { display: none; fill: var(--ink); font-size: 13px; font-weight: 600; }
+.skyline-point:is(:hover, :focus, .is-selected) :is(.skyline-date-guide, .skyline-date-label),
+.skyline-pending-point:is(:hover, :focus, .is-selected) :is(.skyline-date-guide, .skyline-label) { display: inline; }
+.skyline-point:hover .skyline-label,
+.skyline-point:focus .skyline-label,
+.skyline-point.is-selected .skyline-label,
+.skyline-point:hover .skyline-guide,
+.skyline-point:focus .skyline-guide,
+.skyline-point.is-selected .skyline-guide,
+.skyline-point:hover .skyline-guide-tip,
+.skyline-point:focus .skyline-guide-tip,
+.skyline-point.is-selected .skyline-guide-tip { display: inline; }
+.figure-caption { position: relative; padding-right: 2.5rem; margin-top: .65rem; }
+.figure-caption > .info-disclosure,
+.figure-caption > #leaderboard-top-info,
+.figure-note > summary { position: absolute; right: 0; top: 0; }
+.figure-caption { min-height: 2rem; }
+.figure-caption .info-disclosure-body { left: auto; right: 0; top: 2.5rem; width: min(26rem, calc(100vw - 2rem)); }
+.figure-caption > .frontier-org-key { margin: 0; }
+.figure-note .section-note { max-width: 85ch; margin: .65rem 0 0; }
+.skyline-legend { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; list-style: none; padding: 0; margin: .4rem 0; color: var(--muted); font-size: .875rem; }
+.skyline-legend li { display: flex; align-items: center; gap: .4rem; }
+.skyline-swatch { width: .6rem; height: .6rem; border-radius: 50%; background: var(--skyline-color); }
+.skyline-swatch-pareto { background: transparent; border: 2px solid #b57d18; width: .8rem; height: .8rem; }
+.skyline-swatch-unknown { background: var(--panel); border: 1.5px solid var(--muted); }
+.skyline-swatch-proxy { background: var(--panel); border: 1.5px dashed var(--muted); }
+.skyline-source-coverage { margin: .25rem 0 .7rem; color: var(--muted); font-size: .8rem; }
+.skyline-caption { position: relative; padding-right: 2.5rem; margin-top: .7rem; }
+.skyline-caption .skyline-method { margin: 0; }
+.skyline-caption .skyline-method > summary { position: absolute; top: .1rem; right: 0; }
+.skyline-method-body { margin-top: .9rem; padding: .25rem 1rem; border-left: 2px solid var(--line); color: var(--muted); font-size: .875rem; max-width: 85ch; }
+.skyline-method:not([open]) > .skyline-method-body { display: none; }
+.skyline-method-body p { margin: .5rem 0; line-height: 1.6; }
+.skyline-empty { margin: .5rem 0; }
+@media (max-width: 640px) {
+  .skyline-heading { align-items: flex-start; flex-direction: column; gap: .2rem; }
+  .skyline-count { margin: .3rem 0; }
+  .score-filter { flex-wrap: wrap; }
+  .score-filter > span { flex-basis: 100%; }
+}
+.score-source-heading { font-size: .8rem; margin: 1rem 0 .4rem; color: var(--muted); }
+.score-browse-result { align-items: flex-start; flex-direction: column; gap: .25rem; }
+.score-browse-result .benchmark-result-facts { white-space: normal; }
+#benchmark-search-results { max-height: 62vh; overflow-y: auto; }
+#frontier-highest-score { font-weight: 600; }
+#frontier-filter-note { color: var(--muted); }
+@media (max-width: 640px) {
+  .score-filter { width: 100%; }
+  .score-filter input[type="range"] { max-width: none; }
+  #benchmark-search-results { max-height: 36vh; }
+}
+
+.score-ranking-link {
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+  padding: .35rem 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.score-ranking-link small { font-size: .7rem; font-weight: 400; color: var(--muted); }
+.score-ranking-link:hover > span { text-decoration: underline; }
+
+/* The contact tooltip can overhang even when the final badge is clamped. */
+#badge-contact::after {
+  right: 0;
+  left: auto;
+  transform: translate(0, -0.2rem);
+}
+#badge-contact:hover::after,
+#badge-contact:focus-visible::after {
+  transform: translate(0, 0);
+}
+@media (min-width: 761px) {
+  .score-ranking .leaderboard-top-row,
+  .score-ranking .leaderboard-top-columns {
+    grid-template-columns: 2rem minmax(0, 26rem) minmax(0, 1fr) 7rem;
+  }
 }

@@ -82,11 +82,8 @@ def _date_position(value: str, first: date, span: int, left: int, width: int) ->
 def catalog_count(progression: dict, index_path: Path = DEFAULT_INDEX_PATH) -> int:
     """Return the complete searchable catalog total, across all layers."""
     payload = json.loads(index_path.read_text(encoding="utf-8"))
-    records = payload.get("benchmarks", [])
-    external_count = int(payload.get("count", len(records)))
-    # Curated score benchmarks are also searchable, but their records are
-    # intentionally not duplicated into benchmark-index.json.
-    return progression["benchmark_count"] + external_count
+    records = payload["benchmarks"]
+    return len(records)
 
 
 def render(

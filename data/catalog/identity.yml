@@ -6,7 +6,7 @@
 #
 # An `equivalent` group promoted by the machine pass requires TWO independent
 # anchors (a shared arXiv id, a shared gh:owner/repo, or a shared hf:owner/name);
-# a shared name is not an anchor. `benchmark-radar normalize-external`
+# a shared name is not an anchor. `benchmark-radar normalize-catalog`
 # regenerates identity_candidates.yml beside this file, and a reviewer promotes
 # proven groups here.
 #
@@ -22,7 +22,7 @@
 #
 # `inherit_from` names the member whose publisher, artifacts, release date, size
 # and openness the other members may display when they carry none of their own
-# (#262). The loader in external_identity.py resolves it in
+# (#262). The loader in catalog_identity.py resolves it in
 # `apply_inherited_identity`, which only ever fills an empty field and always
 # attaches an `identity_inheritance` note naming the donor source. Inheritance
 # never touches scores: the two rows stay two rows and no series joins another.

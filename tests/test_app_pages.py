@@ -31,7 +31,7 @@ SITE = Path(__file__).resolve().parents[1] / "site"
 def _dashboard() -> dict:
     return {
         "model_card_leaderboard": {
-            "measures": "How many curated model cards report each benchmark.",
+            "measures": "Counts source documents for each benchmark.",
             "entries": [
                 {"rank": 1, "name": "Alpha & Reasoning", "card_count": 20},
                 {"rank": 2, "name": "Beta Bench", "card_count": 10},
@@ -131,6 +131,24 @@ def _write(tmp_path: Path, dashboard: dict) -> dict:
     (tmp_path / "index.html").write_text(
         (SITE / "index.html").read_text(encoding="utf-8"), encoding="utf-8"
     )
+    # Page fixtures supply the same catalog artifact as the production build.
+    board = dashboard.get("model_card_leaderboard") or {}
+    entries = [
+        {**entry, "document_count": entry.get("card_count", 0)}
+        for entry in board.get("entries", [])
+    ]
+    (tmp_path / "data").mkdir(exist_ok=True)
+    (tmp_path / "data" / "benchmark-index.json").write_text(
+        json.dumps(
+            {
+                "benchmarks": [
+                    {"slug": f"benchmark-{i}", "name": entry["name"], "source": "model_reports"}
+                    for i, entry in enumerate(entries)
+                ],
+                "document_registry": {**board, "entries": entries},
+            }
+        )
+    )
     return write_app_pages(dashboard, tmp_path)
 
 
@@ -139,6 +157,7 @@ def test_view_seo_is_read_from_the_script_the_browser_uses():
     assert {view: entry["canonical"] for view, entry in seo.items()} == {
         "today": "/",
         "leaderboard": "/leaderboard/",
+        "saturation": "/saturation/",
         "trends": "/trends/",
         "map": "/explore/",
     }
@@ -196,6 +215,7 @@ def test_every_view_is_published_at_its_own_path(tmp_path):
     report = _write(tmp_path, _dashboard())
     assert report["paths"] == [
         "/leaderboard/",
+        "/saturation/",
         "/trends/",
         "/explore/",
         "/cli/",
@@ -228,6 +248,7 @@ def test_only_the_named_view_is_open(tmp_path):
     _write(tmp_path, _dashboard())
     for path, open_id in (
         ("leaderboard", "leaderboard-view"),
+        ("saturation", "saturation-view"),
         ("trends", "trends-view"),
         ("explore", "map-view"),
     ):
@@ -242,6 +263,7 @@ def test_each_generated_page_marks_its_navigation_entry_current(tmp_path):
     _write(tmp_path, _dashboard())
     ids = {
         "leaderboard": 'data-view="leaderboard"',
+        "saturation": 'data-view="saturation"',
         "trends": 'data-view="trends"',
         "cli": 'id="cli-nav"',
         "cite": 'id="cite-open"',
@@ -274,7 +296,7 @@ def test_exactly_one_heading_is_visible_per_page(tmp_path):
     """Four h1s live in the document, one per view, and three are inside hidden
     sections. A page with two visible h1s or none is a page whose outline lies."""
     _write(tmp_path, _dashboard())
-    for path in ("leaderboard", "trends", "explore"):
+    for path in ("leaderboard", "saturation", "trends", "explore"):
         page = (tmp_path / path / "index.html").read_text(encoding="utf-8")
         open_section = re.search(
             r'<section class="view" id="[\w-]+"(?![^>]*hidden)[^>]*>(.*?)\n      </section>',
@@ -355,7 +377,7 @@ def test_seeded_copy_controls_have_names_values_and_fallback_hints(tmp_path):
 
 def test_no_page_ships_a_second_url_for_itself(tmp_path):
     _write(tmp_path, _dashboard())
-    for path in ("leaderboard", "trends", "explore", "cli", "cite", "rubric"):
+    for path in ("leaderboard", "saturation", "trends", "explore", "cli", "cite", "rubric"):
         page = (tmp_path / path / "index.html").read_text(encoding="utf-8")
         assert "?view=" not in page
 
@@ -367,12 +389,12 @@ def test_seeded_rows_match_what_the_renderer_would_draw(tmp_path):
     # The zero-count entry is filtered out, exactly as renderLeaderboardTop does.
     assert len(rows) == 3
     assert "Alpha &amp; Reasoning" in rows[0]
-    assert "20 model cards" in rows[0]
+    assert "20 source documents" in rows[0]
     assert "width:100.0%" in rows[0]
     assert "width:50.0%" in rows[1]
     # Singular noun at one, same as metricLabel.
-    assert "1 model card<" in rows[2]
-    assert "How many curated model cards report each benchmark." in page
+    assert "1 source document<" in rows[2]
+    assert "Counts source documents for each benchmark." in page
 
 
 def test_seeded_ranking_exposes_the_same_named_more_control_as_the_renderer(tmp_path):
@@ -457,7 +479,7 @@ def test_rebuilding_the_same_data_produces_the_same_bytes(tmp_path):
     first, second = tmp_path / "first", tmp_path / "second"
     _write(first, _dashboard())
     _write(second, _dashboard())
-    for path in ("leaderboard", "trends", "explore", "cli", "cite", "rubric"):
+    for path in ("leaderboard", "saturation", "trends", "explore", "cli", "cite", "rubric"):
         assert (first / path / "index.html").read_bytes() == (
             second / path / "index.html"
         ).read_bytes()
@@ -556,8 +578,8 @@ def test_the_ranking_ships_with_the_caveat_that_keeps_it_honest(tmp_path):
     info = page.split('id="leaderboard-top-info"', 1)[1].split("</span>", 1)[0]
 
     assert 'class="info-disclosure"' in info
-    assert "How many curated model cards report each benchmark." in info
-    assert "A report counts once per test" in info
+    assert "Counts source documents for each benchmark." in info
+    assert "trace each count to its citations" in info
 
 
 def test_a_view_that_lost_its_data_loses_its_page(tmp_path):
@@ -590,7 +612,7 @@ def test_every_seeded_container_is_one_the_renderer_already_owns(tmp_path):
     script = (SITE / "assets" / "app.js").read_text(encoding="utf-8")
 
     seen = set()
-    for path in ("leaderboard", "trends", "explore"):
+    for path in ("leaderboard", "saturation", "trends", "explore"):
         page = (tmp_path / path / "index.html").read_text(encoding="utf-8")
         ids = re.findall(r'id="([a-z-]+)"[^>]*\bdata-seed\b', page)
         assert ids, path

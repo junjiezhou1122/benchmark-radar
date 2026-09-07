@@ -107,7 +107,8 @@ def main() -> None:
             "classify",
             "authors",
             "social",
-            "normalize-external",
+            "normalize-catalog",
+            "normalize-external",  # Compatibility with installed maintainer scripts.
             "build-data-release",
             *sorted(QUERY_COMMANDS),
         ),
@@ -120,7 +121,7 @@ def main() -> None:
             "benchmark tracks against the KW-Bench L0-L5 capability rubric, survey "
             "the public profiles of authors behind popular benchmark repositories, "
             "render the daily social post section from the day's evidence and git history, "
-            "or normalize the committed aggregator crawl snapshots into the external "
+            "or normalize the committed source snapshots and model reports into the shared "
             "benchmark catalog, or build the downloadable CLI dataset. Query commands "
             "search and inspect managed local artifacts "
             "through the same contract exposed by the local HTTP API."
@@ -214,9 +215,8 @@ def main() -> None:
         type=Path,
         default=Path("data/model_cards.yml"),
         help=(
-            "Curated model card registry powering the Model Card Adoption Rank "
-            "(issue #83). A missing file omits the leaderboard; an invalid one "
-            "fails the build rather than publishing a stale ranking."
+            "Model report registry supplying catalog documents and citations "
+            "(issue #83). Normalization requires a valid registry."
         ),
     )
     parser.add_argument(
@@ -305,11 +305,12 @@ def main() -> None:
     if feed_output is None and args.dashboard_output == DEFAULT_DASHBOARD_OUTPUT:
         feed_output = DEFAULT_FEED_OUTPUT
 
-    if args.command == "normalize-external":
+    if args.command in {"normalize-catalog", "normalize-external"}:
         # Deliberately separate from `run` and `export`: the crawl snapshots are
         # immutable committed files, so regenerating the catalog does not need a
         # collection pass and a collection pass must not silently reshape it.
-        from .external_catalog import (
+        from .benchmark_scores import DEFAULT_SCORES_PATH, load_scores
+        from .catalog import (
             DEFAULT_OUTPUT_DIR,
             SOURCES,
             build_benchmark_index,
@@ -317,9 +318,13 @@ def main() -> None:
             write_benchmark_index,
             write_catalog,
         )
-        from .external_opencompass import normalize_opencompass
+        from .catalog_dates import apply_benchmark_dates, load_benchmark_dates
+        from .catalog_evidence import attach_evidence, document_registry
+        from .catalog_opencompass import normalize_opencompass
+        from .catalog_reports import normalize_reports
         from .leaderboard_snapshots import DEFAULT_SNAPSHOTS_PATH
         from .leaderboard_snapshots import load_snapshots as load_crawl_snapshots
+        from .model_cards import load_registry
 
         # One loop over every registered crawl, one normalizer, one output
         # shape. Adding a source is a registry entry plus a line in SOURCES,
@@ -330,6 +335,12 @@ def main() -> None:
             for snapshot in crawled["snapshots"]
             if snapshot["id"] in SOURCES
         ]
+        normalized.append(
+            normalize_reports(
+                load_registry(args.model_cards),
+                load_scores(args.benchmark_scores or DEFAULT_SCORES_PATH),
+            )
+        )
 
         opencompass_snapshot = next(
             (item for item in crawled["snapshots"] if item["id"] == "opencompass_hub_2026-08-17"),
@@ -338,13 +349,6 @@ def main() -> None:
         if opencompass_snapshot is None:
             raise ValueError("OpenCompass catalog snapshot is missing from the registry")
         opencompass = normalize_opencompass(catalog_snapshot=opencompass_snapshot)
-        (DEFAULT_OUTPUT_DIR / "opencompass_source_records.jsonl").write_text(
-            "".join(
-                json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
-                for row in opencompass["source_records"]
-            ),
-            encoding="utf-8",
-        )
 
         # Records, series and observations from every crawl travel together but
         # never merge: keys are namespaced per source, and a shard files its
@@ -355,8 +359,20 @@ def main() -> None:
         raw_records = [
             item for result in normalized for item in result["source_records"]
         ] + opencompass["source_records"]
+        date_facts = load_benchmark_dates(raw_records)
+        opencompass["source_records"] = apply_benchmark_dates(
+            opencompass["source_records"], date_facts
+        )
+        opencompass["source_records"] = attach_evidence(opencompass["source_records"], [], [])
+        (DEFAULT_OUTPUT_DIR / "opencompass_source_records.jsonl").write_text(
+            "".join(
+                json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
+                for row in opencompass["source_records"]
+            ),
+            encoding="utf-8",
+        )
 
-        from .external_overrides import (
+        from .catalog_overrides import (
             apply_llm_stats_identity_overrides,
             load_llm_stats_identity_overrides,
             overridden_validation,
@@ -369,15 +385,19 @@ def main() -> None:
         overrides = load_llm_stats_identity_overrides(raw_records)
         enriched_normalized = []
         for result in normalized:
-            if result["validation"]["source"] != "llm_stats":
-                enriched_normalized.append(result)
-                continue
             enriched = dict(result)
-            enriched["source_records"] = apply_llm_stats_identity_overrides(
-                result["source_records"], overrides
+            if result["validation"]["source"] == "llm_stats":
+                enriched["source_records"] = apply_llm_stats_identity_overrides(
+                    result["source_records"], overrides
+                )
+                enriched["validation"] = overridden_validation(
+                    result["validation"], enriched["source_records"], overrides
+                )
+            enriched["source_records"] = apply_benchmark_dates(
+                enriched["source_records"], date_facts
             )
-            enriched["validation"] = overridden_validation(
-                result["validation"], enriched["source_records"], overrides
+            enriched["source_records"] = attach_evidence(
+                enriched["source_records"], enriched["score_series"], enriched["score_observations"]
             )
             enriched_normalized.append(enriched)
         normalized = enriched_normalized
@@ -387,14 +407,14 @@ def main() -> None:
             item for result in normalized for item in result["source_records"]
         ] + opencompass["source_records"]
 
-        from .external_identity import (
+        from .catalog_identity import (
             DEFAULT_CANDIDATES_PATH,
             apply_inherited_identity,
             build_identity_candidates,
             load_identity,
             write_identity_candidates,
         )
-        from .external_shards import write_shards
+        from .catalog_shards import write_shards
 
         # Regenerate the review candidates every run so a recrawl surfaces new
         # collisions, but never touch identity.yml: that file is promoted by
@@ -409,13 +429,18 @@ def main() -> None:
         # records; the raw records above stay the honest source-level state.
         identity = load_identity(all_records)
         resolved_records = apply_inherited_identity(all_records, identity)
+        resolved_records = attach_evidence(resolved_records, all_series, all_observations)
         inherited_count = sum(1 for row in resolved_records if "identity_inheritance" in row)
 
         # One index over every source, one row per source record. Two sources
         # describing the same benchmark stay two rows until identity.yml says
         # otherwise under human review.
         index = build_benchmark_index(resolved_records, series_by_key)
-        index_path = write_benchmark_index(index, Path("site/data/benchmark-index.json"))
+        index_path = write_benchmark_index(
+            index,
+            Path("site/data/benchmark-index.json"),
+            documents=document_registry(resolved_records),
+        )
 
         shard_report = write_shards(
             resolved_records,
@@ -508,12 +533,9 @@ def main() -> None:
             scores_path=args.benchmark_scores,
             kw_bench_store_path=args.kw_bench_store,
         )
-        # One record per model, from both layers, written after radar.json
-        # exists because it reads the curated cards out of it. This is the
-        # structure that answers "which models do we know about" -- consumers
-        # read it instead of walking model_cards and the shards separately and
-        # dropping whichever they forget (issue #268).
-        from .external_shards import DEFAULT_SHARD_DIR
+        # One record per model from the shared catalog, with every reporting
+        # source attached. Consumers never need to join source registries.
+        from .catalog_shards import DEFAULT_SHARD_DIR
         from .models_registry import DEFAULT_REGISTRY_OUTPUT, write_model_registry
 
         registry_report = write_model_registry(
@@ -521,9 +543,7 @@ def main() -> None:
         )
         print(
             f"models: {registry_report['model_count']} "
-            f"({registry_report['curated_only']} curated, "
-            f"{registry_report['crawled_only']} crawled, "
-            f"{registry_report['both_layers']} both) -> {DEFAULT_REGISTRY_OUTPUT}"
+            f"from {len(registry_report['source_counts'])} sources -> {DEFAULT_REGISTRY_OUTPUT}"
         )
 
         report = dashboard["kw_bench"]["coverage"]
@@ -603,7 +623,6 @@ def main() -> None:
         source_url = _leaderboard_url(dashboard_url)
         written = write_exports(
             args.export_dir,
-            registry_path=args.model_cards,
             # 0 means "no limit" on a command line, where passing None is not
             # expressible. Negative values collapse to the same intent rather
             # than silently producing an empty table through a slice.

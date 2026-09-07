@@ -73,6 +73,17 @@ def main() -> None:
 
     assign(org_ids, organizations, "O")
     model_keys = [f"{model}␟{organization}" for model, organization in models]
+    from benchmark_radar.models_registry import model_key
+
+    by_identity = {}
+    for label, identifier in model_ids.items():
+        model, organization = label.split("␟", 1)
+        by_identity.setdefault(model_key(model, organization), identifier)
+    for label in model_keys:
+        model, organization = label.split("␟", 1)
+        previous = by_identity.get(model_key(model, organization))
+        if label not in model_ids and previous:
+            model_ids[label] = previous
     assign(model_ids, model_keys, "M")
 
     # An entry the data no longer carries is dropped. Freezing an ID protects a
