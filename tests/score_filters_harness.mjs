@@ -76,6 +76,32 @@ assert.equal(cutoff('5'), 70, 'below the slider minimum falls back');
 assert.equal(cutoff('999'), 70, 'above the slider maximum falls back');
 assert.equal(cutoff('44'), 40, 'an off-step value snaps to the nearest step');
 
+// A page reload must revalidate recovered dates, while views within one page
+// share their request. Failed loads still return the explicit unavailable state.
+const makeLoaders = new Function('fetch', `let benchmarkIndexPromise = null;
+  const benchmarkShardCache = new Map();
+  ${fn('loadBenchmarkIndex')}
+  ${fn('loadBenchmarkShard')}
+  return {loadBenchmarkIndex,loadBenchmarkShard};`);
+const requests = [];
+const loaders = makeLoaders(async (url,options) => {
+  requests.push({url,options});
+  return {ok:true,json:async()=>({benchmarks:[{slug:'dated',released:'2025-02-14'}]})};
+});
+const firstIndex = loaders.loadBenchmarkIndex();
+assert.equal(loaders.loadBenchmarkIndex(),firstIndex);
+assert.equal((await firstIndex)[0].released,'2025-02-14');
+const firstShard = loaders.loadBenchmarkShard('dated');
+assert.equal(loaders.loadBenchmarkShard('dated'),firstShard);
+await firstShard;
+assert.deepEqual(requests,[
+  {url:'/data/benchmark-index.json',options:{cache:'no-cache'}},
+  {url:'/data/benchmarks/dated.json',options:{cache:'no-cache'}},
+]);
+const unavailable = makeLoaders(async () => ({ok:false,status:503}));
+assert.equal(await unavailable.loadBenchmarkIndex(),null);
+assert.equal(await unavailable.loadBenchmarkShard('missing'),null);
+
 // --- Benchmark Frontier: identity, normalization and dominance ----------------
 const entry = (id, count, extra = {}) => ({
   benchmark_id: id, name: id, released: '2025-01-01', domain: 'science',
@@ -285,6 +311,13 @@ for(const cutoff of [10,30,70,100]) {
     assert(mark.details.rows.some(detail=>detail.label==='Score scale' && detail.value==='Not verified for comparison'));
   }
   const geometry=skylineGeometry(current.cohort);
+  const projections=drawn.filter(node=>'data-projection-for' in node.attrs);
+  assert.equal(projections.length,current.comparable.length);
+  for(const row of current.comparable) {
+    const point=projections.find(node=>node.attrs['data-projection-for']===row.id);
+    assert.deepEqual([point.attrs.cx,point.attrs.cy],geometry.project(0,row.score,row.adoption),
+      'the Pareto side view drops only time; it preserves score and raw model-card count');
+  }
   const datedScored=plotted.filter(node=>node.attrs['data-benchmark-date']);
   for(const mark of datedScored) {
     const row=current.rows.find(row=>row.id===mark.attrs['data-benchmark-id']);
@@ -307,6 +340,11 @@ for(const cutoff of [10,30,70,100]) {
     const row=current.dated.find(row=>row.id===mark.attrs['data-benchmark-id']);
     assert.equal(mark.attrs['data-benchmark-date'],row.date);
     assert(row.date>=SKYLINE_START_DATE);
+    if(row.dateReference) {
+      assert.equal(mark.details.url,row.dateReference.source_url,
+        'recovered dates must expose their primary source on the visible mark');
+      assert.equal(mark.details.urlLabel,'Open date source ↗');
+    }
   }
   for(const mark of pending) {
     const row=current.pending.find(row=>row.id===mark.attrs['data-benchmark-id']);

@@ -116,6 +116,8 @@ export function skylineModel(benchmarks = {}, entries = [], catalog = [], cutoff
     if (!date) missing.push("date");
     return {
       id, name, source, summary, date, dateBasis,
+      dateReference: dateBasis === "released" && record.released === date ? record.released_reference
+        : dateBasis === "first_score" && record.first_score_reported_at === date ? record.first_score_source_reference : null,
       time: date ? Date.parse(`${date}T00:00:00Z`) : null,
       score, plotScore, displayScore, rawScore, inverted, adoption, missing,
       domain: Object.keys(SKYLINE_DOMAINS).find((domain) => SKYLINE_DOMAINS[domain].some((value) => domainValues.includes(value))) || "Other",

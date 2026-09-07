@@ -78,6 +78,14 @@ applying the 2024 cutoff; do not pick its first score after 2024 to force it int
 the view. Keep the evidence and date basis inspectable. A batch crawl timestamp
 or an adoption-only mention is not a score date.
 
+A missing date in a crawl is a gap to investigate. Check the benchmark's own
+release announcement, dataset card, and introducing paper before leaving it
+undated. Store recovered dates with their exact source-record key, citation,
+and basis, and regenerate the chart's inputs. A README's bibliography can
+contain older component methods and unrelated datasets; its earliest paper
+is not automatically this benchmark's release. New dates must reach the main
+timeline, with their evidence accessible from the mark.
+
 When an aggregator dates its numeric LLM score records by model release, use
 the earliest dated score record as a **model-release proxy**, after any known
 benchmark release or actual score-publication date. Carry that date precision

@@ -62,6 +62,8 @@ graphify-out/
 # no donor record anywhere else in the corpus, written by hand from a crawl and
 # never regenerated from one.
 !/data/external/llm_stats_identity_overrides.yml
+# Cited benchmark dates are reviewed source facts, not normalization outputs.
+!/data/external/benchmark_dates.yml
 
 # Written by the same `benchmark-radar normalize-external` run as the ignored
 # catalog above, from the same committed crawl CSVs, and rebuilt by pages.yml on

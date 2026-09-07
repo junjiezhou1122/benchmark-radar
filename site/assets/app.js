@@ -397,7 +397,7 @@ const I18N = {
     "Show benchmarks with highest reported score below:": "只看最高报告分数低于此值的 benchmark：",
     "How to read the frontier": "怎样读这张前沿图",
     "skyline.reading": "每个符合筛选条件的 benchmark 都有一个可见标记。有日期的成绩进入天际线；没有成绩的在下方时间轴保留独立圆点。细柱表示独立模型卡采用量，空心点表示采用量未知或分数刻度未核实。重叠的圆点会错开，悬停或聚焦可追溯实际坐标，并查看名称和证据。方向键可切换 benchmark。",
-    "skyline.pareto": "在日期不早于 2024 年的 benchmark 中，如果没有另一个可比较的 benchmark 分数不高于它、采用量不低于它，且至少一项严格占优，它就位于 Pareto 前沿。日期只用于筛选范围，支配关系只看分数和采用量。拖动分数上限，不会把原本被支配的点变成前沿点。",
+    "skyline.pareto": "Pareto 侧视图把相同的分数和独立模型卡数量投影到左侧墙面，省略时间。金色阶梯线标出前沿，分数和数量不相乘。在日期不早于 2024 年的 benchmark 中，如果没有另一个可比较的 benchmark 分数不高于它、采用量不低于它，且至少一项严格占优，它就位于 Pareto 前沿。日期只用于筛选范围，支配关系只看分数和采用量。拖动分数上限，不会把原本被支配的点变成前沿点。",
     "skyline.scope": "采用量按独立文档计数。只有明确采用百分比指标、且采用量已记录的 benchmark 才参与 Pareto 计算和侧墙投影；越低越好的百分比换算为 100 减去原值。其他成绩保留列表中的显示单位，不能直接比较，原始数值可在悬浮说明中查看。柱高用 log1p(count)，标签和 Pareto 计算用原始数量。采用量未知不等于零。刻度一致不代表测试条件相同，也不能据此认定 benchmark 已被解决。",
     "skyline.regions": "时间轴从 2024 年 1 月 1 日开始，包含当天。优先使用 benchmark 发布日期，其次使用最早的 LLM 数值成绩报告日期。如果来源按模型发布日期记录成绩，则采用最早一条成绩记录的日期，并明确标为模型发布日期估算；它不代表已核实的成绩发表日期。抓取时间和只有采用记录的文档不能代替日期。已知日期早于 2024 年的排除；完全没有日期的记录仍在标明的区域各自显示。底面的文字只是读图提示。",
     "Release date / first LLM score →": "发布日期／首次 LLM 成绩日期 →",
@@ -406,7 +406,14 @@ const I18N = {
     "First score date uses model release": "首条成绩日期按模型发布日期估算",
     "Exact dates; nearby benchmarks stack vertically": "按实际日期排列，日期相近的点上下错开",
     "Lower scores at the front": "低分在前方",
-    "Score × adoption": "分数 × 采用量",
+    "Pareto side view": "Pareto 侧视图",
+    "Same scores and model-card counts; time omitted": "保留分数和模型卡数量，省略时间维度",
+    "Date evidence": "日期依据",
+    "Paper first version": "论文首版",
+    "Introducing paper": "首次介绍该 benchmark 的论文",
+    "Dated LLM score": "有日期的 LLM 成绩",
+    "Public release": "公开发布",
+    "Open date source ↗": "查看日期来源 ↗",
     "Unique model cards": "独立模型卡数量",
     "Hard frontier": "难题前沿",
     "Emerging": "新兴评测",
@@ -4379,7 +4386,9 @@ let benchmarkIndexPromise = null;
 
 function loadBenchmarkIndex() {
   if (!benchmarkIndexPromise) {
-    benchmarkIndexPromise = fetch("/data/benchmark-index.json")
+    // Revalidate on page load so newly recovered dates reach the figure.
+    // The promise still shares one request across all views in this page.
+    benchmarkIndexPromise = fetch("/data/benchmark-index.json", { cache: "no-cache" })
       .then((response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json();
@@ -4832,6 +4841,15 @@ function skylineChart(model, cutoff) {
   const textAt = (position, text, className = "skyline-tick", anchor = "middle") => svgElement("text", {
     x: position[0], y: position[1], class: className, "text-anchor": anchor,
   }, text);
+  const dateRows = (row) => {
+    const rows = [{ label: t(benchmarkDateLabel(row)), value: formatDate(row.date) }];
+    if (row.dateReference) {
+      const basis = row.dateBasis === "first_score" ? "Dated LLM score"
+        : ({ paper_first_version: "Paper first version", paper_publication: "Introducing paper" }[row.dateReference.basis] || "Public release");
+      rows.push({ label: t("Date evidence"), value: t(basis) });
+    }
+    return rows;
+  };
   const svg = svgElement("svg", {
     viewBox: `0 0 ${width} ${height}`, role: "group",
     class: hasUndatedScores ? "skyline-has-undated" : "",
@@ -4900,10 +4918,11 @@ function skylineChart(model, cutoff) {
         quarter === 1 ? "skyline-tick skyline-year" : "skyline-quarter"));
   }
   svg.append(textAt([730, 631], t("Release date / first LLM score →"), "skyline-axis-title"),
-    textAt([1210, 345], t("Reported score"), "skyline-axis-title"),
-    textAt([1210, 365], t("0–100")),
+    textAt([78, 392], t("Reported score"), "skyline-axis-title"),
+    textAt([78, 413], t("0–100")),
     textAt([1170, 580], t("Lower scores at the front"), "skyline-tick", "end"),
-    textAt([95, 30], t("Score × adoption"), "skyline-axis-title", "start"),
+    textAt([95, 24], t("Pareto side view"), "skyline-axis-title", "start"),
+    textAt([285, 24], t("Same scores and model-card counts; time omitted"), "skyline-measurement-note", "start"),
     svgElement("text", { x: 25, y: 175, transform: "rotate(-90 25 175)",
       class: "skyline-axis-title", "text-anchor": "middle" }, t("Unique model cards")));
   if (datedRows.some((row) => row.adoption === null)) {
@@ -4921,6 +4940,7 @@ function skylineChart(model, cutoff) {
     const wall = project(0, row.score, row.adoption);
     svg.append(svgElement("circle", {
       cx: wall[0], cy: wall[1], r: row.pareto ? 4.5 : 3,
+      "data-projection-for": row.id, "aria-hidden": "true",
       class: `skyline-projection skyline-domain-${row.domain.toLowerCase()}${row.pareto ? " is-pareto" : ""}`,
     }));
   }
@@ -4984,7 +5004,7 @@ function skylineChart(model, cutoff) {
         ] : []),
         ...(row.inverted ? [{ label: t("Original score"), value: `${row.rawScore}% · ${t("lower is better")}` }] : []),
         { label: t("Unique model cards"), value: measured ? String(row.adoption) : t("Not recorded") },
-        { label: t(benchmarkDateLabel(row)), value: formatDate(row.date) },
+        ...dateRows(row),
         { label: t("Domain"), value: t(row.domain) },
         ...(comparable ? [
           { label: t("Metric"), value: row.metric || t("Unknown") },
@@ -4993,7 +5013,8 @@ function skylineChart(model, cutoff) {
           { label: t("Score reported"), value: row.reportedAt ? formatDate(row.reportedAt) : t("Unknown") },
         ] : []),
         { label: t("Source"), value: row.sourceId || scoreSourceLabel(row.source) },
-      ], url: row.sourceUrl,
+      ], url: row.dateReference?.source_url || row.sourceUrl,
+      urlLabel: row.dateReference ? t("Open date source ↗") : null,
     });
     svg.append(group);
   }
@@ -5087,9 +5108,10 @@ function skylineChart(model, cutoff) {
             ? `${row.displayScore.toLocaleString("en", { maximumFractionDigits: 2 })}${row.summary?.unit === "percent" ? "%" : ""}` : t("No score reported") },
           { label: t("Unique model cards"), value: row.adoption === null ? t("Not recorded") : String(row.adoption) },
           { label: t("Score scale"), value: row.score === null ? t("Not verified for comparison") : "0–100" },
-          { label: t(benchmarkDateLabel(row)), value: formatDate(row.date) },
+          ...dateRows(row),
           { label: t("Domain"), value: t(row.domain) },
-        ], url: row.sourceUrl,
+        ], url: row.dateReference?.source_url || row.sourceUrl,
+        urlLabel: row.dateReference ? t("Open date source ↗") : null,
       });
       svg.append(group);
     }
@@ -5225,7 +5247,7 @@ function loadBenchmarkShard(slug) {
   if (!benchmarkShardCache.has(slug)) {
     benchmarkShardCache.set(
       slug,
-      fetch(`/data/benchmarks/${slug}.json`)
+      fetch(`/data/benchmarks/${slug}.json`, { cache: "no-cache" })
         .then((response) => {
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           return response.json();
@@ -6570,7 +6592,7 @@ function frontierTooltipContent(details, pinned) {
     pinned && safeHttpUrl(details.url)
       ? element("a", {
           className: "frontier-tooltip-source",
-          text: t("Open source record ↗"),
+          text: details.urlLabel || t("Open source record ↗"),
           attrs: {
             href: safeHttpUrl(details.url),
             target: "_blank",

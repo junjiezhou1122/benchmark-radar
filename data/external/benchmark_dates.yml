@@ -1,0 +1,381 @@
+# Source-verified release and first-score dates absent from catalog crawls.
+# Exact source keys preserve the catalog's one-record-per-source population.
+# Prefer an explicit public release announcement; otherwise use the first
+# version of the paper that introduces this specific benchmark or partition.
+# Never date a benchmark from a Hub card's creation, a crawl, an arbitrary
+# README citation, or a newer model's release. Sources checked 2026-09-07.
+# Existing source-provided releases take precedence over this missing-data fill.
+# First-score evidence verifies a dated numeric report when a release day is
+# unknown. These isolated historical results are not an aggregator score series
+# or a claim about a benchmark's highest score, and never enter Pareto ranking.
+schema_version: 1
+benchmarks:
+  "opencompass:502":
+    name: "ARC-c"
+    released: "2018-03-14"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1803.05457"
+    note: "The ARC introduction releases both the Challenge and Easy partitions."
+  "opencompass:503":
+    name: "ARC-e"
+    released: "2018-03-14"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1803.05457"
+    note: "The ARC introduction releases both the Easy and Challenge partitions."
+  "opencompass:496":
+    name: "C-Eval"
+    released: "2023-05-15"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2305.08322"
+    note: "First version of the paper introducing C-Eval."
+  "opencompass:505":
+    name: "CHID"
+    released: "2019-06-04"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1906.01265"
+    note: "First version of the paper introducing the Chinese idiom cloze dataset."
+  "opencompass:499":
+    name: "CMMLU"
+    released: "2023-06-15"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2306.09212"
+    note: "First version introducing CMMLU; the 2024 revision is not its release."
+  "opencompass:511":
+    name: "CommonSenseQA"
+    released: "2018-11-02"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1811.00937"
+    note: "First version of the CommonsenseQA dataset paper."
+  "opencompass:519":
+    name: "CSL"
+    released: "2022-09-12"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2209.05034"
+    note: "The source describes the 396k-paper scientific literature dataset introduced here."
+  "opencompass:536":
+    name: "DROP"
+    released: "2019-03-01"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1903.00161"
+    note: "First version introducing the DROP reading-comprehension benchmark."
+  "opencompass:522":
+    name: "EPRSTMT"
+    released: "2021-07-15"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2107.07498"
+    note: "The FewCLUE introduction includes its new EPRSTMT product-review sentiment task."
+  "opencompass:500":
+    name: "GAOKAO-Bench"
+    released: "2023-05-21"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2305.12474"
+    note: "First version of the GAOKAO benchmark paper, not a later paper revision."
+  "opencompass:523":
+    name: "LAMBADA"
+    released: "2016-06-20"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1606.06031"
+    note: "First version introducing the LAMBADA word-prediction dataset."
+  "opencompass:520":
+    name: "LCSTS"
+    released: "2015-06-19"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1506.05865"
+    note: "First version introducing the Chinese short-text summarization corpus."
+  "opencompass:498":
+    name: "MMLU"
+    released: "2020-09-07"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2009.03300"
+    note: "First version introducing MMLU; this is a benchmark date, not a recent model release."
+  "opencompass:525":
+    name: "OCNLI"
+    released: "2020-10-12"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2010.05444"
+    note: "First version introducing Original Chinese Natural Language Inference."
+  "opencompass:518":
+    name: "OpenbookQA"
+    released: "2018-09-08"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1809.02789"
+    note: "First version introducing OpenBookQA."
+  "opencompass:532":
+    name: "PIQA"
+    released: "2019-11-26"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1911.11641"
+    note: "The physical-commonsense question-answering paper, not the unrelated image-quality library."
+  "opencompass:516":
+    name: "RACE(High)"
+    released: "2017-04-15"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1704.04683"
+    note: "The RACE introduction defines its high-school and middle-school partitions together."
+  "opencompass:517":
+    name: "RACE(Middle)"
+    released: "2017-04-15"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1704.04683"
+    note: "The RACE introduction defines its middle-school and high-school partitions together."
+  "opencompass:512":
+    name: "TriviaQA"
+    released: "2017-05-09"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1705.03551"
+    note: "First version introducing the TriviaQA question-answering dataset."
+  "opencompass:508":
+    name: "TyDiQA"
+    released: "2020-03-10"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2003.05002"
+    note: "First version introducing TyDi QA."
+  "opencompass:504":
+    name: "WiC"
+    released: "2018-08-28"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1808.09121"
+    note: "First version introducing Word-in-Context."
+  "opencompass:521":
+    name: "XSum"
+    released: "2018-08-27"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1808.08745"
+    note: "First version of the paper introducing the Extreme Summarization dataset."
+  "opencompass:2078":
+    name: "AutoAdvExBench"
+    released: "2025-03-03"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2503.01811"
+    note: "First version introducing AutoAdvExBench and evaluating LLM agents on its defenses."
+  "opencompass:2084":
+    name: "AXBENCH"
+    released: "2025-01-28"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2501.17148"
+    note: "AxBench's own introduction, not later steering papers referenced by its README."
+  "opencompass:2081":
+    name: "General-Bench"
+    released: "2025-05-07"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2505.04620"
+    note: "First version introducing General-Level and General-Bench."
+  "opencompass:2089":
+    name: "LaRA"
+    released: "2025-02-14"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2502.09977"
+    note: "First version introducing the LaRA benchmark, before its July Hub-card creation."
+  "opencompass:2088":
+    name: "LMAct"
+    released: "2024-12-02"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2412.01441"
+    note: "First version introducing LMAct; the 2025 revision is not its release."
+  "opencompass:2417":
+    name: "MedHallTune"
+    released: "2025-02-28"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2502.20780"
+    note: "First version introducing the medical hallucination instruction-tuning benchmark."
+  "opencompass:2085":
+    name: "MIB"
+    released: "2025-04-17"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2504.13151"
+    note: "MIB's own introduction, not the earlier interpretability work cited in its repository."
+  "opencompass:2080":
+    name: "PhyGenBench"
+    released: "2024-10-07"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2410.05363"
+    note: "The paper introducing PhyGenBench's 160 physical-commonsense video prompts."
+  "opencompass:1712":
+    name: "ToolHop"
+    released: "2025-01-05"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2501.02506"
+    note: "First version introducing the query-driven multi-hop tool-use benchmark."
+  "opencompass:2083":
+    name: "SAEBench"
+    released: "2025-03-12"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2503.09532"
+    note: "SAEBench's own introduction, not the papers introducing its component evaluation methods."
+  "opencompass:2086":
+    name: "OR-Bench"
+    released: "2024-05-31"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2405.20947"
+    note: "First version introducing the over-refusal benchmark."
+  "opencompass:2079":
+    name: "MER-UniBench"
+    released: "2025-01-27"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2501.16566"
+    note: "The AffectGPT paper introduces MER-UniBench; the older MER-Caption paper is a different artifact."
+  "opencompass:1701":
+    name: "WritingBench"
+    released: "2025-03-07"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2503.05244"
+    note: "First version introducing WritingBench."
+  "opencompass:2082":
+    name: "StructTokenBench"
+    released: "2025-02-28"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2503.00089"
+    note: "First version introducing the structure-tokenizer evaluation framework."
+  "opencompass:2077":
+    name: "ITBench"
+    released: "2025-02-07"
+    basis: "release_announcement"
+    source_url: "https://github.com/itbench-hub/ITBench"
+    note: "The official project changelog explicitly dates its initial release of the paper, scenarios, setup tooling, and agents."
+  "opencompass:2151":
+    name: "InternData-A1"
+    released: "2025-07-26"
+    basis: "dataset_published"
+    source_url: "https://huggingface.co/datasets/InternRobotics/InternData-A1"
+    note: "The official dataset card explicitly states its release date."
+  "llm-stats:cvtg-2k":
+    name: "CVTG-2K"
+    released: "2025-03-30"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2503.23461"
+    note: "TextCrafter introduces the complex visual text generation benchmark. The source's Chinese-only name expansion is not used to identify a separate instrument."
+  "llm-stats:longtext-bench":
+    name: "LongText-Bench"
+    released: "2025-07-29"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2507.22058"
+    note: "The official X-Omni repository and LongText-Bench dataset card identify this paper as their introduction."
+  "opencompass:1246":
+    name: "LiveBench"
+    released: "2024-06-12"
+    basis: "release_announcement"
+    source_url: "https://github.com/LiveBench/LiveBench/blob/main/docs/DATASHEET.md"
+    note: "The official datasheet states the suite became public on June 12, before the June 27 paper."
+  "opencompass:2075":
+    name: "Arena-Hard-Auto"
+    released: "2024-04-19"
+    basis: "release_announcement"
+    source_url: "https://www.lmsys.org/blog/2024-04-19-arena-hard/"
+    note: "The original LMSYS announcement introduces Arena-Hard-Auto v0.1 and its leaderboard, before the June paper."
+  "opencompass:1361":
+    name: "RealworldQA"
+    released: "2024-04-12"
+    basis: "release_announcement"
+    source_url: "https://x.ai/news/grok-1.5v"
+    note: "The dated Grok-1.5V announcement introduces RealWorldQA and provides its initial public dataset download."
+  "opencompass:1360":
+    name: "LLaVA-Bench"
+    released: "2023-04-17"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2304.08485"
+    note: "The original Visual Instruction Tuning paper introduces the visual-chat evaluation benchmark."
+  "opencompass:1077":
+    name: "SALAD-Bench"
+    released: "2024-02-07"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2402.05044"
+    note: "First version introducing SALAD-Bench and its hierarchical safety evaluation."
+  "opencompass:2087":
+    name: "PertEval-scFM"
+    released: "2024-10-03"
+    basis: "paper_first_version"
+    source_url: "https://www.biorxiv.org/content/10.1101/2024.10.02.616248v1"
+    note: "The first preprint was posted October 3; the October 2 date in the DOI is not its posting date."
+  "opencompass:2153":
+    name: "InternData-M1"
+    released: "2025-07-26"
+    basis: "dataset_published"
+    source_url: "https://huggingface.co/datasets/InternRobotics/InternData-M1"
+    note: "The official dataset license and changelog give the same initial release date."
+  "opencompass:2152":
+    name: "InternData-N1"
+    released: "2025-07-26"
+    basis: "dataset_published"
+    source_url: "https://huggingface.co/datasets/InternRobotics/InternData-N1"
+    note: "The official dataset license states the release date, before the later directory and model updates."
+  "opencompass:2154":
+    name: "MotionMillion"
+    released: "2025-07-26"
+    basis: "dataset_published"
+    source_url: "https://github.com/VankouF/MotionMillion-Codes"
+    note: "The authors explicitly date the dataset release July 26; the July 3 code release and July 9 paper are separate events."
+  "opencompass:1320":
+    name: "IaC-Eval"
+    released: "2024-09-26"
+    basis: "paper_first_version"
+    source_url: "https://openreview.net/forum?id=7TCK0aBL1C"
+    note: "OpenReview lists September 26 as the introducing paper's public publication date; private submission and later modification dates are not used."
+  "opencompass:1326":
+    name: "MedJourney"
+    released: "2024-09-26"
+    basis: "paper_first_version"
+    source_url: "https://openreview.net/forum?id=XXaIoJyYs7"
+    note: "The clinical-journey benchmark paper's public publication date on OpenReview. This is not the unrelated counterfactual-image MedJourney project."
+  "opencompass:1279":
+    name: "WhodunitBench"
+    released: "2024-09-26"
+    basis: "paper_first_version"
+    source_url: "https://openreview.net/forum?id=qmvtDIfbmS"
+    note: "OpenReview's public publication date for the murder-mystery benchmark, before the later camera-ready modification."
+  "opencompass:530":
+    name: "ReCoRD"
+    released: "2018-10-30"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1810.12885"
+    note: "The original ReCoRD introduction, not the later SuperGLUE paper that reuses it."
+  "opencompass:506":
+    name: "AFQMC"
+    released: "2020-04-13"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2004.05986v1"
+    note: "CLUE's first paper version introduces the Ant Financial semantic-similarity task in section 4.2 and reports its evaluation."
+  "opencompass:1273":
+    name: "MolPuzzle"
+    released: "2024-09-26"
+    basis: "paper_first_version"
+    source_url: "https://openreview.net/forum?id=t1mAXb4Cop"
+    note: "Public publication date on the original NeurIPS submission. The separately imported bibliographic record's year-boundary date is not used."
+  "opencompass:509":
+    name: "Flores"
+    released: "2021-06-06"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/2106.03193"
+    note: "The Hub record explicitly links the FLORES-101 introduction; its selected languages are contained in that benchmark."
+  "opencompass:526":
+    name: "AX-b"
+    released: "2019-05-02"
+    basis: "paper_first_version"
+    source_url: "https://arxiv.org/abs/1905.00537v1"
+    note: "The SuperGLUE first version introduces its collapsed broad-coverage diagnostic in section 3.2, derived from GLUE's original three-way diagnostic."
+  "opencompass:527":
+    name: "AX-g"
+    released: "2019-07-12"
+    basis: "paper_publication"
+    source_url: "https://arxiv.org/abs/1905.00537v2"
+    note: "The first paper version containing SuperGLUE's filtered Winogender diagnostic is v2, dated July 12. V1 does not include this task."
+  "opencompass:529":
+    name: "COPA"
+    first_score_reported_at: "2019-05-02"
+    basis: "score_publication"
+    source_url: "https://arxiv.org/abs/1905.00537v1"
+    note: "The original benchmark release day is absent from the crawl. Table 2 provides the earliest dated numeric language-model evaluation retained in this date archive for the source-linked COPA task; it is not a benchmark release date."
+    score_evidence: {"model":"BERT-large-cased (fine-tuned)","value":69,"metric":"accuracy","unit":"percent","locator":"Table 2, BERT row, COPA column"}
+  "opencompass:528":
+    name: "RTE"
+    first_score_reported_at: "2019-05-02"
+    basis: "score_publication"
+    source_url: "https://arxiv.org/abs/1905.00537v1"
+    note: "The original benchmark release day is absent from the crawl. Table 2 provides the earliest dated numeric language-model evaluation retained in this date archive for the source-linked RTE task; it is not a benchmark release date."
+    score_evidence: {"model":"BERT-large-cased (fine-tuned)","value":70.1,"metric":"accuracy","unit":"percent","locator":"Table 2, BERT row, RTE column"}
+  "opencompass:507":
+    name: "WSC"
+    first_score_reported_at: "2019-05-02"
+    basis: "score_publication"
+    source_url: "https://arxiv.org/abs/1905.00537v1"
+    note: "The original benchmark release day is absent from the crawl. Table 2 provides the earliest dated numeric language-model evaluation retained in this date archive for the source-linked WSC task; it is not a benchmark release date."
+    score_evidence: {"model":"BERT-large-cased (fine-tuned)","value":68.5,"metric":"accuracy","unit":"percent","locator":"Table 2, BERT row, WSC column"}

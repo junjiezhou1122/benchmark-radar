@@ -397,6 +397,10 @@ def apply_inherited_identity(
                 continue
             merged[field_name] = donor_value
             inherited_fields.append(field_name)
+            if field_name == "released" and donor.get("released_reference"):
+                # A release date and its citation travel together. Never attach
+                # the donor's citation to a recipient's own, different date.
+                merged["released_reference"] = donor["released_reference"]
         if inherited_fields:
             merged["identity_inheritance"] = {
                 "donor_key": donor["key"],

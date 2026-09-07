@@ -122,7 +122,7 @@ def test_trajectory_points_expose_and_pin_record_details():
     assert 'event.key === "Escape" && selectedFrontierPoint' in script
     assert 'view !== "leaderboard" && selectedFrontierPoint' in script
     assert 'pinned ? "dialog" : "tooltip"' in script
-    assert 'text: t("Open source record ↗")' in script
+    assert 'details.urlLabel || t("Open source record ↗")' in script
     # Resolved from the point's own chart, not by a document-wide id: the
     # crawled panel mounts a second tooltip and getElementById returned that
     # one, which is what killed hover and click on the curated chart (#261).
@@ -608,7 +608,7 @@ def test_shard_fetch_failure_keeps_the_selection_and_the_row():
     # panel and does not clear the selection or throw into the router.
     script = source("site/assets/app.js")
 
-    assert "fetch(`/data/benchmarks/${slug}.json`)" in script
+    assert 'fetch(`/data/benchmarks/${slug}.json`, { cache: "no-cache" })' in script
     handler = script.split("loadBenchmarkShard(record.slug).then((shard) =>", 1)[1]
     assert "state.lfrontier !== record.slug" in handler
     assert "Could not load details for this benchmark." in handler

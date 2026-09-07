@@ -558,6 +558,15 @@ def build_benchmark_index(
         openness = record.get("openness") or {}
         artifacts = record.get("artifacts") or []
         series = series_by_key.get(record["key"]) or {}
+        dated_reports = [
+            report
+            for report in (
+                series.get("first_score_report"),
+                record.get("first_score_source_reference"),
+            )
+            if report and report.get("reported_at")
+        ]
+        first_report = min(dated_reports, key=lambda report: report["reported_at"], default=None)
         publisher = record.get("publisher")
         repository = record.get("repository") or {}
         index.append(
@@ -582,14 +591,13 @@ def build_benchmark_index(
                 "source": record["source"],
                 "publisher": publisher["name"] if publisher else None,
                 "released": record.get("released"),
+                "released_reference": record.get("released_reference"),
                 # Collection is provenance, never benchmark introduction.
                 # Keep actual publication evidence separate from model-date
                 # proxies so every consumer can explain its fallback.
                 "collected_at": (record.get("provenance") or {}).get("crawled_at"),
-                "first_score_reported_at": (series.get("first_score_report") or {}).get(
-                    "reported_at"
-                ),
-                "first_score_source_reference": series.get("first_score_report"),
+                "first_score_reported_at": (first_report or {}).get("reported_at"),
+                "first_score_source_reference": first_report,
                 "first_score_record": series.get("first_score_record"),
                 "source_url": (record.get("provenance") or {}).get("source_url"),
                 "openness": openness.get("status", "unknown"),

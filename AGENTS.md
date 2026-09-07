@@ -93,8 +93,11 @@ sources below, run the generators in order, and measure the rebuilt outputs.
 2. **External benchmark catalog.** `data/leaderboard_snapshots.yml` registers
    immutable crawl inputs under `data/leaderboard_snapshots/`. The reviewed
    join rules are `data/external/identity.yml` and
-   `data/external/llm_stats_identity_overrides.yml`. Other JSONL and validation
-   files under `data/external/` are normalization products; do not hand-edit or
+   `data/external/llm_stats_identity_overrides.yml`. Cited release and first-score
+   dates missing from the crawls live in `data/external/benchmark_dates.yml`,
+   keyed by exact source record. Numeric first-score evidence only verifies a
+   date; it does not supply a highest score or merge records. Other JSONL and
+   validation files under `data/external/` are normalization products; do not hand-edit or
    treat them as a separate corpus, even when Git currently tracks a generated
    copy.
 3. **Curated measurement layer.** `data/model_cards.yml` is the reviewed model

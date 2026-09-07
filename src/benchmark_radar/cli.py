@@ -317,6 +317,7 @@ def main() -> None:
             write_benchmark_index,
             write_catalog,
         )
+        from .external_dates import apply_benchmark_dates, load_benchmark_dates
         from .external_opencompass import normalize_opencompass
         from .leaderboard_snapshots import DEFAULT_SNAPSHOTS_PATH
         from .leaderboard_snapshots import load_snapshots as load_crawl_snapshots
@@ -338,13 +339,6 @@ def main() -> None:
         if opencompass_snapshot is None:
             raise ValueError("OpenCompass catalog snapshot is missing from the registry")
         opencompass = normalize_opencompass(catalog_snapshot=opencompass_snapshot)
-        (DEFAULT_OUTPUT_DIR / "opencompass_source_records.jsonl").write_text(
-            "".join(
-                json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
-                for row in opencompass["source_records"]
-            ),
-            encoding="utf-8",
-        )
 
         # Records, series and observations from every crawl travel together but
         # never merge: keys are namespaced per source, and a shard files its
@@ -355,6 +349,17 @@ def main() -> None:
         raw_records = [
             item for result in normalized for item in result["source_records"]
         ] + opencompass["source_records"]
+        date_facts = load_benchmark_dates(raw_records)
+        opencompass["source_records"] = apply_benchmark_dates(
+            opencompass["source_records"], date_facts
+        )
+        (DEFAULT_OUTPUT_DIR / "opencompass_source_records.jsonl").write_text(
+            "".join(
+                json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
+                for row in opencompass["source_records"]
+            ),
+            encoding="utf-8",
+        )
 
         from .external_overrides import (
             apply_llm_stats_identity_overrides,
@@ -369,15 +374,16 @@ def main() -> None:
         overrides = load_llm_stats_identity_overrides(raw_records)
         enriched_normalized = []
         for result in normalized:
-            if result["validation"]["source"] != "llm_stats":
-                enriched_normalized.append(result)
-                continue
             enriched = dict(result)
-            enriched["source_records"] = apply_llm_stats_identity_overrides(
-                result["source_records"], overrides
-            )
-            enriched["validation"] = overridden_validation(
-                result["validation"], enriched["source_records"], overrides
+            if result["validation"]["source"] == "llm_stats":
+                enriched["source_records"] = apply_llm_stats_identity_overrides(
+                    result["source_records"], overrides
+                )
+                enriched["validation"] = overridden_validation(
+                    result["validation"], enriched["source_records"], overrides
+                )
+            enriched["source_records"] = apply_benchmark_dates(
+                enriched["source_records"], date_facts
             )
             enriched_normalized.append(enriched)
         normalized = enriched_normalized
