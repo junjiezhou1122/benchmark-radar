@@ -5085,6 +5085,39 @@ dialog {
   font-weight: 600;
   min-width: 2.5rem;
 }
+/* The histogram sits on the light page ground, not inside .frontier-panel, so
+   it uses the :root tokens. The panel's own chart classes (.frontier-tick and
+   friends) are tuned for its #0d1519 island and measure 1.64:1 against --canvas,
+   which is why none of them are reused here. */
+.score-histogram { margin: 0 0 1.5rem; }
+.score-histogram-title { font-size: 1rem; margin: 0 0 .6rem; font-weight: 600; }
+.score-histogram-note { color: var(--muted); font-size: .8rem; margin: .4rem 0 0; }
+.iso-ground { fill: #dde4e8; stroke: var(--line); stroke-width: 1; }
+.iso-grid { stroke: var(--line); stroke-width: .5; }
+.iso-axis-tick { fill: var(--muted); font-size: 11px; }
+.iso-axis-tick.is-dim { fill: var(--line); }
+.iso-bar { cursor: pointer; }
+.iso-bar-top { fill: #4f8fd6; }
+.iso-bar-left { fill: var(--blue); }
+.iso-bar-right { fill: var(--blue-deep); }
+.iso-bar-top, .iso-bar-left, .iso-bar-right {
+  stroke: var(--panel);
+  stroke-width: .6;
+  stroke-linejoin: round;
+}
+/* A buried bar must still show that it is focused, so the cue is a fill change
+   that reads through the gaps rather than a size change, which would break the
+   painter's-algorithm assumption that every bar fills exactly one cell. */
+.iso-bar:hover .iso-bar-top,
+.iso-bar:focus-visible .iso-bar-top,
+.iso-bar.is-selected .iso-bar-top { fill: var(--gold); }
+.iso-bar:hover .iso-bar-left,
+.iso-bar:focus-visible .iso-bar-left,
+.iso-bar.is-selected .iso-bar-left { fill: #b8811f; }
+.iso-bar:focus { outline: none; }
+.iso-bar:focus-visible .iso-bar-top,
+.iso-bar:focus-visible .iso-bar-left,
+.iso-bar:focus-visible .iso-bar-right { stroke: var(--ink); stroke-width: 1.4; }
 .score-source-heading { font-size: .8rem; margin: 1rem 0 .4rem; color: var(--muted); }
 .score-browse-result { align-items: flex-start; flex-direction: column; gap: .25rem; }
 .score-browse-result .benchmark-result-facts { white-space: normal; }

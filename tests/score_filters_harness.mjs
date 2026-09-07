@@ -74,4 +74,69 @@ assert.equal(cutoff('under70'), 70, 'a stale token from an old link falls back')
 assert.equal(cutoff('5'), 70, 'below the slider minimum falls back');
 assert.equal(cutoff('999'), 70, 'above the slider maximum falls back');
 assert.equal(cutoff('44'), 40, 'an off-step value snaps to the nearest step');
-console.log('Date windows, deduplication, cutoff boundaries, source-neutral ranking, and shared scale passed.');
+
+// --- Score histogram ---------------------------------------------------------
+const histNames = ['monthIndexOf','monthFromIndex','scoreBandOf','isoDepth','scoreHistogramCells'];
+const histConsts = source.match(/const HISTOGRAM_BANDS = \d+;/)[0] + '\n'
+  + source.match(/const HISTOGRAM_WINDOW_MONTHS = \d+;/)[0];
+const hist = new Function(`${histConsts}\n${histNames.map(fn).join('\n')}\nreturn {${histNames.join(',')}};`)();
+
+// High bands sit at the back so the heavy rows cannot bury the sparse ones.
+// Painter's ordering depends on this; a flipped mapping would silently hide bars.
+assert.equal(hist.isoDepth(9), 0);
+assert.equal(hist.isoDepth(0), 9);
+
+assert.equal(hist.scoreBandOf(69.9), 6);
+assert.equal(hist.scoreBandOf(70), 7);
+assert.equal(hist.scoreBandOf(0), 0);
+assert.equal(hist.scoreBandOf(100), 9, 'a 100 clamps into the top band rather than a tenth one');
+
+assert.equal(hist.monthIndexOf('2026-01') - hist.monthIndexOf('2025-12'), 1, 'months step across a year boundary');
+assert.equal(hist.monthFromIndex(hist.monthIndexOf('2024-03')), '2024-03');
+
+const track = (unit, rows) => ({unit, name: unit, observations: rows.map(([reported_at, value]) => ({reported_at, value}))});
+const bench = {
+  pct: track('percent', [['2026-08-01', 65], ['2026-08-20', 62], ['2026-07-01', 12], ['2025-01-01', 40]]),
+  elo: track('elo', [['2026-08-02', 1400]]),
+  usd: track('usd', [['2026-08-03', 5000]]),
+};
+const all = hist.scoreHistogramCells(bench, 100);
+// A 1400 Elo would clamp into "90-99" and sit beside a percentage as though the
+// two measured the same thing, so non-percent units never enter the figure.
+assert.equal(all.total, 3, 'only in-window percent scores are plotted');
+assert.equal(all.excluded, 1, 'the 2025 score is counted as outside the window');
+assert.equal(all.months.length, 12);
+assert.equal(all.months[all.months.length - 1], '2026-08');
+assert.equal(all.months[0], '2025-09');
+
+// The spine keeps every calendar month, so a gap stays a gap.
+assert.ok(all.months.includes('2025-11'), 'empty months remain on the axis');
+
+const under = hist.scoreHistogramCells(bench, 60);
+assert.equal(under.total, 1, 'the cutoff hides whole bands, not whole benchmarks');
+assert.ok([...under.cells.values()].every((cell) => cell.band * 10 < 60));
+
+const aug = [...all.cells.values()].find((cell) => cell.band === 6);
+assert.equal(aug.count, 2, 'two August scores share the 60-69 band');
+assert.equal(aug.tracks.size, 1);
+
+assert.equal(hist.scoreHistogramCells({}, 100).cells.size, 0, 'an empty corpus yields no cells');
+
+// Painter's algorithm: far cells first. Verified against the three neighbours
+// that can occlude a cell.
+const order = [...all.cells.values()]
+  .sort((a, b) => (a.slot + hist.isoDepth(a.band)) - (b.slot + hist.isoDepth(b.band)) || a.slot - b.slot);
+const key = (c) => `${c.slot}|${hist.isoDepth(c.band)}`;
+const at = new Map(order.map((c, i) => [key(c), i]));
+order.forEach((cell) => {
+  const m = cell.slot;
+  const d = hist.isoDepth(cell.band);
+  [[1, 0], [0, 1], [1, 1]].forEach(([dm, dd]) => {
+    const front = at.get(`${m + dm}|${d + dd}`);
+    if (front !== undefined) {
+      assert.ok(front > at.get(key(cell)), 'a nearer cell must be painted after the one behind it');
+    }
+  });
+});
+
+console.log('Date windows, deduplication, cutoff boundaries, source-neutral ranking, shared scale, and histogram cells passed.');

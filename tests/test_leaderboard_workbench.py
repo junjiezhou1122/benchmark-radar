@@ -684,6 +684,19 @@ def test_the_crawled_chart_ticks_label_real_values_not_padded_bounds():
     assert "band = { low: low - pad, high: high + pad }" in chart
 
 
+def test_score_histogram_leads_the_ranked_list():
+    html = source("site/index.html")
+    # The tooltip resolves through .closest(".frontier-chart"), so that class on
+    # the mount is a contract, not styling.
+    assert '<div class="frontier-chart" id="score-histogram-chart"></div>' in html
+    assert html.index('id="score-histogram"') < html.index('id="score-ranking-list"')
+    script = source("site/assets/app.js")
+    # Non-percent units cannot share a 0-99 band axis.
+    assert 'record?.unit !== "percent"' in script
+    histogram = script.split("function scoreHistogramCells(", 1)[1].split("\nfunction ", 1)[0]
+    assert "monthFromIndex" in histogram, "the month spine keeps empty months"
+
+
 def test_score_ranking_and_adoption_state_their_distinct_measures():
     html = source("site/index.html")
     # The score ranking is labelled by its own column headers rather than a
