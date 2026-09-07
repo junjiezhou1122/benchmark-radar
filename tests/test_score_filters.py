@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from benchmark_radar.app_seeds import _score_browser_seed
+from benchmark_radar.app_seeds import _display_value, _score_browser_seed
 from benchmark_radar.score_summary import score_summary
 
 
@@ -132,3 +132,16 @@ def test_browser_date_and_score_filter_contracts():
     subprocess.run(
         [node, "tests/score_filters_harness.mjs"], check=True, capture_output=True, text=True
     )
+
+
+def test_seed_and_browser_format_scores_identically():
+    """The seed and app.js must print one decimal the same way, half-up included."""
+    node = shutil.which("node")
+    assert node, "Node.js is required for the site behavior tests"
+    values = [55.468026, 94.949495, 70, 0, 32.285714, 1400, 69.95, 69.94, 0.95, 0.05, 1234.567]
+    script = (
+        "console.log(JSON.stringify("
+        f"{values}.map(v => v.toLocaleString('en', {{maximumFractionDigits: 1}}))))"
+    )
+    result = subprocess.run([node, "-e", script], check=True, capture_output=True, text=True)
+    assert json.loads(result.stdout) == [_display_value(value) for value in values]

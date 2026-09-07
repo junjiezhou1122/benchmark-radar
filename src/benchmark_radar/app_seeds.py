@@ -17,6 +17,7 @@ one side has an obvious counterpart on the other.
 
 from __future__ import annotations
 
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from .citation import apa_citation
@@ -69,6 +70,18 @@ LEADERBOARD_TOP_NOTE = (
     "read those with software that can misread a digit, so the list at the "
     "bottom of this page links every count back to the report it came from."
 )
+
+
+def _display_value(value: float) -> str:
+    """One decimal, matching scoreSummaryLabel in app.js so seeds and renders agree.
+
+    Half-up rather than Python's default banker's rounding, because
+    toLocaleString rounds half-up; without this a 0.95 prints as "1" in the
+    browser and "0.9" in the seed. Rounding is display only: a 69.95 shows as
+    "70" and still belongs under the <70 cutoff, which filters on the raw value.
+    """
+    rounded = Decimal(str(value)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    return f"{rounded:,f}".rstrip("0").rstrip(".")
 
 
 def _info_disclosure(text: str) -> str:
@@ -191,7 +204,7 @@ def _score_browser_seed(
     ranking = ""
     for rank, row in enumerate(shown, 1):
         summary = row["summary"]
-        value = f"{summary['display_max']:,.6f}".rstrip("0").rstrip(".")
+        value = _display_value(summary["display_max"])
         unit = summary.get("unit")
         suffix = "%" if unit == "percent" else f" {unit}" if unit else ""
         factor = " · raw score ×100" if summary["display_multiplier"] == 100 else ""

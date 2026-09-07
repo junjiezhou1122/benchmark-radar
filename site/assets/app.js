@@ -4583,7 +4583,7 @@ function scoreBrowseRows(board = state.data?.model_card_leaderboard) {
 
 function scoreSummaryLabel(summary) {
   if (!Number.isFinite(summary?.display_max)) return t("No numeric score");
-  const value = summary.display_max.toLocaleString("en", { maximumFractionDigits: 6 });
+  const value = summary.display_max.toLocaleString("en", { maximumFractionDigits: 1 });
   const unit = summary.unit === "percent" ? "%" : summary.unit ? ` ${summary.unit}` : "";
   const factor = summary.display_multiplier === 100 ? ` · ${t("raw score ×100")}` : "";
   return `${t("Highest")} ${value}${unit}${factor}`;
