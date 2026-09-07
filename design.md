@@ -45,7 +45,8 @@ accessible names, downloads, and citations are part of the product's trust.
 | --- | --- |
 | Today | Explain what appeared recently and why it matters |
 | Search | Find possible benchmarks across the corpus |
-| Leaderboard | Compare attention, adoption, or reported scores as separate modes |
+| Leaderboard | Compare Benchmark Frontier, recorded score counts and documentation |
+| Saturation | Find benchmarks and inspect their reported scores over time |
 | Trends | Show change across comparable time windows |
 | Blog | Publish dated, shareable analysis |
 | CLI and Skill | Let people and agents query local data |
@@ -112,10 +113,11 @@ most of the corpus. Name the source instead: "Artificial Analysis", "LLM Stats",
 "OpenCompass Hub", "Model reports". Preserve the evidence fields above for
 each source. Missing measurements do not remove benchmark records.
 
-A figure and the list beside it answer the same question over the same rows. If
-a chart shows a dozen benchmarks while the list underneath says 790, the chart
-is wrong, not the list. Prefer the count and unit the reader can already see on
-the page ("1,259 benchmarks · 4 sources") over a private subset.
+Each figure and browser starts from the complete catalog and states its own
+filter scope. Leaderboard's slider filters only Benchmark Frontier. Saturation
+shares that slider for browsing; a search queries the full catalog without
+changing the cutoff. Clearing the query restores filtered browsing. Prefer the
+count and unit the reader can already see over a private subset.
 
 When a measurement cannot span the population, restrict the calculation, not
 the represented records. Keep benchmarks with unknown or incompatible values

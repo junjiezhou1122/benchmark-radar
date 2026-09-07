@@ -466,7 +466,8 @@ main {
    y=1356, entirely below the fold, behind KPI cards and accordions that
    summarise it. Those moved below the figure; this recovers the last of the
    gap so the visualization is visibly underway on load. */
-#leaderboard-view {
+#leaderboard-view,
+#saturation-view {
   padding-top: clamp(1.25rem, 2vw, 1.75rem);
 }
 
@@ -4181,10 +4182,7 @@ footer {
 
   .benchmark-navigator {
     position: static;
-  }
-
-  .frontier-panel {
-    order: -1;
+    max-height: min(50vh, 24rem);
   }
 
   .health-panel {

@@ -104,9 +104,9 @@ def _leaderboard_seed(
     board = dashboard.get("model_card_leaderboard") or {}
     ranked = [entry for entry in (board.get("entries") or []) if (entry.get("card_count") or 0) > 0]
     entries = ranked[:LEADERBOARD_TOP_LIMIT]
-    browse_seed = _score_browser_seed(dashboard, catalog_index)
+    ranking_seed = _score_ranking_seed(dashboard, catalog_index)
     if not entries:
-        return browse_seed
+        return ranking_seed
     # Scaled against the top row on screen rather than the top row overall,
     # because that is what the renderer scales against.
     top = max(int(entry["card_count"]) for entry in entries)
@@ -159,7 +159,7 @@ def _leaderboard_seed(
             '<p class="leaderboard-deck visually-hidden" id="leaderboard-measures" data-seed>'
             f"{esc(measures)}</p>"
         )
-    return {**seed, **browse_seed}
+    return {**seed, **ranking_seed}
 
 
 def _browser_score_summary(record: dict[str, Any]) -> dict[str, Any] | None:
@@ -222,10 +222,8 @@ def _benchmark_date(
     return None, None
 
 
-def _score_browser_seed(
-    dashboard: dict[str, Any], catalog_index: list[dict[str, Any]]
-) -> dict[str, str]:
-    """The default list rendered by renderBenchmarkSearch, at DEFAULT_SCORE_CUTOFF."""
+def _catalog_score_rows(catalog_index: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The complete population and ordering used by scoreBrowseRows."""
     rows = [
         {
             "id": record["slug"],
@@ -236,73 +234,63 @@ def _score_browser_seed(
         }
         for record in catalog_index
     ]
+    rows.sort(key=lambda row: (-(row["summary"] or {}).get("numeric_count", 0), row["id"]))
+    return rows
+
+
+def _has_reported_score(row: dict[str, Any]) -> bool:
+    summary = row["summary"] or {}
+    value = summary.get("display_max")
+    return (
+        summary.get("numeric_count", 0) > 0
+        and isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    )
+
+
+_SCORE_SOURCE_NAMES = {
+    "model_reports": "Model reports",
+    "llm_stats": "LLM Stats",
+    "artificial_analysis": "Artificial Analysis",
+    "opencompass_hub": "OpenCompass Hub",
+}
+
+
+def _score_browser_seed(
+    dashboard: dict[str, Any], catalog_index: list[dict[str, Any]]
+) -> dict[str, str]:
+    """Saturation's empty-search browser, with the shared default cutoff."""
+    if not catalog_index:
+        return {}
     rows = [
         row
-        for row in rows
-        if (row["date"][0] is None or row["date"][0] >= "2024-01-01")
-        and (row["summary"] or {}).get("numeric_count", 0) > 0
-        and isinstance((row["summary"] or {}).get("display_max"), (int, float))
-        and not isinstance(row["summary"]["display_max"], bool)
-        and math.isfinite(row["summary"]["display_max"])
-        and row["summary"]["display_max"] < DEFAULT_SCORE_CUTOFF
+        for row in _catalog_score_rows(catalog_index)
+        if not _has_reported_score(row) or row["summary"]["display_max"] < DEFAULT_SCORE_CUTOFF
     ]
-    rows.sort(key=lambda row: (-(row["summary"] or {}).get("numeric_count", 0), row["id"]))
     shown = rows[:50]
-    if not shown:
-        return {}
-    names = {
-        "model_reports": "Model reports",
-        "llm_stats": "LLM Stats",
-        "artificial_analysis": "Artificial Analysis",
-        "opencompass_hub": "OpenCompass Hub",
-    }
     content = ""
-    ranking = ""
-    for rank, row in enumerate(shown, 1):
-        summary = row["summary"] or {}
-        value = (
-            _display_value(summary["display_max"])
-            if summary.get("display_max") is not None
-            else None
-        )
-        unit = summary.get("unit")
-        suffix = "%" if unit == "percent" else f" {unit}" if unit else ""
-        factor = " · raw score ×100" if summary.get("display_multiplier") == 100 else ""
-        highest = f"Highest {value}{suffix}{factor}" if value is not None else "No score reported"
-        label = names.get(row["source"], row["source"])
+    for index, row in enumerate(shown):
+        label = _SCORE_SOURCE_NAMES.get(row["source"], row["source"])
         dated, basis = row["date"]
         date_label = f"{basis} {_medium_date(dated)}" if dated else "Date unknown"
-        count = (
-            _metric_label(summary["numeric_count"], "data point")
-            if summary.get("numeric_count")
-            else "No score reported"
-        )
-        pressed = "true" if rank == 1 else "false"
+        facts = f"{label} · {date_label}"
+        if not _has_reported_score(row):
+            facts += " · No score reported"
+        pressed = "true" if index == 0 else "false"
         content += (
             '<button class="benchmark-result score-browse-result" '
             f'type="button" aria-pressed="{pressed}">'
-            f'<span class="benchmark-result-name">{rank}. {esc(row["name"])}</span>'
-            f'<span class="benchmark-result-facts">{esc(label + " · " + date_label)}</span>'
+            f'<span class="benchmark-result-name">{esc(row["name"])}</span>'
+            f'<span class="benchmark-result-facts">{esc(facts)}</span>'
             "</button>"
         )
-        if rank <= 5:
-            maximum = (shown[0]["summary"] or {}).get("numeric_count") or 1
-            width = summary.get("numeric_count", 0) / maximum * 100
-            ranking += (
-                '<li class="leaderboard-top-row">'
-                f'<span class="leaderboard-top-rank">{rank:02}</span>'
-                '<span class="leaderboard-top-name">'
-                f'<button class="score-ranking-link" type="button" aria-pressed="{pressed}">'
-                f"<span>{esc(row['name'])}</span>"
-                f"<small>{esc(label + ' · ' + highest)}</small></button></span>"
-                '<span class="leaderboard-top-bar"><span class="leaderboard-top-bar-fill" '
-                f'style="width:{width:.1f}%"></span></span>'
-                f'<span class="leaderboard-top-count">{esc(count)}</span></li>'
-            )
+    if not rows:
+        content = (
+            '<p class="empty-state">No benchmarks match these filters.</p>'
+            '<button class="clear-button" type="button">All</button>'
+        )
     seeds = {
-        '<ol class="leaderboard-top-list" id="score-ranking-list"></ol>': (
-            f'<ol class="leaderboard-top-list" id="score-ranking-list" data-seed>{ranking}</ol>'
-        ),
         '<div id="benchmark-search-results"></div>': (
             f'<div id="benchmark-search-results" data-seed>{content}</div>'
         ),
@@ -311,15 +299,55 @@ def _score_browser_seed(
             f"{len(shown):,} of {len(rows):,} matches</p>"
         ),
     }
-    if len(rows) > 5:
-        button = (
-            '<button id="score-ranking-more" class="leaderboard-top-more" type="button" '
-            'data-i18n="Show more" hidden>Show more</button>'
-        )
-        seeds[button] = button.replace(" hidden>", " data-seed>")
     if len(rows) > 50:
         button = (
             '<button id="benchmark-search-more" class="clear-button" type="button" '
+            'data-i18n="Show more" hidden>Show more</button>'
+        )
+        seeds[button] = button.replace(" hidden>", " data-seed>")
+    return seeds
+
+
+def _score_ranking_seed(
+    dashboard: dict[str, Any], catalog_index: list[dict[str, Any]]
+) -> dict[str, str]:
+    """The score ranking keeps its scored 2024+ cohort, independent of the slider."""
+    rows = [
+        row
+        for row in _catalog_score_rows(catalog_index)
+        if _has_reported_score(row) and (row["date"][0] is None or row["date"][0] >= "2024-01-01")
+    ]
+    if not rows:
+        return {}
+    maximum = rows[0]["summary"]["numeric_count"]
+    ranking = ""
+    for rank, row in enumerate(rows[:5], 1):
+        summary = row["summary"]
+        value = _display_value(summary["display_max"])
+        unit = summary.get("unit")
+        suffix = "%" if unit == "percent" else f" {unit}" if unit else ""
+        label = _SCORE_SOURCE_NAMES.get(row["source"], row["source"])
+        count = _metric_label(summary["numeric_count"], "data point")
+        width = summary["numeric_count"] / maximum * 100
+        ranking += (
+            '<li class="leaderboard-top-row">'
+            f'<span class="leaderboard-top-rank">{rank:02}</span>'
+            '<span class="leaderboard-top-name">'
+            '<button class="score-ranking-link" type="button" aria-pressed="false">'
+            f"<span>{esc(row['name'])}</span>"
+            f"<small>{esc(label + ' · ' + value + suffix)}</small></button></span>"
+            '<span class="leaderboard-top-bar"><span class="leaderboard-top-bar-fill" '
+            f'style="width:{width:.1f}%"></span></span>'
+            f'<span class="leaderboard-top-count">{esc(count)}</span></li>'
+        )
+    seeds = {
+        '<ol class="leaderboard-top-list" id="score-ranking-list"></ol>': (
+            f'<ol class="leaderboard-top-list" id="score-ranking-list" data-seed>{ranking}</ol>'
+        ),
+    }
+    if len(rows) > 5:
+        button = (
+            '<button id="score-ranking-more" class="leaderboard-top-more" type="button" '
             'data-i18n="Show more" hidden>Show more</button>'
         )
         seeds[button] = button.replace(" hidden>", " data-seed>")
@@ -533,6 +561,7 @@ def view_seeds(
     """Every view's seed, keyed by view. An empty dict means nothing to publish."""
     return {
         "leaderboard": _leaderboard_seed(dashboard, catalog_index or []),
+        "saturation": _score_browser_seed(dashboard, catalog_index or []),
         "trends": _trends_seed(dashboard, palette),
         "map": _map_seed(dashboard),
     }

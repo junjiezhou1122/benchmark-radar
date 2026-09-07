@@ -45,7 +45,7 @@ from .feed import SITE_URL
 from .site_shell import breadcrumb_schema, esc, json_ld, webpage_schema
 
 # Published in this order. "map" is the view key; its path is /explore/.
-APP_VIEWS: tuple[str, ...] = ("leaderboard", "trends", "map")
+APP_VIEWS: tuple[str, ...] = ("leaderboard", "saturation", "trends", "map")
 UTILITY_PAGES: tuple[str, ...] = ("cli", "cite", "rubric")
 UNLISTED_ROUTES = frozenset({"map", "rubric"})
 
@@ -64,6 +64,7 @@ HOME_NAV_INACTIVE = (
 # Breadcrumb names, matching the navigation labels a reader clicked to get here.
 VIEW_LABELS = {
     "leaderboard": "Leaderboard",
+    "saturation": "Saturation",
     "trends": "Trends",
     "map": "Explore",
 }

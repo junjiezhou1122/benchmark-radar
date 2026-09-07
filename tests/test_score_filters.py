@@ -8,7 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from benchmark_radar.app_seeds import _benchmark_date, _display_value, _score_browser_seed
+from benchmark_radar.app_seeds import (
+    _benchmark_date,
+    _display_value,
+    _score_browser_seed,
+    _score_ranking_seed,
+)
 from benchmark_radar.score_summary import score_summary
 
 
@@ -179,12 +184,13 @@ def test_seed_ranks_score_points_without_source_preference():
             "score_summary": summary(20, 70),
         },
     ]
-    seeds = _score_browser_seed(data, index)
+    seeds = _score_ranking_seed(data, index)
     markup = seeds['<ol class="leaderboard-top-list" id="score-ranking-list"></ol>']
     assert markup.index("External") < markup.index("Curated")
     assert "9 data points" in markup
     assert "2 data points" in markup
-    assert "Excluded" not in markup
+    assert markup.index("Excluded") < markup.index("External")
+    assert "20 data points" in markup
     assert "LLM Stats" in markup
 
 
@@ -196,7 +202,7 @@ def test_browser_date_and_score_filter_contracts():
     )
 
 
-def test_seed_excludes_unscored_but_keeps_zero_scores_and_unjoined_records():
+def test_saturation_seed_keeps_unscored_zero_scores_and_unjoined_records():
     data = {
         "model_card_leaderboard": {"entries": []},
         "benchmark_score_progression": {
@@ -227,11 +233,11 @@ def test_seed_excludes_unscored_but_keeps_zero_scores_and_unjoined_records():
     seeds = _score_browser_seed(data, index)
     rendered = "".join(seeds.values())
     assert "unjoined" in rendered
-    assert "Unknown score" not in rendered
-    assert "No score reported" not in rendered
+    assert "Unknown score" in rendered
+    assert "No score reported" in rendered
     assert "Zero score" in rendered
     assert "Above cutoff" not in rendered
-    assert "2 of 2 matches" in rendered
+    assert "3 of 3 matches" in rendered
 
 
 def test_seed_and_browser_format_scores_identically():
@@ -247,7 +253,23 @@ def test_seed_and_browser_format_scores_identically():
     assert json.loads(result.stdout) == [_display_value(value) for value in values]
 
 
-def test_seed_uses_release_then_earliest_score_and_applies_inclusive_2024_cutoff():
+def test_saturation_page_keeps_its_browser_when_default_cutoff_has_no_matches():
+    index = [
+        {
+            "slug": "high",
+            "name": "Above cutoff",
+            "source": "llm_stats",
+            "score_summary": score_summary([{"value": 95}]),
+        },
+    ]
+    markup = "".join(_score_browser_seed({}, index).values())
+    assert "0 of 0 matches" in markup
+    assert "No benchmarks match these filters." in markup
+    assert ">All</button>" in markup
+    assert "Above cutoff" not in markup
+
+
+def test_saturation_seed_preserves_dates_without_the_frontier_date_cutoff():
     assert _benchmark_date({"released": "2025-01-01", "first_reported_at": "2023-01-01"}) == (
         "2025-01-01",
         "Released",
@@ -302,14 +324,14 @@ def test_seed_uses_release_then_earliest_score_and_applies_inclusive_2024_cutoff
     for record in index:
         record["score_summary"] = score_summary([{"value": 50}])
     markup = "".join(_score_browser_seed({}, index).values())
-    assert "Old release" not in markup
-    assert "Old score" not in markup
+    assert "Old release" in markup
+    assert "Old score" in markup
     assert "Boundary release" in markup
     assert "Dated score" in markup
     assert "First LLM score reported Jan 1, 2024" in markup
     assert "Undated evidence" in markup
     assert "Date unknown" in markup
-    assert "3 of 3 matches" in markup
+    assert "5 of 5 matches" in markup
 
 
 def test_seed_preserves_score_entry_proxy_and_prefers_release_or_publication():
@@ -348,5 +370,5 @@ def test_seed_preserves_score_entry_proxy_and_prefers_release_or_publication():
         record["score_summary"] = score_summary([{"value": 50}])
     markup = "".join(_score_browser_seed({}, index).values())
     assert "First dated LLM score (model-release proxy) Feb 29, 2024" in markup
-    assert "Pre-2024 score entry" not in markup
-    assert "1 of 1 matches" in markup
+    assert "Pre-2024 score entry" in markup
+    assert "2 of 2 matches" in markup

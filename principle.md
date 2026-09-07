@@ -19,8 +19,22 @@ missing and investigate. Do not present that subset as Benchmark Radar.**
 
 Check which sources, records, and fields disappeared at each join or filter.
 A successful render, plausible Pareto frontier, or passing test does not excuse
-missing most of the population. A chart and the browser beside it must use the
-same record universe and respond consistently to the user's filters.
+missing most of the population. Each surface starts from the same catalog;
+filters apply to the surface the reader is using, as described below.
+
+## Leaderboard and Saturation share a cutoff; search bypasses it
+
+Both tabs use the same score slider, initially 70. On Leaderboard it filters
+only Benchmark Frontier and its coverage counts. The score ranking keeps its
+numeric-score and date eligibility but does not follow the slider.
+
+Saturation contains the benchmark browser and complete reported score histories.
+With an empty search it applies the shared cutoff across all years, retaining
+unscored records as unknown rather than inventing scores. With a search query it
+searches the entire catalog, including every source, year and unscored record,
+without applying the cutoff. Searching does not change the slider; clearing the
+query restores filtered browsing. Selecting a result keeps its complete history,
+even when it lies outside the current browsing cutoff.
 
 ## One corpus, one record contract, equal treatment of sources
 
@@ -119,7 +133,7 @@ A numeric score cutoff may hide records whose known scores are at or above it.
 Records without scores cannot be classified as above or below the cutoff;
 Frontier excludes them with its separate reported-score requirement. Show the
 full population and account for the visible records, pre-2024 records, records
-excluded for missing scores, and records hidden by score or search. Count each
+excluded for missing scores, and records hidden by score. Count each
 record once so the categories reconcile.
 
 ## Calculate only what the evidence supports
@@ -155,7 +169,7 @@ must preserve the filtered benchmark IDs.
 
 Use `log1p(count)` for height and raw counts for ticks, tooltips and dominance.
 Derive the maximum from the entire scored 2024+ cohort for the selected measure,
-before the score and search filters. Do not cap it at 20, 100 or any fixed value.
+before the score cutoff. Do not cap it at 20, 100 or any fixed value.
 The wall projection uses the same selected count as the main chart; unverified
 score scales retain hollow projections and remain outside Pareto calculations.
 

@@ -141,7 +141,10 @@ def _write(tmp_path: Path, dashboard: dict) -> dict:
     (tmp_path / "data" / "benchmark-index.json").write_text(
         json.dumps(
             {
-                "benchmarks": [],
+                "benchmarks": [
+                    {"slug": f"benchmark-{i}", "name": entry["name"], "source": "model_reports"}
+                    for i, entry in enumerate(entries)
+                ],
                 "document_registry": {**board, "entries": entries},
             }
         )
@@ -154,6 +157,7 @@ def test_view_seo_is_read_from_the_script_the_browser_uses():
     assert {view: entry["canonical"] for view, entry in seo.items()} == {
         "today": "/",
         "leaderboard": "/leaderboard/",
+        "saturation": "/saturation/",
         "trends": "/trends/",
         "map": "/explore/",
     }
@@ -211,6 +215,7 @@ def test_every_view_is_published_at_its_own_path(tmp_path):
     report = _write(tmp_path, _dashboard())
     assert report["paths"] == [
         "/leaderboard/",
+        "/saturation/",
         "/trends/",
         "/explore/",
         "/cli/",
@@ -243,6 +248,7 @@ def test_only_the_named_view_is_open(tmp_path):
     _write(tmp_path, _dashboard())
     for path, open_id in (
         ("leaderboard", "leaderboard-view"),
+        ("saturation", "saturation-view"),
         ("trends", "trends-view"),
         ("explore", "map-view"),
     ):
@@ -257,6 +263,7 @@ def test_each_generated_page_marks_its_navigation_entry_current(tmp_path):
     _write(tmp_path, _dashboard())
     ids = {
         "leaderboard": 'data-view="leaderboard"',
+        "saturation": 'data-view="saturation"',
         "trends": 'data-view="trends"',
         "cli": 'id="cli-nav"',
         "cite": 'id="cite-open"',
@@ -289,7 +296,7 @@ def test_exactly_one_heading_is_visible_per_page(tmp_path):
     """Four h1s live in the document, one per view, and three are inside hidden
     sections. A page with two visible h1s or none is a page whose outline lies."""
     _write(tmp_path, _dashboard())
-    for path in ("leaderboard", "trends", "explore"):
+    for path in ("leaderboard", "saturation", "trends", "explore"):
         page = (tmp_path / path / "index.html").read_text(encoding="utf-8")
         open_section = re.search(
             r'<section class="view" id="[\w-]+"(?![^>]*hidden)[^>]*>(.*?)\n      </section>',
@@ -370,7 +377,7 @@ def test_seeded_copy_controls_have_names_values_and_fallback_hints(tmp_path):
 
 def test_no_page_ships_a_second_url_for_itself(tmp_path):
     _write(tmp_path, _dashboard())
-    for path in ("leaderboard", "trends", "explore", "cli", "cite", "rubric"):
+    for path in ("leaderboard", "saturation", "trends", "explore", "cli", "cite", "rubric"):
         page = (tmp_path / path / "index.html").read_text(encoding="utf-8")
         assert "?view=" not in page
 
@@ -472,7 +479,7 @@ def test_rebuilding_the_same_data_produces_the_same_bytes(tmp_path):
     first, second = tmp_path / "first", tmp_path / "second"
     _write(first, _dashboard())
     _write(second, _dashboard())
-    for path in ("leaderboard", "trends", "explore", "cli", "cite", "rubric"):
+    for path in ("leaderboard", "saturation", "trends", "explore", "cli", "cite", "rubric"):
         assert (first / path / "index.html").read_bytes() == (
             second / path / "index.html"
         ).read_bytes()
@@ -605,7 +612,7 @@ def test_every_seeded_container_is_one_the_renderer_already_owns(tmp_path):
     script = (SITE / "assets" / "app.js").read_text(encoding="utf-8")
 
     seen = set()
-    for path in ("leaderboard", "trends", "explore"):
+    for path in ("leaderboard", "saturation", "trends", "explore"):
         page = (tmp_path / path / "index.html").read_text(encoding="utf-8")
         ids = re.findall(r'id="([a-z-]+)"[^>]*\bdata-seed\b', page)
         assert ids, path

@@ -396,8 +396,13 @@ def test_each_view_serializes_only_the_filters_it_reads():
     for key in ("date", "q", "kind", "category", "source", "organization", "event"):
         assert f'params.set("{key}"' in today
 
-    leaderboard = body.split('if (!utility && state.view === "leaderboard")', 1)[1]
-    for key in ("lq", "ldomain", "lorg", "lera", "lfrontier"):
+    leaderboard, saturation = body.split('if (!utility && state.view === "leaderboard")', 1)[
+        1
+    ].split('if (!utility && state.view === "saturation")', 1)
+    assert 'params.set("lfrontier"' not in leaderboard
+    for key in ("lscore", "bq", "lfrontier"):
+        assert f'params.set("{key}"' in saturation
+    for key in ("lq", "ldomain", "lorg", "lera", "lscore"):
         assert f'params.set("{key}"' in leaderboard
 
     assert 'if (!utility && state.view === "map" && state.entity) params.set("entity"' in body
@@ -601,6 +606,33 @@ readUrl();
 writeUrl("replace");
 results.legacyView = window.location.pathname + window.location.search;
 
+results.legacyBenchmarks = [];
+for (const url of [
+  "/leaderboard/?lfrontier=bench-95&lscore=70",
+  "/?view=leaderboard&lfrontier=bench-95&lscore=70",
+]) {{
+  install(url);
+  readUrl();
+  writeUrl("replace");
+  results.legacyBenchmarks.push(window.location.pathname + window.location.search);
+}}
+
+install("/saturation/?lscore=40&bq=bench-95&lfrontier=bench-95&lq=agent&lheight=documents");
+readUrl();
+writeUrl("replace");
+results.saturation = {{
+  url: window.location.pathname + window.location.search,
+  view: state.view, query: state.benchmarkQuery, cutoff: state.lscore,
+  selected: state.lfrontier, explicit: state.lfrontierExplicit,
+}};
+state.view = "leaderboard";
+writeUrl("push");
+results.sharedCutoff = window.location.pathname + window.location.search;
+state.view = "saturation";
+state.benchmarkQuery = "";
+writeUrl("replace");
+results.clearedSearch = window.location.pathname + window.location.search;
+
 install("/#rubric=2");
 readUrl();
 writeUrl("replace");
@@ -628,6 +660,23 @@ console.log(JSON.stringify(results));
     routes = json.loads(result.stdout)
 
     assert routes["legacyView"] == "/leaderboard/?lscore=70&lq=agent"
+    assert (
+        routes["legacyBenchmarks"]
+        == [
+            "/saturation/?lscore=70&lfrontier=bench-95",
+        ]
+        * 2
+    )
+    assert routes["saturation"] == {
+        "url": "/saturation/?lscore=40&bq=bench-95&lfrontier=bench-95",
+        "view": "saturation",
+        "query": "bench-95",
+        "cutoff": 40,
+        "selected": "bench-95",
+        "explicit": True,
+    }
+    assert routes["sharedCutoff"] == "/leaderboard/?lscore=40&lheight=documents&lq=agent"
+    assert routes["clearedSearch"] == "/saturation/?lscore=40&lfrontier=bench-95"
     assert routes["legacyRubric"] == "/rubric/?version=2"
     assert routes["legacyReturns"] is False
     assert routes["openCli"] == "/cli/"
@@ -2463,7 +2512,7 @@ def test_a_benchmark_name_search_reaches_the_registry_not_only_the_daily_feed():
     # visitor arrives at an empty leaderboard: 0 chart children, 0 table rows.
     for row in ("function benchmarkResultRow(record",):
         body = script.split(row, 1)[1].split("\nfunction ", 1)[0]
-        assert 'setView("leaderboard");\n      renderLeaderboard();' in body, row
+        assert 'setView("saturation");\n      renderSaturation();' in body, row
 
     # And the empty list stops advising a filter change that cannot help when
     # the thing being searched for was found in the registry instead.
@@ -2629,14 +2678,25 @@ def test_heading_outline_and_scale_stay_quiet():
         html,
         re.S,
     )
-    assert {name for name, _, _ in sections} == {"today", "leaderboard", "map", "trends"}
+    assert {name for name, _, _ in sections} == {
+        "today",
+        "leaderboard",
+        "saturation",
+        "map",
+        "trends",
+    }
     for name, _, body in sections:
         assert body.count("<h1") == 1, name
     visible = [name for name, attrs, _ in sections if " hidden" not in attrs]
     assert visible == ["today"], visible
 
     assert '<h1 id="today-heading" class="today-heading" data-i18n="Today\'s radar">' in html
-    for heading_id in ("leaderboard-heading", "map-heading", "trends-heading"):
+    for heading_id in (
+        "leaderboard-heading",
+        "saturation-heading",
+        "map-heading",
+        "trends-heading",
+    ):
         assert f'<h1 id="{heading_id}"' in html
 
     # The today h1 renders exactly like the counts caption beside it: the shared
