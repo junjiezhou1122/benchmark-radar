@@ -5095,29 +5095,69 @@ dialog {
 .iso-ground { fill: #dde4e8; stroke: var(--line); stroke-width: 1; }
 .iso-grid { stroke: var(--line); stroke-width: .5; }
 .iso-axis-tick { fill: var(--muted); font-size: 11px; }
-.iso-axis-tick.is-dim { fill: var(--line); }
 .iso-bar { cursor: pointer; }
-.iso-bar-top { fill: #4f8fd6; }
-.iso-bar-left { fill: var(--blue); }
-.iso-bar-right { fill: var(--blue-deep); }
+/* One hue per domain, each face a step down the same hue so the solid reads as
+   one object rather than three colours. */
+.iso-domain-coding .iso-bar-top { fill: #4f8fd6; }
+.iso-domain-coding .iso-bar-left { fill: var(--blue); }
+.iso-domain-coding .iso-bar-right { fill: var(--blue-deep); }
+.iso-domain-math .iso-bar-top { fill: #6fb3a9; }
+.iso-domain-math .iso-bar-left { fill: var(--sea); }
+.iso-domain-math .iso-bar-right { fill: #35695f; }
+.iso-domain-agents .iso-bar-top { fill: #e88a6a; }
+.iso-domain-agents .iso-bar-left { fill: var(--orange); }
+.iso-domain-agents .iso-bar-right { fill: #a1442a; }
+.iso-domain-vision .iso-bar-top { fill: #9a8fc4; }
+.iso-domain-vision .iso-bar-left { fill: var(--violet); }
+.iso-domain-vision .iso-bar-right { fill: #524a7d; }
+.iso-domain-knowledge .iso-bar-top { fill: #dfb454; }
+.iso-domain-knowledge .iso-bar-left { fill: var(--gold); }
+.iso-domain-knowledge .iso-bar-right { fill: #8e6716; }
+.iso-domain-language .iso-bar-top { fill: #8d9aa2; }
+.iso-domain-language .iso-bar-left { fill: #64757f; }
+.iso-domain-language .iso-bar-right { fill: #41525b; }
+.iso-domain-other .iso-bar-top { fill: #b9c4ca; }
+.iso-domain-other .iso-bar-left { fill: #94a3ab; }
+.iso-domain-other .iso-bar-right { fill: #6d7d86; }
 .iso-bar-top, .iso-bar-left, .iso-bar-right {
   stroke: var(--panel);
   stroke-width: .6;
   stroke-linejoin: round;
 }
-/* A buried bar must still show that it is focused, so the cue is a fill change
-   that reads through the gaps rather than a size change, which would break the
-   painter's-algorithm assumption that every bar fills exactly one cell. */
+/* A partly hidden bar must still show focus, so the cue is a stroke and a
+   lightened top rather than a size change, which would break the painter's
+   assumption that each bar stays inside its own footprint. */
 .iso-bar:hover .iso-bar-top,
 .iso-bar:focus-visible .iso-bar-top,
-.iso-bar.is-selected .iso-bar-top { fill: var(--gold); }
-.iso-bar:hover .iso-bar-left,
-.iso-bar:focus-visible .iso-bar-left,
-.iso-bar.is-selected .iso-bar-left { fill: #b8811f; }
+.iso-bar.is-selected .iso-bar-top { fill: #fff; }
 .iso-bar:focus { outline: none; }
 .iso-bar:focus-visible .iso-bar-top,
 .iso-bar:focus-visible .iso-bar-left,
 .iso-bar:focus-visible .iso-bar-right { stroke: var(--ink); stroke-width: 1.4; }
+.iso-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem .9rem;
+  list-style: none;
+  margin: .5rem 0 0;
+  padding: 0;
+  font-size: .78rem;
+  color: var(--muted);
+}
+.iso-legend-item { display: flex; align-items: center; gap: .35rem; }
+.iso-legend-swatch {
+  width: .7rem;
+  height: .7rem;
+  border-radius: 2px;
+  background: var(--line);
+}
+.iso-domain-coding .iso-legend-swatch { background: var(--blue); }
+.iso-domain-math .iso-legend-swatch { background: var(--sea); }
+.iso-domain-agents .iso-legend-swatch { background: var(--orange); }
+.iso-domain-vision .iso-legend-swatch { background: var(--violet); }
+.iso-domain-knowledge .iso-legend-swatch { background: var(--gold); }
+.iso-domain-language .iso-legend-swatch { background: #64757f; }
+.iso-domain-other .iso-legend-swatch { background: #94a3ab; }
 .score-source-heading { font-size: .8rem; margin: 1rem 0 .4rem; color: var(--muted); }
 .score-browse-result { align-items: flex-start; flex-direction: column; gap: .25rem; }
 .score-browse-result .benchmark-result-facts { white-space: normal; }

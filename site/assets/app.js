@@ -432,16 +432,25 @@ const I18N = {
     "data point": "条成绩记录",
     "data points": "条成绩记录",
     "Data points": "成绩记录数",
-    "Where scores landed, month by month": "各月份成绩的分布",
-    "{n} reported scores from {a} to {b}. Percentage scores only; {x} earlier scores and every rating or cost measure sit outside this window.": "{a} 至 {b} 共 {n} 条成绩记录。仅统计百分比成绩；另有 {x} 条更早的成绩，以及所有评分和费用类指标，不在此范围内。",
-    "Isometric histogram of {n} reported scores across {c} month and score band cells, {a} to {b}. The tallest cell holds {m}.": "等距柱状图，{a} 至 {b} 共 {n} 条成绩记录，分布在 {c} 个「月份 × 分数区间」格子中。最高的格子有 {m} 条。",
-    "Reported scores in one month and score band": "某一月份、某一分数区间的成绩记录",
-    "Reported scores": "成绩记录数",
+    "Every benchmark: when it appeared, how often it is reported, how high scores reach": "每个 benchmark：何时出现、被报告多少次、最高分多少",
+    "{n} benchmarks reported by at least {k} model cards. Percentage scores only; {x} reported fewer times are left out because they would stack on the same spot.": "{n} 个被至少 {k} 份模型卡报告过的 benchmark。仅统计百分比成绩；另有 {x} 个报告次数更少的 benchmark 未显示，因为它们会挤在同一位置。",
+    "Isometric chart of {n} benchmarks. Position is when each was first reported and how many model cards report it; height is its highest reported score.": "{n} 个 benchmark 的等距立体图。位置表示首次被报告的时间和被多少份模型卡报告，高度表示最高成绩。",
+    "Benchmark": "Benchmark",
+    "Highest score": "最高分",
+    "Reported by": "报告来源",
+    "First reported": "首次报告",
+    "Domain": "领域",
+    "{n} reports": "{n} 次报告",
+    "Click to pin benchmark details": "点击以固定该 benchmark 详情",
+    "No benchmarks match this cutoff.": "没有 benchmark 符合该上限。",
+    "Coding": "编程",
+    "Math": "数学",
+    "Agents": "智能体",
+    "Vision": "视觉",
+    "Knowledge": "知识",
+    "Language": "语言",
+    "Other": "其他",
     "Benchmarks": "benchmark 数",
-    "Includes": "包含",
-    "Click to pin cell details": "点击以固定该格详情",
-    "No reported scores fall under this cutoff.": "没有成绩低于该上限。",
-    "scores": "分数",
     "Jan": "1月",
     "Feb": "2月",
     "Mar": "3月",
@@ -4724,177 +4733,159 @@ function renderBenchmarkSearch() {
   renderScoreHistogram();
 }
 
-function isoPointX(originX, tile, month, depth) {
-  return originX + (month - depth) * (tile / 2);
+function isoPointX(originX, tile, x, y) {
+  return originX + (x - y) * (tile / 2);
 }
 
-function isoPointY(originY, tile, month, depth, height, unit) {
-  return originY + (month + depth) * (tile / 4) - height * unit;
+function isoPointY(originY, tile, x, y, height) {
+  return originY + (x + y) * (tile / 4) - height;
 }
 
 function isoFace(points) {
   return points.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
 }
 
-function scoreHistogramBar(cell, geometry) {
-  const { originX, originY, tile, unit } = geometry;
-  const depth = isoDepth(cell.band);
-  const inset = 0.06;
-  const near = cell.slot + 1 - inset;
-  const far = cell.slot + inset;
-  const left = depth + 1 - inset;
-  const right = depth + inset;
-  const px = (m, d) => isoPointX(originX, tile, m, d);
-  const py = (m, d, h) => isoPointY(originY, tile, m, d, h, unit);
-  const h = cell.count;
-  // Only two side faces can face the viewer: the ones meeting at the near
-  // corner (far month edge, near band edge). Drawing all four would paint the
-  // hidden pair over the visible one.
-  const top = [[px(far, right), py(far, right, h)], [px(near, right), py(near, right, h)],
-    [px(near, left), py(near, left, h)], [px(far, left), py(far, left, h)]];
-  const leftFace = [[px(far, left), py(far, left, h)], [px(near, left), py(near, left, h)],
-    [px(near, left), py(near, left, 0)], [px(far, left), py(far, left, 0)]];
-  const rightFace = [[px(near, left), py(near, left, h)], [px(near, right), py(near, right, h)],
-    [px(near, right), py(near, right, 0)], [px(near, left), py(near, left, 0)]];
+function scoreHistogramBar(row, geometry) {
+  const { originX, originY, tile, rise, xOf, yOf } = geometry;
+  const inset = 0.09;
+  const x0 = xOf(row) + inset;
+  const x1 = xOf(row) + 1 - inset;
+  const y0 = yOf(row) + inset;
+  const y1 = yOf(row) + 1 - inset;
+  const px = (x, y) => isoPointX(originX, tile, x, y);
+  const py = (x, y, h) => isoPointY(originY, tile, x, y, h);
+  const h = row.best * rise;
+  // Only the two faces meeting at the near corner can face the viewer.
+  const top = [[px(x0, y0), py(x0, y0, h)], [px(x1, y0), py(x1, y0, h)],
+    [px(x1, y1), py(x1, y1, h)], [px(x0, y1), py(x0, y1, h)]];
+  const left = [[px(x0, y1), py(x0, y1, h)], [px(x1, y1), py(x1, y1, h)],
+    [px(x1, y1), py(x1, y1, 0)], [px(x0, y1), py(x0, y1, 0)]];
+  const right = [[px(x1, y1), py(x1, y1, h)], [px(x1, y0), py(x1, y0, h)],
+    [px(x1, y0), py(x1, y0, 0)], [px(x1, y1), py(x1, y1, 0)]];
   const group = svgElement("g", {
-    class: "iso-bar",
+    class: `iso-bar iso-domain-${row.domain.toLowerCase()}`,
     tabindex: "0",
     role: "button",
     "aria-pressed": "false",
     "data-frontier-point": "",
   });
   group.append(
-    svgElement("polygon", { class: "iso-bar-right", points: isoFace(rightFace) }),
-    svgElement("polygon", { class: "iso-bar-left", points: isoFace(leftFace) }),
+    svgElement("polygon", { class: "iso-bar-right", points: isoFace(right) }),
+    svgElement("polygon", { class: "iso-bar-left", points: isoFace(left) }),
     svgElement("polygon", { class: "iso-bar-top", points: isoFace(top) }),
   );
   return group;
 }
 
-function scoreHistogramLabel(month) {
-  const [year, index] = month.split("-");
+function scoreHistogramDate(date) {
   const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const name = t(names[Number(index) - 1]);
-  if (Number(index) !== 1) return name;
+  const name = t(names[Number(date.slice(5, 7)) - 1]);
+  const year = date.slice(0, 4);
+  // Chinese puts the year first; "9 月 2025" is English order in Chinese words.
   return getLang() === "zh" ? `${year} 年 ${name}` : `${name} ${year}`;
 }
 
-function scoreHistogramMonthYear(month) {
-  const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const name = t(names[Number(month.slice(5, 7)) - 1]);
-  const year = month.slice(0, 4);
-  // Chinese puts the year first ("2025 年 9 月"); "9 月 2025" is English order
-  // wearing Chinese words.
-  return getLang() === "zh" ? `${year} 年 ${name}` : `${name} ${year}`;
-}
-
-function scoreHistogramChart(model, cutoff) {
+function scoreHistogramChart(model) {
   const narrow = typeof window !== "undefined" && window.innerWidth <= 760;
-  const tile = narrow ? 30 : 44;
-  const unit = narrow ? 7 : 9;
-  const months = model.months.length;
-  const margin = { top: 26, right: 18, bottom: 46, left: narrow ? 66 : 74 };
-  const originX = margin.left + (HISTOGRAM_BANDS - 1) * (tile / 2);
-  // Reserve headroom for the tallest bar as actually placed, not for a
-  // hypothetical tall bar at the back corner. Bars rise from their own cell, so
-  // a max-height bar in the middle needs far less room above the ground plane
-  // than the worst case, and reserving the worst case leaves a third of the
-  // canvas empty.
-  const rise = Math.max(0, ...[...model.cells.values()].map((cell) => (
-    cell.count * unit - (cell.slot + isoDepth(cell.band)) * (tile / 4)
-  )));
-  const originY = margin.top + rise;
-  const spanY = (months + HISTOGRAM_BANDS) * (tile / 4);
-  const height = originY + spanY + margin.bottom;
-  // The ground plane covers only the bands the cutoff kept. Drawing the hidden
-  // rows greyed looked like empty data rather than a filter.
-  const backDepth = isoDepth(Math.max(0, Math.min(HISTOGRAM_BANDS - 1, Math.ceil(cutoff / 10) - 1)));
-  // The drawn figure is a diamond narrower than the viewBox, and its width
-  // depends on how many bands the cutoff kept, so centre it rather than leaving
-  // the slack on one side.
-  const drawnWidth = (months + HISTOGRAM_BANDS - backDepth) * (tile / 2);
-  // Fit the box to the drawing rather than to a fixed canvas: on a phone a
-  // 520-wide box the figure never filled rendered it at about half scale.
-  const width = Math.max(360, drawnWidth + margin.left + margin.right);
-  const shift = Math.max(0, (width - margin.left - margin.right - drawnWidth) / 2);
+  const tile = narrow ? 40 : 64;
+  const rise = (narrow ? 0.9 : 1.25);
+  const slots = model.dates.length;
+  // The lane axis stops just past the busiest benchmark rather than at a round
+  // number, so an outlier reported 27 times does not stretch an empty apron
+  // across the whole figure.
+  const lanes = model.maxReports + 1;
+  const margin = { top: 30, right: 20, bottom: 40, left: narrow ? 40 : 60 };
+  const xIndex = new Map(model.dates.map((date, index) => [date, index]));
+  const xOf = (row) => xIndex.get(row.first) + row.lane * 0.42;
+  const yOf = (row) => row.reports;
+  const originX = margin.left + lanes * (tile / 2);
+  const tallest = Math.max(...model.rows.map((row) => (
+    row.best * rise - (xOf(row) + yOf(row)) * (tile / 4)
+  )), 0);
+  const originY = margin.top + tallest;
+  const width = Math.max(360, (slots + lanes) * (tile / 2) + margin.left + margin.right);
+  const height = originY + (slots + lanes) * (tile / 4) + margin.bottom;
+  const geometry = { originX, originY, tile, rise, xOf, yOf };
+  const px = (x, y) => isoPointX(originX, tile, x, y);
+  const py = (x, y, h) => isoPointY(originY, tile, x, y, h);
   const svg = svgElement("svg", {
-    viewBox: `${(-shift).toFixed(2)} 0 ${Math.round(width)} ${Math.round(height)}`,
+    viewBox: `0 0 ${Math.round(width)} ${Math.round(height)}`,
     role: "group",
     "aria-label": t(
-      "Isometric histogram of {n} reported scores across {c} month and score band cells, {a} to {b}. The tallest cell holds {m}.",
-    ).replace("{n}", model.total.toLocaleString()).replace("{c}", String(model.cells.size))
-      .replace("{a}", scoreHistogramLabel(model.months[0]))
-      .replace("{b}", scoreHistogramLabel(model.months[months - 1]))
-      .replace("{m}", String(model.maxCount)),
+      "Isometric chart of {n} benchmarks. Position is when each was first reported and how many model cards report it; height is its highest reported score.",
+    ).replace("{n}", String(model.rows.length)),
   });
-  const px = (m, d) => isoPointX(originX, tile, m, d);
-  const py = (m, d, h) => isoPointY(originY, tile, m, d, h, unit);
-  // The ground plane spans every band, including the ones the cutoff removed,
-  // so the reader sees what was filtered out rather than a figure that silently
-  // shrank.
   svg.append(svgElement("polygon", {
     class: "iso-ground",
-    points: isoFace([[px(0, backDepth), py(0, backDepth, 0)], [px(months, backDepth), py(months, backDepth, 0)],
-      [px(months, HISTOGRAM_BANDS), py(months, HISTOGRAM_BANDS, 0)],
-      [px(0, HISTOGRAM_BANDS), py(0, HISTOGRAM_BANDS, 0)]]),
+    points: isoFace([[px(0, 0), py(0, 0, 0)], [px(slots, 0), py(slots, 0, 0)],
+      [px(slots, lanes), py(slots, lanes, 0)], [px(0, lanes), py(0, lanes, 0)]]),
   }));
-  for (let slot = 0; slot <= months; slot += 1) {
+  for (let slot = 0; slot <= slots; slot += 1) {
     svg.append(svgElement("line", {
       class: "iso-grid",
-      x1: px(slot, backDepth).toFixed(2), y1: py(slot, backDepth, 0).toFixed(2),
-      x2: px(slot, HISTOGRAM_BANDS).toFixed(2), y2: py(slot, HISTOGRAM_BANDS, 0).toFixed(2),
+      x1: px(slot, 0).toFixed(2), y1: py(slot, 0, 0).toFixed(2),
+      x2: px(slot, lanes).toFixed(2), y2: py(slot, lanes, 0).toFixed(2),
     }));
   }
-  for (let band = backDepth; band <= HISTOGRAM_BANDS; band += 1) {
+  for (let lane = 0; lane <= lanes; lane += 5) {
     svg.append(svgElement("line", {
       class: "iso-grid",
-      x1: px(0, band).toFixed(2), y1: py(0, band, 0).toFixed(2),
-      x2: px(months, band).toFixed(2), y2: py(months, band, 0).toFixed(2),
+      x1: px(0, lane).toFixed(2), y1: py(0, lane, 0).toFixed(2),
+      x2: px(slots, lane).toFixed(2), y2: py(slots, lane, 0).toFixed(2),
     }));
+    if (lane > 0) {
+      // On the far edge, where the bars grow away from the label rather than
+      // over it. The near edge buried these behind the tallest column.
+      svg.append(svgElement("text", {
+        class: "iso-axis-tick", "text-anchor": "start",
+        x: (px(slots + 0.15, lane + 0.5) + 6).toFixed(2),
+        y: (py(slots + 0.15, lane + 0.5, 0) + 4).toFixed(2),
+      }, t("{n} reports").replace("{n}", String(lane))));
+    }
   }
-  model.months.forEach((month, slot) => {
-    const label = Number(month.slice(5, 7));
-    if (narrow ? label !== 1 : label % 3 !== 1) return;
+  const labelled = new Set();
+  model.dates.forEach((date, index) => {
+    const month = date.slice(0, 7);
+    if (labelled.has(month)) return;
+    labelled.add(month);
+    if (narrow && labelled.size % 2 === 0) return;
     svg.append(svgElement("text", {
       class: "iso-axis-tick", "text-anchor": "start",
-      x: px(slot + 0.5, HISTOGRAM_BANDS).toFixed(2),
-      y: (py(slot + 0.5, HISTOGRAM_BANDS, 0) + 14).toFixed(2),
-    }, scoreHistogramLabel(month)));
+      x: px(index + 0.4, lanes).toFixed(2),
+      y: (py(index + 0.4, lanes, 0) + 14).toFixed(2),
+    }, scoreHistogramDate(date)));
   });
-  for (let band = 0; band < HISTOGRAM_BANDS; band += 1) {
-    if (band * 10 >= cutoff) continue;
-    // Ten labels along a foreshortened axis collide on a phone.
-    if (narrow && band % 2 !== 0) continue;
-    const depth = isoDepth(band) + 0.5;
-    svg.append(svgElement("text", {
-      class: "iso-axis-tick", "text-anchor": "end",
-      x: (px(0, depth) - 8).toFixed(2), y: (py(0, depth, 0) + 4).toFixed(2),
-    }, `${band * 10}–${band * 10 + 9}`));
-  }
-  // Painter's algorithm: ascending month + depth draws far cells first. This is
-  // the whole hidden-surface method and it holds only while every bar sits on
-  // the shared ground plane and fills one cell. Floating or overlapping bars
-  // would break it.
-  [...model.cells.values()]
-    .sort((a, b) => (a.slot + isoDepth(a.band)) - (b.slot + isoDepth(b.band)) || a.slot - b.slot)
-    .forEach((cell) => {
-      const bar = scoreHistogramBar(cell, { originX, originY, tile, unit });
-      const names = [...cell.tracks.values()].sort((a, b) => b.best - a.best).map((track) => track.name);
-      const month = scoreHistogramLabel(model.months[cell.slot]);
-      const band = `${cell.band * 10}–${cell.band * 10 + 9}`;
-      bar.setAttribute("aria-label", `${month}, ${t("scores")} ${band}, ${metricLabel(cell.count, "reported score")}. ${t("Click to pin cell details")}.`);
+  // Painter's algorithm: ascending x + y draws far bars before near ones. This
+  // holds only while every bar sits on the shared ground plane inside its own
+  // footprint, which is what the lane offset preserves.
+  [...model.rows]
+    .sort((a, b) => (xOf(a) + yOf(a)) - (xOf(b) + yOf(b)) || xOf(a) - xOf(b))
+    .forEach((row) => {
+      const bar = scoreHistogramBar(row, geometry);
+      bar.setAttribute("aria-label", `${row.name}. ${t("Highest score")} ${row.best.toLocaleString("en", { maximumFractionDigits: 1 })}. ${metricLabel(row.reports, "report")}. ${t("First reported")} ${scoreHistogramDate(row.first)}. ${t("Click to pin benchmark details")}.`);
       makeFrontierPointInteractive(bar, {
-        kind: t("Reported scores in one month and score band"),
-        title: `${month} · ${band}`,
+        kind: t("Benchmark"),
+        title: row.name,
         rows: [
-          { label: t("Reported scores"), value: String(cell.count) },
-          { label: t("Benchmarks"), value: String(cell.tracks.size) },
-          { label: t("Includes"), value: shorten(names.join(" · ")) },
+          { label: t("Highest score"), value: row.best.toLocaleString("en", { maximumFractionDigits: 1 }) },
+          { label: t("Reported by"), value: metricLabel(row.reports, "model card") },
+          { label: t("First reported"), value: scoreHistogramDate(row.first) },
+          { label: t("Domain"), value: t(row.domain) },
         ],
       });
       svg.append(bar);
     });
   return svg;
+}
+
+function scoreHistogramLegend(model) {
+  const domains = [...new Set(model.rows.map((row) => row.domain))].sort();
+  return element("ul", { className: "iso-legend" }, domains.map((domain) => element(
+    "li", { className: `iso-legend-item iso-domain-${domain.toLowerCase()}` }, [
+      element("span", { className: "iso-legend-swatch", attrs: { "aria-hidden": "true" } }),
+      element("span", { text: t(domain) }),
+    ],
+  )));
 }
 
 function renderScoreHistogram(cutoff = state.lscore) {
@@ -4905,9 +4896,9 @@ function renderScoreHistogram(cutoff = state.lscore) {
   if (!benchmarks) return;
   // Every redraw detaches the nodes the shared frontier selection points at.
   clearFrontierPointSelection();
-  const model = scoreHistogramCells(benchmarks, cutoff);
-  if (!model.cells.size) {
-    const empty = [element("p", { className: "empty-state", text: t("No reported scores fall under this cutoff.") })];
+  const model = scoreHistogramRows(benchmarks, state.data?.model_card_leaderboard?.entries, cutoff);
+  if (!model.rows.length) {
+    const empty = [element("p", { className: "empty-state", text: t("No benchmarks match this cutoff.") })];
     if (cutoff < 100) {
       const all = element("button", { className: "clear-button", text: t("All scored"), attrs: { type: "button" } });
       all.addEventListener("click", () => setScoreFilter(100));
@@ -4917,16 +4908,15 @@ function renderScoreHistogram(cutoff = state.lscore) {
     if (note) note.textContent = "";
     return;
   }
-  const svg = scoreHistogramChart(model, cutoff);
-  replaceChildren(host, [svg, frontierTooltip()]);
+  const svg = scoreHistogramChart(model);
+  replaceChildren(host, [svg, scoreHistogramLegend(model), frontierTooltip()]);
   enableFrontierTouchTargets(svg);
   if (note) {
     note.textContent = t(
-      "{n} reported scores from {a} to {b}. Percentage scores only; {x} earlier scores and every rating or cost measure sit outside this window.",
-    ).replace("{n}", model.total.toLocaleString())
-      .replace("{a}", scoreHistogramMonthYear(model.months[0]))
-      .replace("{b}", scoreHistogramMonthYear(model.months[model.months.length - 1]))
-      .replace("{x}", model.excluded.toLocaleString());
+      "{n} benchmarks reported by at least {k} model cards. Percentage scores only; {x} reported fewer times are left out because they would stack on the same spot.",
+    ).replace("{n}", String(model.rows.length))
+      .replace("{k}", String(HISTOGRAM_MIN_REPORTS))
+      .replace("{x}", String(model.omitted));
   }
 }
 
@@ -6046,82 +6036,85 @@ function renderFrontierTaskPreview(entry) {
 
 // --- Score histogram -----------------------------------------------------------
 //
-// A month x score-band count of reported scores, drawn isometrically by
-// renderScoreHistogram. Three constraints are load-bearing and easy to undo by
-// accident, so they are stated here rather than in the renderer:
+// One bar per benchmark: x is when it was first reported, y is how many model
+// cards have reported it, z (height) is the highest score anyone reached, and
+// colour is its domain. Three constraints are load-bearing:
 //
 // 1. Only `percent` tracks are plotted. The corpus also carries `elo` (values
-//    reaching 3206) and `usd` (4432..5634) scores. A 0-99 band axis cannot hold
-//    those, and bucketing a 3206 Elo into "90-99" would sit a rating beside a
-//    percentage and imply they measure the same thing.
-// 2. The month spine is every calendar month in the window, not only the months
-//    that carry data. Collapsing the empty ones would make a one-month step and
-//    an eight-month step look identical.
-// 3. Band index maps to depth inverted (see isoDepth), so the heavy high bands
-//    sit at the back and cannot bury the thinly populated low ones.
+//    reaching 3206) and `usd` (thousands), and a 0-100 height axis cannot hold
+//    those without implying a rating and a percentage measure the same thing.
+// 2. Only benchmarks reported HISTOGRAM_MIN_REPORTS times or more. With every
+//    benchmark included, 45 of 82 land on an already-occupied cell and 21 stack
+//    in a single footprint, because 34 are reported exactly once and 14 twice.
+//    A log y does not separate them: they collide at identical values, not at
+//    large ones. Those are also the benchmarks with the least to show on a time
+//    axis. The caption states how many are left out.
+// 3. Ties that remain get a small lane offset rather than being drawn on top of
+//    each other, so no bar is ever fully buried by another.
 
-const HISTOGRAM_BANDS = 10;
-const HISTOGRAM_WINDOW_MONTHS = 12;
+const HISTOGRAM_MIN_REPORTS = 3;
 
-function monthIndexOf(month) {
-  // Integer arithmetic on "YYYY-MM" rather than Date, so a UTC-midnight
-  // timestamp cannot roll a score into the previous month in a western zone.
-  return Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7)) - 1;
+const HISTOGRAM_DOMAINS = {
+  coding: "Coding", coding_agent: "Coding",
+  math: "Math", reasoning: "Math",
+  agent: "Agents", tool_use: "Agents", computer_use: "Agents",
+  multimodal: "Vision", vision: "Vision",
+  science: "Knowledge", knowledge: "Knowledge", biology: "Knowledge",
+  factuality: "Knowledge", ai_research: "Knowledge",
+  long_context: "Language", multilingual: "Language",
+  instruction_following: "Language", human_preference: "Language",
+};
+
+function histogramDomain(domain) {
+  return HISTOGRAM_DOMAINS[domain] || "Other";
 }
 
-function monthFromIndex(index) {
-  const year = Math.floor(index / 12);
-  return `${String(year).padStart(4, "0")}-${String(index % 12 + 1).padStart(2, "0")}`;
-}
-
-function scoreBandOf(value) {
-  // Clamped, but only percent values reach here, so the clamp catches a 100.0
-  // rather than silently absorbing an out-of-scale unit.
-  return Math.min(HISTOGRAM_BANDS - 1, Math.max(0, Math.floor(value / 10)));
-}
-
-function isoDepth(band) {
-  return HISTOGRAM_BANDS - 1 - band;
-}
-
-function scoreHistogramCells(benchmarks, cutoff, windowMonths = HISTOGRAM_WINDOW_MONTHS) {
-  const plotted = [];
+function scoreHistogramRows(benchmarks, entries, cutoff) {
+  const named = new Map((entries || []).map((entry) => [entry.benchmark_id, entry]));
+  const rows = [];
+  let omitted = 0;
   Object.entries(benchmarks || {}).forEach(([id, record]) => {
     if (record?.unit !== "percent") return;
-    (record.observations || []).forEach((observation) => {
-      const value = observation?.value;
-      if (typeof value !== "number" || !Number.isFinite(value)) return;
-      const at = observation.reported_at;
-      if (typeof at !== "string" || at.length < 7) return;
-      plotted.push({ id, name: record.name || id, month: at.slice(0, 7), value, model: observation.model });
+    const summary = record.score_summary;
+    if (!summary || !summary.numeric_count) return;
+    const observations = (record.observations || []).filter((observation) => (
+      typeof observation?.value === "number" && Number.isFinite(observation.value)
+      && typeof observation.reported_at === "string"
+    ));
+    if (!observations.length) return;
+    if (typeof summary.display_max !== "number") return;
+    if (cutoff < 100 && summary.display_max >= cutoff) return;
+    if (observations.length < HISTOGRAM_MIN_REPORTS) { omitted += 1; return; }
+    const entry = named.get(id) || {};
+    rows.push({
+      id,
+      name: entry.name || id,
+      first: observations.reduce((a, b) => (a.reported_at <= b.reported_at ? a : b)).reported_at,
+      reports: observations.length,
+      best: summary.display_max,
+      domain: histogramDomain(entry.domain),
+      organizations: record.organization_count || 0,
     });
   });
-  if (!plotted.length) return { months: [], cells: new Map(), maxCount: 0, total: 0, excluded: 0 };
-  const lastIndex = Math.max(...plotted.map((row) => monthIndexOf(row.month)));
-  const firstIndex = lastIndex - windowMonths + 1;
-  const months = [];
-  for (let index = firstIndex; index <= lastIndex; index += 1) months.push(monthFromIndex(index));
-  const cells = new Map();
-  let total = 0;
-  let excluded = 0;
-  plotted.forEach((row) => {
-    const slot = monthIndexOf(row.month) - firstIndex;
-    if (slot < 0) { excluded += 1; return; }
-    const band = scoreBandOf(row.value);
-    // The cutoff hides whole bands. It is the depth control for the figure, so
-    // it must cut on the axis the figure draws, not on a track's overall best.
-    if (band * 10 >= cutoff) return;
-    const key = `${slot}|${band}`;
-    const cell = cells.get(key) || { slot, band, count: 0, tracks: new Map() };
-    cell.count += 1;
-    const track = cell.tracks.get(row.id) || { name: row.name, best: row.value };
-    if (row.value > track.best) track.best = row.value;
-    cell.tracks.set(row.id, track);
-    cells.set(key, cell);
-    total += 1;
+  rows.sort((a, b) => (a.first < b.first ? -1 : a.first > b.first ? 1 : 0)
+    || a.reports - b.reports || (a.id < b.id ? -1 : 1));
+  // Remaining exact ties share a footprint, so fan them into lanes instead of
+  // stacking them where the front bar would hide the ones behind it.
+  const seen = new Map();
+  rows.forEach((row) => {
+    const key = `${row.first}|${row.reports}`;
+    const lane = seen.get(key) || 0;
+    seen.set(key, lane + 1);
+    row.lane = lane;
   });
-  const maxCount = cells.size ? Math.max(...[...cells.values()].map((cell) => cell.count)) : 0;
-  return { months, cells, maxCount, total, excluded };
+  const dates = [...new Set(rows.map((row) => row.first))].sort();
+  return {
+    rows,
+    dates,
+    omitted,
+    maxReports: rows.length ? Math.max(...rows.map((row) => row.reports)) : 0,
+    maxBest: rows.length ? Math.max(...rows.map((row) => row.best)) : 0,
+  };
 }
 
 function scoreRecord(benchmarkId) {

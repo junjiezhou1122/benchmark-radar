@@ -76,67 +76,49 @@ assert.equal(cutoff('999'), 70, 'above the slider maximum falls back');
 assert.equal(cutoff('44'), 40, 'an off-step value snaps to the nearest step');
 
 // --- Score histogram ---------------------------------------------------------
-const histNames = ['monthIndexOf','monthFromIndex','scoreBandOf','isoDepth','scoreHistogramCells'];
-const histConsts = source.match(/const HISTOGRAM_BANDS = \d+;/)[0] + '\n'
-  + source.match(/const HISTOGRAM_WINDOW_MONTHS = \d+;/)[0];
+const histNames = ['histogramDomain','scoreHistogramRows'];
+const histConsts = source.match(/const HISTOGRAM_MIN_REPORTS = \d+;/)[0] + '\n'
+  + source.match(/const HISTOGRAM_DOMAINS = \{[\s\S]*?\n\};/)[0];
 const hist = new Function(`${histConsts}\n${histNames.map(fn).join('\n')}\nreturn {${histNames.join(',')}};`)();
 
-// High bands sit at the back so the heavy rows cannot bury the sparse ones.
-// Painter's ordering depends on this; a flipped mapping would silently hide bars.
-assert.equal(hist.isoDepth(9), 0);
-assert.equal(hist.isoDepth(0), 9);
+assert.equal(hist.histogramDomain('coding_agent'), 'Coding');
+assert.equal(hist.histogramDomain('reasoning'), 'Math');
+assert.equal(hist.histogramDomain(undefined), 'Other', 'an unmapped domain still gets a colour');
 
-assert.equal(hist.scoreBandOf(69.9), 6);
-assert.equal(hist.scoreBandOf(70), 7);
-assert.equal(hist.scoreBandOf(0), 0);
-assert.equal(hist.scoreBandOf(100), 9, 'a 100 clamps into the top band rather than a tenth one');
-
-assert.equal(hist.monthIndexOf('2026-01') - hist.monthIndexOf('2025-12'), 1, 'months step across a year boundary');
-assert.equal(hist.monthFromIndex(hist.monthIndexOf('2024-03')), '2024-03');
-
-const track = (unit, rows) => ({unit, name: unit, observations: rows.map(([reported_at, value]) => ({reported_at, value}))});
+const obs = (n, at, value) => Array.from({length: n}, (_, i) => ({reported_at: at, value: value - i}));
 const bench = {
-  pct: track('percent', [['2026-08-01', 65], ['2026-08-20', 62], ['2026-07-01', 12], ['2025-01-01', 40]]),
-  elo: track('elo', [['2026-08-02', 1400]]),
-  usd: track('usd', [['2026-08-03', 5000]]),
+  kept: {unit: 'percent', score_summary: {numeric_count: 4, display_max: 60}, organization_count: 2,
+    observations: obs(4, '2026-02-01', 60)},
+  thin: {unit: 'percent', score_summary: {numeric_count: 2, display_max: 55},
+    observations: obs(2, '2026-02-01', 55)},
+  elo: {unit: 'elo', score_summary: {numeric_count: 9, display_max: 3206},
+    observations: obs(9, '2026-02-01', 3206)},
 };
-const all = hist.scoreHistogramCells(bench, 100);
-// A 1400 Elo would clamp into "90-99" and sit beside a percentage as though the
-// two measured the same thing, so non-percent units never enter the figure.
-assert.equal(all.total, 3, 'only in-window percent scores are plotted');
-assert.equal(all.excluded, 1, 'the 2025 score is counted as outside the window');
-assert.equal(all.months.length, 12);
-assert.equal(all.months[all.months.length - 1], '2026-08');
-assert.equal(all.months[0], '2025-09');
+const entries = [{benchmark_id: 'kept', name: 'Kept', domain: 'math'}];
 
-// The spine keeps every calendar month, so a gap stays a gap.
-assert.ok(all.months.includes('2025-11'), 'empty months remain on the axis');
+const model = hist.scoreHistogramRows(bench, entries, 100);
+// A 3206 Elo on a 0-100 height axis would sit beside a percentage as though the
+// two measured the same thing.
+assert.deepEqual(model.rows.map((row) => row.id), ['kept'], 'only percent tracks are plotted');
+assert.equal(model.rows[0].domain, 'Math');
+assert.equal(model.rows[0].reports, 4);
+assert.equal(model.rows[0].name, 'Kept');
+// Benchmarks under the report floor are counted, not silently dropped: the
+// caption reports how many the figure leaves out.
+assert.equal(model.omitted, 1, 'the 2-report benchmark is counted as omitted');
 
-const under = hist.scoreHistogramCells(bench, 60);
-assert.equal(under.total, 1, 'the cutoff hides whole bands, not whole benchmarks');
-assert.ok([...under.cells.values()].every((cell) => cell.band * 10 < 60));
+assert.equal(hist.scoreHistogramRows(bench, entries, 50).rows.length, 0, 'the cutoff hides a 60 from a <50 view');
+assert.equal(hist.scoreHistogramRows({}, [], 100).rows.length, 0);
 
-const aug = [...all.cells.values()].find((cell) => cell.band === 6);
-assert.equal(aug.count, 2, 'two August scores share the 60-69 band');
-assert.equal(aug.tracks.size, 1);
+// Every bar needs its own footprint, or the front one hides the back one.
+const tied = {
+  a: {unit: 'percent', score_summary: {numeric_count: 3, display_max: 70}, observations: obs(3, '2026-02-01', 70)},
+  b: {unit: 'percent', score_summary: {numeric_count: 3, display_max: 80}, observations: obs(3, '2026-02-01', 80)},
+  c: {unit: 'percent', score_summary: {numeric_count: 3, display_max: 90}, observations: obs(3, '2026-02-01', 90)},
+};
+const lanes = hist.scoreHistogramRows(tied, [], 100);
+assert.equal(lanes.rows.length, 3);
+assert.equal(new Set(lanes.rows.map((row) => `${row.first}|${row.reports}|${row.lane}`)).size, 3,
+  'three benchmarks sharing a date and a report count get three distinct lanes');
 
-assert.equal(hist.scoreHistogramCells({}, 100).cells.size, 0, 'an empty corpus yields no cells');
-
-// Painter's algorithm: far cells first. Verified against the three neighbours
-// that can occlude a cell.
-const order = [...all.cells.values()]
-  .sort((a, b) => (a.slot + hist.isoDepth(a.band)) - (b.slot + hist.isoDepth(b.band)) || a.slot - b.slot);
-const key = (c) => `${c.slot}|${hist.isoDepth(c.band)}`;
-const at = new Map(order.map((c, i) => [key(c), i]));
-order.forEach((cell) => {
-  const m = cell.slot;
-  const d = hist.isoDepth(cell.band);
-  [[1, 0], [0, 1], [1, 1]].forEach(([dm, dd]) => {
-    const front = at.get(`${m + dm}|${d + dd}`);
-    if (front !== undefined) {
-      assert.ok(front > at.get(key(cell)), 'a nearer cell must be painted after the one behind it');
-    }
-  });
-});
-
-console.log('Date windows, deduplication, cutoff boundaries, source-neutral ranking, shared scale, and histogram cells passed.');
+console.log('Date windows, deduplication, cutoff boundaries, source-neutral ranking, shared scale, and benchmark bars passed.');

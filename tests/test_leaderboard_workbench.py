@@ -691,10 +691,12 @@ def test_score_histogram_leads_the_ranked_list():
     assert '<div class="frontier-chart" id="score-histogram-chart"></div>' in html
     assert html.index('id="score-histogram"') < html.index('id="score-ranking-list"')
     script = source("site/assets/app.js")
-    # Non-percent units cannot share a 0-99 band axis.
+    # Non-percent units cannot share a 0-100 height axis.
     assert 'record?.unit !== "percent"' in script
-    histogram = script.split("function scoreHistogramCells(", 1)[1].split("\nfunction ", 1)[0]
-    assert "monthFromIndex" in histogram, "the month spine keeps empty months"
+    histogram = script.split("function scoreHistogramRows(", 1)[1].split("\nfunction ", 1)[0]
+    # Ties must fan into lanes; stacking them would bury a bar inside another.
+    assert "row.lane = lane" in histogram
+    assert "omitted" in histogram, "benchmarks under the report floor are counted, not dropped"
 
 
 def test_score_ranking_and_adoption_state_their_distinct_measures():
