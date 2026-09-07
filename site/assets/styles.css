@@ -5131,6 +5131,7 @@ dialog {
 .skyline-point.is-selected .skyline-mark { opacity: 1; }
 .skyline-ring { fill: none; stroke: #b57d18; stroke-width: 2.5; display: none; }
 .skyline-point.is-pareto .skyline-ring { display: inline; }
+.skyline-pending-point.is-pareto .skyline-ring { display: inline; }
 .skyline-point:hover .skyline-ring,
 .skyline-point:focus .skyline-ring,
 .skyline-point.is-selected .skyline-ring { display: inline; stroke: var(--ink); stroke-width: 2.5; }

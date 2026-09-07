@@ -181,11 +181,12 @@ def test_lower_is_better_headroom_is_described_against_zero():
     assert "points to zero, the floor of this metric" in script
 
 
-def test_only_numeric_scored_records_enter_the_filtered_picker():
+def test_the_picker_uses_the_full_population_cutoff_contract():
     script = source("site/assets/app.js")
     membership = script.split("function matchesScoreFilter(summary)", 1)[1].split("\n}", 1)[0]
-    assert "Number.isFinite(summary?.display_max)" in membership
-    assert "summary.numeric_count > 0" in membership
+    # Unknown scores remain visible under principle.md. The Node harness tests
+    # their membership together with strict numeric boundaries and all sources.
+    assert "matchesScoreCutoff(summary, state.lscore)" in membership
     picker = script.split("function frontierPickerGroups(scored)", 1)[1].split("\n}", 1)[0]
     assert "scoreBrowseRows()" in picker
     assert "renderFrontierPicker(scored, state.lfrontier);" in script
@@ -196,11 +197,13 @@ def test_the_picker_and_the_search_both_cover_both_layers():
     rows = script.split("function scoreBrowseRows(", 1)[1].split("\n}", 1)[0]
     assert "board?.entries" in rows
     assert "state.benchmarkIndex" in rows
-    assert "b.summary.numeric_count - a.summary.numeric_count" in rows
+    assert "scorePopulation(" in rows
     assert "a.source.localeCompare" not in rows
     render = script.split("function renderBenchmarkSearch()", 1)[1].split("\nfunction ", 1)[0]
-    assert "searchCuratedEntries(board, state.benchmarkQuery)" in render
-    assert "searchBenchmarkIndex(state.benchmarkIndex || [], state.benchmarkQuery)" in render
+    assert "benchmarkQueryIds(board)" in render
+    query = script.split("function benchmarkQueryIds(board)", 1)[1].split("\n}", 1)[0]
+    assert "searchCuratedEntries(board, state.benchmarkQuery)" in query
+    assert "searchBenchmarkIndex(state.benchmarkIndex || [], state.benchmarkQuery)" in query
     assert "rows.slice(0, state.benchmarkVisibleLimit)" in render
 
 
@@ -226,7 +229,8 @@ def test_search_still_works_when_the_crawled_index_is_unavailable():
     script = source("site/assets/app.js")
     render = script.split("function renderBenchmarkSearch()", 1)[1].split("\nfunction ", 1)[0]
     assert "let rows = scoreBrowseRows(board);" in render
-    assert "state.benchmarkIndex || []" in render
+    query = script.split("function benchmarkQueryIds(board)", 1)[1].split("\n}", 1)[0]
+    assert "state.benchmarkIndex || []" in query
     assert "const failed = state.benchmarkIndexLoaded && !state.benchmarkIndex" in render
     assert "these results may be incomplete" in render
 
@@ -248,7 +252,7 @@ def test_the_navigator_is_a_tool_region_not_a_content_section():
         assert gone not in navigator, f"{gone} still occupies the navigator"
     # The search label is the only heading, so it is the panel's one anchor.
     assert navigator.count("<h2") == 1
-    assert 'data-i18n="Browse scored benchmarks"' in navigator
+    assert 'data-i18n="Browse all benchmarks"' in navigator
     # And the examples label is not `.eyebrow`, whose accent blue would plant a
     # second anchor competing with the field.
     assert 'class="eyebrow"' not in navigator

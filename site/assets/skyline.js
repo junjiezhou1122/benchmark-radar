@@ -93,16 +93,20 @@ export function skylineModel(benchmarks = {}, entries = [], catalog = [], cutoff
       metric: record.metric, protocol: best?.protocol, instrument: best?.instrument,
     };
   });
-  const eligible = all.filter((row) => !row.missing.length);
+  // Missing time changes where a mark is drawn, never whether it can dominate
+  // another benchmark on the score/adoption wall.
+  const comparable = (row) => row.score !== null && row.adoption !== null;
+  const eligible = all.filter(comparable);
   for (const row of all) {
-    row.pareto = row.missing.length ? null : !eligible.some((other) => other.score <= row.score && other.adoption >= row.adoption
+    row.pareto = !comparable(row) ? null : !eligible.some((other) => other.score <= row.score && other.adoption >= row.adoption
       && (other.score < row.score || other.adoption > row.adoption));
   }
   // Cutoff membership is shared with score browsing. Normalized reversed
   // metrics remain explicit in the tooltip; they never change source scores.
   const visible = all.filter((row) => (!matchingIds || matchingIds.has(row.id)) && matchesScoreCutoff(row.summary, cutoff));
   return {
-    all, visible, eligible, rows: visible.filter((row) => !row.missing.length),
+    all, visible, eligible, comparable: visible.filter(comparable),
+    rows: visible.filter((row) => !row.missing.length),
     pending: visible.filter((row) => row.missing.length),
     population: all.length, sources: new Set(all.map((row) => row.source)).size,
     hidden: all.length - visible.length,

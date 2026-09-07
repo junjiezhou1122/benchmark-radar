@@ -135,7 +135,13 @@ assert.equal(invalidModel.all.filter(row=>row.missing.includes('scale')).length,
 assert.equal(invalidModel.all.find(row=>row.id==='unmeasured').adoption,null,'unknown adoption is not zero');
 assert.equal(invalidModel.all.find(row=>row.id==='unscored').score,null,'unknown score is not zero');
 assert.equal(invalidModel.population,10);
-assert(invalidModel.pending.every(row=>row.pareto===null),'incomplete measurements cannot qualify for Pareto');
+assert(invalidModel.pending.filter(row=>row.missing.includes('score') || row.missing.includes('scale') || row.missing.includes('adoption'))
+  .every(row=>row.pareto===null),'unknown score or adoption cannot qualify for Pareto');
+const dateIndependent=skylineModel({dated:record(50),undated:record(10,{observations:[{value:10}]})},
+  [entry('dated',1),entry('undated',2,{released:null,adopters:[{model_card_id:'a'},{model_card_id:'b'}]})],[],100);
+assert.equal(dateIndependent.rows[0].pareto,false,'a benchmark with unknown time can still dominate');
+assert.equal(dateIndependent.pending[0].pareto,true,'time never participates in Pareto eligibility');
+assert.equal(dateIndependent.comparable.length,2,'both points can be projected on the score/adoption wall');
 const datesModel = skylineModel({date:record(40,{first_reported_at:'2024-04-03'})},
   [entry('date',1,{released:'2026-02-30',adopters:[{model_card_id:'x',published:'2023-12-11'}]})],[],100);
 assert.equal(datesModel.rows[0].date,'2023-12-11','earliest actual evidence is used if release is absent or invalid');

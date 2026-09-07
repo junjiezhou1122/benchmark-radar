@@ -4839,11 +4839,11 @@ function skylineChart(model, cutoff) {
     svg.append(textAt(project(fraction, score), t(label), "skyline-region"));
   }
   // This path lives only on the score × adoption wall: no time ordering is implied.
-  const steps = skylineFrontierSteps(model.rows);
+  const steps = skylineFrontierSteps(model.comparable);
   if (steps.length) svg.append(svgElement("polyline", {
     class: "skyline-pareto-path", points: points(steps.map((row) => project(0, row.score, row.adoption))),
   }));
-  for (const row of model.rows) {
+  for (const row of model.comparable) {
     const wall = project(0, row.score, row.adoption);
     svg.append(svgElement("circle", {
       cx: wall[0], cy: wall[1], r: row.pareto ? 4.5 : 3,
@@ -4913,13 +4913,14 @@ function skylineChart(model, cutoff) {
       const cx = 50 + (index % columns) * 10.1;
       const cy = pendingY + 28 + Math.floor(index / columns) * 12;
       const group = svgElement("g", {
-        class: `skyline-pending-point skyline-domain-${row.domain.toLowerCase()}`,
+        class: `skyline-pending-point skyline-domain-${row.domain.toLowerCase()}${row.pareto ? " is-pareto" : ""}`,
         tabindex: "0", role: "button", "aria-pressed": "false", "data-frontier-point": "", "data-benchmark-id": row.id,
         "aria-label": `${row.name}. ${scoreSourceLabel(row.source)}. ${t(heading)}.`,
       });
       group.append(svgElement("circle", {
         cx, cy, r: 3.7, class: "skyline-pending-cap", "data-frontier-anchor": "",
       }));
+      if (row.pareto) group.append(svgElement("circle", { cx, cy, r: 6, class: "skyline-ring" }));
       makeFrontierPointInteractive(group, {
         kind: scoreSourceLabel(row.source), title: row.name,
         rows: [
@@ -5006,7 +5007,7 @@ function renderBenchmarkSkyline(cutoff = state.lscore) {
     visible: model.visible.length.toLocaleString(), scored: (model.visible.length - model.unscored).toLocaleString(),
     unknown: model.unscored.toLocaleString(), hidden: model.hidden.toLocaleString(),
   }), t("Pareto: {p} of {n} benchmarks with comparable score scales and recorded adoption.", {
-    p: model.rows.filter((row) => row.pareto).length, n: model.rows.length,
+    p: model.comparable.filter((row) => row.pareto).length, n: model.comparable.length,
   })];
   byId("benchmark-skyline-note").textContent = coverage.join(". ");
 }
