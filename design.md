@@ -90,6 +90,29 @@ unlabelled ranking.
 Show empty, partial, stale, and incomparable states plainly. Do not replace
 missing evidence with guessed content.
 
+## Show all the data, unify the vocabulary
+
+A benchmark is a benchmark. The corpus holds one benchmark population assembled
+from several sources, not a first-class set and a lesser one. Any surface that
+counts, ranks, charts, or searches benchmarks covers the whole population by
+default.
+
+Never call a benchmark "external" in the interface. That word describes where a
+record was collected, not what the thing is, and it invites a reader to discount
+most of the corpus. Name the source instead: "Artificial Analysis", "LLM Stats",
+"Curated registry". The layer table above governs how a row is *labelled* and
+what provenance it must expose. It never licenses dropping a layer from a view.
+
+A figure and the list beside it answer the same question over the same rows. If
+a chart shows a dozen benchmarks while the list underneath says 790, the chart
+is wrong, not the list. Prefer the count and unit the reader can already see on
+the page ("1,259 benchmarks · 4 sources") over a private subset.
+
+Narrowing is allowed when a measurement genuinely cannot span the population,
+and then the surface states the restriction, the count kept, and the count left
+out, in the reader's words. "Percentage scores only, 48 of 82 shown" is a
+restriction. Silently charting 322 of 12,916 observations is a defect.
+
 ## Load only what the current task needs
 
 A view should respond without downloading unrelated data. Opening a route or
@@ -147,7 +170,10 @@ Before merging a user-facing change, check:
 - Can an expert reach the provenance, protocol, and caveats?
 - Is one answer or action clearly primary?
 - Did a new choice replace or demote an old one?
-- Are Radar, Catalog, adoption, and scores still distinguishable?
+- Are Radar, Catalog, adoption, and scores still distinguishable by label,
+  while every one of them still appears in counts, charts, and search?
+- Does any user-facing string say "external"? Name the source instead.
+- Do the figure and the list beside it cover the same rows and agree on totals?
 - Do the first response and hydrated page agree?
 - Does it work at 320px with long content, keyboard navigation, direct URLs,
   Back and Forward, slow loading, and empty or error states?
