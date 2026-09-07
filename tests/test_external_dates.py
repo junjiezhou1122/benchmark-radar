@@ -168,3 +168,27 @@ def test_rebuilt_catalog_exposes_release_evidence():
             assert row[reference]["source_url"] == fact["source_url"]
         shard = json.loads(Path(f"site/data/benchmarks/{row['slug']}.json").read_text())
         assert fact["source_url"] in json.dumps(shard)
+
+
+def test_retrospectively_scored_models_do_not_date_new_benchmarks_before_2024():
+    import json
+
+    index = json.loads(Path("site/data/benchmark-index.json").read_text())["benchmarks"]
+    by_key = {r["key"]: r for r in index}
+    for key, released in {
+        "artificial-analysis:humanitys-last-exam": "2025-01-23",
+        "artificial-analysis:scicode": "2024-07-18",
+        "artificial-analysis:critpt": "2025-11-21",
+    }.items():
+        row = by_key[key]
+        assert row["first_score_record"]["reported_at"] < "2024-01-01"
+        assert row["first_score_record"]["date_precision"] == "model_announcement"
+        assert row["released"] == released
+        assert row["released_reference"]["source_url"]
+        assert row["score_summary"]["model_count"] > 200
+    for row in index:
+        count = (row.get("score_summary") or {}).get("model_count")
+        if row["source"] == "artificial_analysis" and count and count >= 200:
+            assert row["released"], (
+                f"{row['key']}: audit benchmark age before relying on an old model release"
+            )

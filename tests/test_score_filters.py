@@ -68,6 +68,54 @@ def test_summary_ties_choose_a_stable_source_reference():
     assert score_summary(rows)["source_reference"]["obs_id"] == "a"
 
 
+def test_model_count_deduplicates_source_ids_without_collapsing_configurations():
+    rows = [
+        {"value": 0, "model_id": "model-a", "model_name": "Model", "source_id": "report-1"},
+        {"value": 20, "model_id": "model-a", "model_name": "Model", "source_id": "report-2"},
+        {"value": 30, "model_id": "model-b", "model_name": "Model", "source_id": "report-2"},
+        *[{"value": value, "model_id": "unscored"} for value in (None, True, math.nan, math.inf)],
+    ]
+    result = score_summary(rows)
+    assert result["numeric_count"] == 3
+    assert result["model_count"] == 2
+    assert result["model_count_basis"] == "source_model_id"
+    assert score_summary(list(reversed(rows))) == result
+
+
+def test_curated_model_count_uses_the_scored_model_not_the_reporting_document():
+    rows = [
+        {"value": 10, "model": "Model A", "organization": "Org A", "source_id": "report-1"},
+        {"value": 20, "model": "Model A", "organization": "Org A", "source_id": "report-2"},
+        {"value": 30, "model": "Model B", "organization": "Org A", "source_id": "report-2"},
+        {"value": 40, "model": "Model A", "organization": "Org B", "source_id": "report-2"},
+    ]
+    result = score_summary(rows)
+    assert result["numeric_count"] == 4
+    assert result["model_count"] == 3
+    assert result["model_count_basis"] == "organization_and_model"
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [],
+        [{"value": None, "model_id": "no-score"}],
+        [{"value": 20}],
+        [{"value": 20, "model_id": "known"}, {"value": 30, "model_id": "  "}],
+        [
+            {"value": 20, "model_id": "known", "model_name": "Model A", "organization": "Org A"},
+            {"value": 30, "model_name": "Model A", "organization": "Org A"},
+        ],
+        [{"value": 20, "model_id": None, "model_name": "Model A", "organization": "Org A"}],
+        [{"value": 20, "model": "Ambiguous", "organization": ""}],
+    ],
+)
+def test_missing_model_identity_is_unknown_instead_of_a_partial_or_zero_count(rows):
+    result = score_summary(rows)
+    assert result["model_count"] is None
+    assert result["model_count_basis"] is None
+
+
 def test_generated_external_index_and_shards_share_summary():
     index = json.loads(Path("site/data/benchmark-index.json").read_text())["benchmarks"]
     for record in index:
@@ -85,12 +133,19 @@ def test_generated_external_index_and_shards_share_summary():
         )
         assert series["score_summary"] == expected
         assert record["score_summary"] == expected
+        model_ids = {
+            row["model_id"] for row in payload["rows"] if isinstance(row["value"], (int, float))
+        }
+        assert record["score_summary"]["model_count"] == (len(model_ids) if model_ids else None)
 
 
 def test_generated_curated_summary_counts_all_observations():
     data = json.loads(Path("site/data/radar.json").read_text())
     for record in data["benchmark_score_progression"]["benchmarks"].values():
         assert record["score_summary"] == score_summary(record["observations"], unit=record["unit"])
+        assert record["score_summary"]["model_count"] == len(
+            {(row["organization"], row["model"]) for row in record["observations"]}
+        )
 
 
 def test_seed_ranks_score_points_without_source_preference():

@@ -104,6 +104,9 @@ const unavailable = makeLoaders(async () => ({ok:false,status:503}));
 assert.equal(await unavailable.loadBenchmarkIndex(),null);
 assert.equal(await unavailable.loadBenchmarkShard('missing'),null);
 
+// The document mode retains its original deduplication and Pareto contract.
+const cardSkyline = (benchmarks={},entries=[],catalog=[],cutoff=70,matchingIds=null) =>
+  skylineModel(benchmarks,entries,catalog,cutoff,matchingIds,'cards');
 // --- Benchmark Frontier: identity, normalization and dominance ----------------
 const entry = (id, count, extra = {}) => ({
   benchmark_id: id, name: id, released: '2025-01-01', domain: 'science',
@@ -125,14 +128,14 @@ const tracks = {
 const cards = [entry('hardest',2), entry('twin',2,{released:'2024-01-01'}),
   entry('adopted',5), entry('dominated',4), entry('sameScore',3),
   entry('sameAdoption',5), entry('all',6), entry('zero',0)];
-const model = skylineModel(tracks,cards,[],100);
+const model = cardSkyline(tracks,cards,[],100);
 const paretoIds = (m) => m.rows.filter((row)=>row.pareto).map((row)=>row.id).sort();
 assert.deepEqual(paretoIds(model), ['adopted','all','hardest','twin','zero']);
 assert.equal(model.rows.length,8,'coincident benchmarks retain their identities');
 assert.equal(model.rows.find(r=>r.id==='zero').adoption,0,'known zero adoption stays valid');
 assert.equal(model.rows.find(r=>r.id==='twin').date,'2024-01-01','the inclusive cohort boundary is eligible; age never affects dominance');
 for (let cut = 10; cut <= 100; cut += 10) {
-  const sliced = skylineModel(tracks,cards,[],cut);
+  const sliced = cardSkyline(tracks,cards,[],cut);
   assert.deepEqual(sliced.rows, model.rows.filter((row)=>cut===100 || row.score<cut));
   assert.equal(sliced.rows.some(row=>row.score===cut),cut===100,'cutoff is strict except All');
   assert.deepEqual(skylineGeometry(sliced.eligible).project(.5,20,2),
@@ -140,22 +143,22 @@ for (let cut = 10; cut <= 100; cut += 10) {
 }
 const duplicate = entry('repeats',2);
 duplicate.adopters.push({...duplicate.adopters[0]});
-const duplicated = skylineModel({repeats:record(45,{observations:Array(100).fill({value:45})})},[duplicate],[],100);
+const duplicated = cardSkyline({repeats:record(45,{observations:Array(100).fill({value:45})})},[duplicate],[],100);
 assert.equal(duplicated.rows[0].adoption,2,'repeated cards and repeated score rows cannot inflate adoption');
 assert.equal(duplicated.rows[0].score,45);
-const reversed = skylineModel({error:record(90,{
+const reversed = cardSkyline({error:record(90,{
   direction:'lower_is_better',observations:[{value:90},{value:25}],
 })},[entry('error',1)],[],100);
 assert.equal(reversed.rows[0].score,75,'best normalized score is 100 minus the LOWEST error');
 assert.equal(reversed.rows[0].rawScore,25);
-assert.equal(skylineModel({error:record(25,{direction:'lower_is_better'})},[entry('error',1)],[],70).rows.length,0);
+assert.equal(cardSkyline({error:record(25,{direction:'lower_is_better'})},[entry('error',1)],[],70).rows.length,0);
 const invalids = {
   elo:record(50,{unit:'elo'}), dollars:record(5,{unit:'usd'}),
   fraction:record(.7,{unit:undefined}), unknown:record(30,{direction:undefined}),
   bogus:record(30,{direction:'inferred'}), negative:record(-1), high:record(101),
   unscored:record(null), unmeasured:record(10), undated:record(10,{observations:[{value:10}]}),
 };
-const invalidModel = skylineModel(invalids,
+const invalidModel = cardSkyline(invalids,
   Object.keys(invalids).filter(id=>id!=='unmeasured').map(id=>entry(id,0,{released:null})),[],100);
 assert.deepEqual(invalidModel.rows.map(row=>row.id),['fraction','unmeasured','undated'],
   'unknown dates or adoption cannot remove a reported number from the main visualization');
@@ -168,14 +171,14 @@ assert.equal(invalidModel.all.filter(row=>row.missing.includes('scale')).length,
 assert.equal(invalidModel.all.find(row=>row.id==='unmeasured').adoption,null,'unknown adoption is not zero');
 assert.equal(invalidModel.all.find(row=>row.id==='unscored').score,null,'unknown score is not zero');
 assert.equal(invalidModel.population,10);
-assert(invalidModel.pending.filter(row=>row.missing.includes('score') || row.missing.includes('scale') || row.missing.includes('adoption'))
+assert(invalidModel.pending.filter(row=>row.missing.includes('score') || row.missing.includes('scale') || row.missing.includes('count'))
   .every(row=>row.pareto===null),'unknown score or adoption cannot qualify for Pareto');
-const dateIndependent=skylineModel({dated:record(50),undated:record(10,{observations:[{value:10}]})},
+const dateIndependent=cardSkyline({dated:record(50),undated:record(10,{observations:[{value:10}]})},
   [entry('dated',1),entry('undated',2,{released:null,adopters:[{model_card_id:'a'},{model_card_id:'b'}]})],[],100);
 assert.equal(dateIndependent.rows[0].pareto,true,'dominance is calculated within the established 2024+ cohort');
 assert.equal(dateIndependent.undated[0].pareto,null,'an undated benchmark is not claimed to belong to 2024+');
 assert.equal(dateIndependent.comparable.length,1);
-const datesModel = skylineModel({date:record(40,{first_reported_at:'2024-04-03'})},
+const datesModel = cardSkyline({date:record(40,{first_reported_at:'2024-04-03'})},
   [entry('date',1,{released:'2026-02-30',adopters:[{model_card_id:'x',published:'2023-12-11'}]})],[],100);
 assert.equal(datesModel.rows[0].date,'2024-04-03','earliest score report takes priority over an adoption-only mention');
 assert.equal(datesModel.rows[0].dateBasis,'first_score');
@@ -199,17 +202,17 @@ assert.deepEqual(benchmarkDate({...proxyRecord,released:'2025-01-01'}),{date:'20
 assert.deepEqual(benchmarkDate({...proxyRecord,first_score_reported_at:'2025-02-01'}),{date:'2025-02-01',dateBasis:'first_score'},
   'actual publication evidence takes priority over a model-date proxy');
 assert.equal(benchmarkDate({first_score_record:{reported_at:'2024-01-01',date_precision:'crawl'}}).date,null);
-const boundary=skylineModel({old:record(30),fallbackOld:record(20,{observations:[
+const boundary=cardSkyline({old:record(30),fallbackOld:record(20,{observations:[
   {value:10,reported_at:'2023-12-31'}, {value:20,reported_at:'2025-01-01'}]}), boundary:record(40)},
   [entry('old',8,{released:'2023-12-31'}),entry('fallbackOld',9,{released:null}),entry('boundary',1,{released:'2024-01-01'})],[],100);
 assert.deepEqual(boundary.visible.map(row=>row.id),['boundary'],'the first score is chosen before the date cutoff, even at score 100');
 assert.equal(boundary.beforeStart,2);
 assert.equal(model.rows.find(r=>r.id==='hardest').sourceUrl,'https://example.org/0');
 assert.equal(model.rows.find(r=>r.id==='hardest').domain,'Science');
-assert.equal(skylineModel({other:record(20)},[entry('other',1,{domain:'unmapped'})],[],100).rows[0].domain,'Other');
+assert.equal(cardSkyline({other:record(20)},[entry('other',1,{domain:'unmapped'})],[],100).rows[0].domain,'Other');
 assert.deepEqual(skylineFrontierSteps(model.rows),[
-  {score:0,adoption:0},{score:10,adoption:0},{score:10,adoption:2},
-  {score:20,adoption:2},{score:20,adoption:5},{score:100,adoption:5},{score:100,adoption:6},
+  {score:0,count:0},{score:10,count:0},{score:10,count:2},
+  {score:20,count:2},{score:20,count:5},{score:100,count:5},{score:100,count:6},
 ],'staircase corners use raw score and adoption, with shared corners drawn once');
 const g = skylineGeometry(model.eligible);
 assert.equal(g.startYear,2024,'the user-requested starting date is a hard cutoff');
@@ -233,7 +236,7 @@ const chart = new Function('skylineGeometry','skylineDateLanes','skylineScoreLan
   (n,label)=>`${n} ${label}`, (s,n)=>s.slice(0,n), x=>x, (node,details)=>{node.details=details;}, x=>x, benchmarkDateLabel);
 const flatten = (node)=>[node,...node.children.flatMap(flatten)];
 for (const cutoff of [10,70,100]) {
-  const m=skylineModel(tracks,cards,[],cutoff);
+  const m=cardSkyline(tracks,cards,[],cutoff);
   const nodes=flatten(chart(m,cutoff));
   assert.equal(nodes.filter(n=>'data-frontier-point' in n.attrs).length,m.rows.length);
   assert.equal(nodes.filter(n=>'data-frontier-anchor' in n.attrs).length,m.rows.length);
@@ -246,7 +249,49 @@ for (const cutoff of [10,70,100]) {
   const labelLayer=nodes.find(n=>n.attrs.class==='skyline-labels');
   assert.equal(labelLayer.children.filter(n=>n.tag==='text').length,m.rows.filter(r=>r.pareto).length);
 }
-assert(!JSON.stringify(chart(skylineModel({},[],[],70),70)).includes('NaN'),'empty chart retains usable axes');
+assert(!JSON.stringify(chart(cardSkyline({},[],[],70),70)).includes('NaN'),'empty chart retains usable axes');
+// Catalog model coverage and curated document adoption are separate measures.
+const countedTracks = {
+  hard: record(10,{score_summary:{...summary(10,400),model_count:2}}),
+  popular: record(50,{score_summary:{...summary(50,700),model_count:577}}),
+  dominated: record(60,{score_summary:{...summary(60,650),model_count:200}}),
+  unknown: record(15,{score_summary:{...summary(15,900),model_count:null}}),
+  old: record(10,{score_summary:{...summary(10,1000),model_count:1000}}),
+};
+const countedCards = [entry('hard',3),entry('popular',1),entry('dominated',20),entry('unknown',1),
+  entry('old',30,{released:'2023-12-31'})];
+const byModels = skylineModel(countedTracks,countedCards,[],100);
+const byCards = cardSkyline(countedTracks,countedCards,[],100);
+assert.equal(byModels.heightMetric,'models','full-source model coverage is the default height');
+assert.deepEqual(byModels.visible.map(row=>row.id),byCards.visible.map(row=>row.id));
+assert.deepEqual(paretoIds(byModels),['hard','popular']);
+assert.deepEqual(paretoIds(byCards),['dominated','hard']);
+assert.equal(byModels.rows.find(row=>row.id==='unknown').heightCount,null,
+  'neither score-row counts nor card counts may fill in an unknown model count');
+assert.equal(byModels.rows.find(row=>row.id==='popular').adoption,1);
+assert.equal(byCards.rows.find(row=>row.id==='popular').modelCount,577);
+assert.equal(skylineGeometry(byModels.cohort).maximum,577,'model heights exceed 200 and exclude pre-2024 records');
+assert.equal(skylineGeometry(byCards.cohort).maximum,20,'document mode retains real document counts');
+for(const cut of [10,30,70,100]) {
+  const sliced=skylineModel(countedTracks,countedCards,[],cut);
+  assert.equal(skylineGeometry(sliced.cohort).maximum,577,'score slicing never rescales the count axis');
+  assert.deepEqual(paretoIds(sliced),paretoIds(byModels).filter(id=>cut===100 || countedTracks[id].score_summary.display_max<cut));
+}
+const searchHeight=skylineModel(countedTracks,countedCards,[],70,new Set(['hard']));
+assert.equal(skylineGeometry(searchHeight.cohort).maximum,577,'search never rescales the count axis');
+for(const m of [byModels,byCards]) {
+  const drawn=flatten(chart(m,100));
+  const max=skylineGeometry(m.cohort).maximum;
+  const ticks=drawn.filter(node=>node.attrs.class==='skyline-tick skyline-count-tick');
+  assert.equal(ticks.at(-1).text,String(max));
+  assert.deepEqual(drawn.filter(node=>node.attrs.class==='skyline-tick skyline-score-tick-left').map(node=>node.text),
+    ['0','20','40','60','80','100']);
+  assert.deepEqual(drawn.filter(node=>'data-axis' in node.attrs).map(node=>node.attrs['data-axis']),[m.heightMetric,'score']);
+  const popular=drawn.find(node=>node.attrs['data-benchmark-id']==='popular');
+  assert.equal(popular.attrs['data-height-count'],m.heightMetric==='models'?577:1);
+  assert(popular.details.rows.some(row=>row.label==='Models with reported scores' && row.value==='577'));
+  assert(popular.details.rows.some(row=>row.label==='Unique model cards' && row.value==='1'));
+}
 // A complete rebuilt corpus exercises crowded labels and the production input contract.
 const corpus = JSON.parse(readFileSync('site/data/radar.json','utf8'));
 const catalog = JSON.parse(readFileSync('site/data/benchmark-index.json','utf8')).benchmarks;
@@ -263,10 +308,11 @@ assert.equal(full.all.filter(row=>row.source==='opencompass_hub').length,
   catalog.filter(row=>row.source==='opencompass_hub').length,'unscored records remain in the corpus');
 state.data=corpus;
 state.benchmarkIndex=catalog;
-for(const cutoff of [10,30,70,100]) {
+const fullModes = new Map([['models',full],['cards',cardSkyline(benchmarkRecords,corpusEntries,catalog,100)]]);
+for(const [heightMetric,fullMode] of fullModes) for(const cutoff of [10,30,70,100]) {
   state.lscore=cutoff;
-  const current=skylineModel(benchmarkRecords,corpusEntries,catalog,cutoff);
-  assert.deepEqual(current.visible,full.all.filter(row=>(row.date===null || row.date>=SKYLINE_START_DATE) && matchesScoreCutoff(row.summary,cutoff)));
+  const current=skylineModel(benchmarkRecords,corpusEntries,catalog,cutoff,null,heightMetric);
+  assert.deepEqual(current.visible,fullMode.all.filter(row=>(row.date===null || row.date>=SKYLINE_START_DATE) && matchesScoreCutoff(row.summary,cutoff)));
   assert.equal(current.visible.length+current.hidden,expected);
   assert.equal(current.rows.length+current.pending.length,current.visible.length);
   assert.equal(current.unscored,full.unscored,'the missing-score exclusion is independent of the cutoff');
@@ -286,11 +332,11 @@ for(const cutoff of [10,30,70,100]) {
     'the main visualization represents exactly the filtered full corpus, with no missing or duplicate marks');
   const plotted=drawn.filter(node=>node.attrs.class?.startsWith('skyline-point '));
   assert.equal(plotted.length,current.rows.length,'every usable score is on the main plane');
-  const measured=plotted.filter(node=>node.attrs['data-adoption']!=='unknown');
+  const measured=plotted.filter(node=>node.attrs['data-height-count']!=='unknown' && node.attrs['data-benchmark-date']);
   assert.equal(drawn.filter(node=>node.attrs.class==='skyline-stem skyline-mark').length,measured.length,
-    'unknown adoption never becomes a fake zero-height stem');
-  assert.equal(drawn.filter(node=>node.attrs.class==='skyline-guide').length,current.comparable.length,
-    'only comparable measurements have a Pareto wall projection');
+    'unknown counts never become fake zero-height stems');
+  assert.equal(drawn.filter(node=>node.attrs.class==='skyline-guide').length,measured.length,
+    'every measured height has a side-wall projection; scale qualifications stay visible');
   if(cutoff===70) {
     const main=plotted.filter(node=>node.attrs['data-benchmark-date']);
     assert(main.length>=300,'a few dozen main skyline points plus hundreds in a side panel still fails principle.md');
@@ -306,6 +352,10 @@ for(const cutoff of [10,30,70,100]) {
     }
     assert(current.dated.length>300,'investigate a timeline limited to a few dozen curated benchmarks');
     assert(current.visible.length>300,'excluding unscored records must preserve the scored catalog');
+    if(heightMetric==='models') {
+      assert(measured.length>300,'the measured model counts must produce hundreds of real stems, not a curated-only skyline');
+      assert(skylineGeometry(current.cohort).maximum>200,'investigate a height axis missing the large source model counts');
+    }
     for(const source of new Set(current.visible.map(row=>row.source))) {
       const sourceIds=new Set(current.visible.filter(row=>row.source===source).map(row=>row.id));
       assert(sourceIds.size>0);
@@ -321,11 +371,13 @@ for(const cutoff of [10,30,70,100]) {
   }
   const geometry=skylineGeometry(current.cohort);
   const projections=drawn.filter(node=>'data-projection-for' in node.attrs);
-  assert.equal(projections.length,current.comparable.length);
-  for(const row of current.comparable) {
+  const projectedRows=current.rows.filter(row=>row.date!==null && row.heightCount!==null);
+  assert.equal(projections.length,projectedRows.length);
+  for(const row of projectedRows) {
     const point=projections.find(node=>node.attrs['data-projection-for']===row.id);
-    assert.deepEqual([point.attrs.cx,point.attrs.cy],geometry.project(0,row.score,row.adoption),
-      'the Pareto side view drops only time; it preserves score and raw model-card count');
+    assert.deepEqual([point.attrs.cx,point.attrs.cy],geometry.project(0,row.plotScore,row.heightCount),
+      'the side view drops only time; it preserves score and the selected raw count');
+    if(row.score===null) assert(point.attrs.class.includes('is-unverified') && !point.attrs.class.includes('is-pareto'));
   }
   const datedScored=plotted.filter(node=>node.attrs['data-benchmark-date']);
   for(const mark of datedScored) {
@@ -333,9 +385,9 @@ for(const cutoff of [10,30,70,100]) {
     const cap=mark.children.find(node=>'data-frontier-anchor' in node.attrs);
     const stem=mark.children.find(node=>node.attrs.class==='skyline-stem skyline-mark');
     if(stem) {
-      const expectedTip=geometry.project(geometry.timeFraction(row.time),row.plotScore,row.adoption);
+      const expectedTip=geometry.project(geometry.timeFraction(row.time),row.plotScore,row.heightCount);
       assert.deepEqual([stem.attrs.x2,stem.attrs.y2],expectedTip,
-        'spreading a cap cannot change the measured time, score or adoption at its stem');
+        'spreading a cap cannot change the measured time, score or count at its stem');
     }
     for(const other of datedScored) {
       if(other===mark) continue;

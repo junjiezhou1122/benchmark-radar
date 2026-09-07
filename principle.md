@@ -76,12 +76,36 @@ record once so the categories reconcile.
 Represent every record, but compute a statistic only from records with the
 measurements that statistic requires. State that measured coverage beside the
 result. In particular, Pareto eligibility requires a declared common score
-scale and a real adoption measurement. Unknown measurements must never become
-zeros or qualify a point for the frontier.
+scale and a recorded value for the selected count. Unknown measurements must
+never become zeros or qualify a point for the frontier.
 
 Keep source identities and provenance. Two source records with similar names
 are not permission to merge scores or transfer adoption counts. A shared
 display scale does not establish equivalent test protocols.
+
+## Chart heights must use the measurements in the full corpus
+
+The default Frontier height is **Models with reported scores**: distinct models
+with numeric scores for that source's benchmark record. Aggregate score records
+already contain hundreds of model IDs for some benchmarks; a chart that only
+uses the small curated document registry discards that measured coverage.
+Deduplicate by the source's model ID, preserving separately evaluated
+configurations. Curated observations use the exact organization and model name.
+Repeated scores, protocols and source documents for the same model must not
+increase this count. If model identities are incomplete, mark the count unknown.
+
+Keep **Unique model cards** as a separate height option, counted from distinct
+registry documents. Models, score rows, model-card documents and citations are
+different quantities. Never substitute or sum them, transfer a count between
+similarly named source records, or label hundreds of evaluated models as
+hundreds of model-card citations. Both counts and the selected coverage must be
+inspectable. Switching height measures must preserve the filtered benchmark IDs.
+
+Use `log1p(count)` for height and raw counts for ticks, tooltips and dominance.
+Derive the maximum from the entire scored 2024+ cohort for the selected measure,
+before the score and search filters. Do not cap it at 20, 100 or any fixed value.
+The wall projection uses the same selected count as the main chart; unverified
+score scales retain hollow projections and remain outside Pareto calculations.
 
 ## Use benchmark dates and show only 2024 onward
 
@@ -104,6 +128,12 @@ and basis, and regenerate the chart's inputs. A README's bibliography can
 contain older component methods and unrelated datasets; its earliest paper
 is not automatically this benchmark's release. New dates must reach the main
 timeline, with their evidence accessible from the mark.
+
+An old model can be evaluated retrospectively on a new benchmark. Audit any
+pre-2024 exclusion based only on a model-release proxy, especially records with
+hundreds of scored models. HLE and SciCode must not disappear merely because
+their evaluated models include releases from 2023. Recover the benchmark's own
+date before interpreting such a proxy as evidence of benchmark age.
 
 When an aggregator dates its numeric LLM score records by model release, use
 the earliest dated score record as a **model-release proxy**, after any known

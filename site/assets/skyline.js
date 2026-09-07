@@ -8,6 +8,10 @@ export const SKYLINE_DOMAINS = {
   Other: [],
 };
 export const SKYLINE_START_DATE = "2024-01-01";
+export const SKYLINE_HEIGHT_LABELS = {
+  models: "Models with reported scores",
+  cards: "Unique model cards",
+};
 
 function validDate(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -84,7 +88,7 @@ export function matchesScoreCutoff(summary, cutoff) {
   return hasReportedScore(summary) && (cutoff >= 100 || summary.display_max < cutoff);
 }
 
-export function skylineModel(benchmarks = {}, entries = [], catalog = [], cutoff = 70, matchingIds = null) {
+export function skylineModel(benchmarks = {}, entries = [], catalog = [], cutoff = 70, matchingIds = null, heightMetric = "models") {
   const population = scorePopulation(benchmarks, entries, catalog);
   const all = population.map((item) => {
     const { id, name, source, curated: entry, record, summary } = item;
@@ -109,6 +113,8 @@ export function skylineModel(benchmarks = {}, entries = [], catalog = [], cutoff
     const adoption = Array.isArray(adopters)
       && adopters.every((card) => typeof card.model_card_id === "string" && card.model_card_id)
       ? new Set(adopters.map((card) => card.model_card_id)).size : null;
+    const modelCount = Number.isInteger(summary?.model_count) && summary.model_count >= 0 ? summary.model_count : null;
+    const heightCount = heightMetric === "cards" ? adoption : modelCount;
     const { date, dateBasis } = item;
     const domainValues = [entry?.domain, ...(record.categories || []), record.modality]
       .filter(Boolean).map((value) => value.toLowerCase());
@@ -116,14 +122,14 @@ export function skylineModel(benchmarks = {}, entries = [], catalog = [], cutoff
     const missing = [];
     if (!Number.isFinite(displayScore)) missing.push("score");
     else if (score === null) missing.push("scale");
-    if (adoption === null) missing.push("adoption");
+    if (heightCount === null) missing.push("count");
     if (!date) missing.push("date");
     return {
       id, name, source, summary, date, dateBasis,
       dateReference: dateBasis === "released" && record.released === date ? record.released_reference
         : dateBasis === "first_score" && record.first_score_reported_at === date ? record.first_score_source_reference : null,
       time: date ? Date.parse(`${date}T00:00:00Z`) : null,
-      score, plotScore, displayScore, rawScore, inverted, adoption, missing,
+      score, plotScore, displayScore, rawScore, inverted, adoption, modelCount, heightCount, missing,
       domain: Object.keys(SKYLINE_DOMAINS).find((domain) => SKYLINE_DOMAINS[domain].some((value) => domainValues.includes(value))) || "Other",
       sourceUrl: card?.url || record.source_url || summary?.source_reference?.source_url,
       sourceId: best?.source_id, reportedAt: best?.reported_at,
@@ -131,15 +137,15 @@ export function skylineModel(benchmarks = {}, entries = [], catalog = [], cutoff
     };
   });
   // The requested cohort starts on 2024-01-01. Within that cohort, only score
-  // and raw adoption determine dominance, before the score or search slice.
+  // and the selected raw count determine dominance, before score or search.
   const comparable = (row) => hasReportedScore(row.summary) && row.date >= SKYLINE_START_DATE
-    && row.score !== null && row.adoption !== null;
+    && row.score !== null && row.heightCount !== null;
   const withinDates = all.filter((row) => row.date === null || row.date >= SKYLINE_START_DATE);
   const cohort = withinDates.filter((row) => row.date !== null && hasReportedScore(row.summary));
   const eligible = cohort.filter(comparable);
   for (const row of all) {
-    row.pareto = !comparable(row) ? null : !eligible.some((other) => other.score <= row.score && other.adoption >= row.adoption
-      && (other.score < row.score || other.adoption > row.adoption));
+    row.pareto = !comparable(row) ? null : !eligible.some((other) => other.score <= row.score && other.heightCount >= row.heightCount
+      && (other.score < row.score || other.heightCount > row.heightCount));
   }
   // Cutoff membership is shared with score browsing. Normalized reversed
   // metrics remain explicit in the tooltip; they never change source scores.
@@ -147,7 +153,7 @@ export function skylineModel(benchmarks = {}, entries = [], catalog = [], cutoff
     && matchesScoreCutoff(row.summary, cutoff));
   const dated = visible.filter((row) => row.date !== null);
   return {
-    all, visible, dated, cohort, eligible, comparable: dated.filter(comparable),
+    all, visible, dated, cohort, eligible, heightMetric, heightLabel: SKYLINE_HEIGHT_LABELS[heightMetric], comparable: dated.filter(comparable),
     rows: visible.filter((row) => row.plotScore !== null),
     pending: visible.filter((row) => row.plotScore === null),
     undated: visible.filter((row) => row.date === null),
@@ -166,12 +172,12 @@ export function skylineGeometry(all) {
   const last = times.length ? Math.max(...times) : start;
   const endYear = new Date(last).getUTCFullYear();
   const end = Date.UTC(endYear, Math.floor(new Date(last).getUTCMonth() / 3) * 3 + 3, 1);
-  const maximum = Math.max(1, ...all.map((row) => row.adoption).filter(Number.isFinite));
-  // Oblique projection: time to the right, low scores at the front, adoption up.
+  const maximum = Math.max(1, ...all.map((row) => row.heightCount).filter(Number.isFinite));
+  // Oblique projection: time to the right, low scores at the front, counts up.
   // Fixed domains across cutoffs prevent filtering from moving the surviving points.
-  const project = (timeFraction, score, adoption = 0) => [
+  const project = (timeFraction, score, count = 0) => [
     250 + timeFraction * 920 - score * 1.4,
-    515 - score * 2.5 - 220 * Math.log1p(adoption) / Math.log1p(maximum),
+    515 - score * 2.5 - 220 * Math.log1p(count) / Math.log1p(maximum),
   ];
   const timeFraction = (time) => !Number.isFinite(time) || time < start ? null : (time - start) / (end - start);
   const years = Array.from({ length: endYear - startYear + 1 }, (_, index) => startYear + index);
@@ -240,15 +246,15 @@ export function skylineCapPositions(rows, position, contains, gap = 10) {
 }
 
 export function skylineFrontierSteps(rows) {
-  // Equal score/adoption pairs all remain Pareto. Draw their shared corner once.
+  // Equal score/count pairs all remain Pareto. Draw their shared corner once.
   const frontier = rows.filter((row) => row.pareto)
     .sort((a, b) => a.score - b.score || a.id.localeCompare(b.id));
   const steps = [];
   for (const row of frontier) {
     const previous = steps.at(-1);
-    if (previous?.score === row.score && previous.adoption === row.adoption) continue;
-    if (previous) steps.push({ score: row.score, adoption: previous.adoption });
-    steps.push({ score: row.score, adoption: row.adoption });
+    if (previous?.score === row.score && previous.count === row.heightCount) continue;
+    if (previous) steps.push({ score: row.score, count: previous.count });
+    steps.push({ score: row.score, count: row.heightCount });
   }
   return steps;
 }
