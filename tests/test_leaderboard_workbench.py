@@ -684,19 +684,32 @@ def test_the_crawled_chart_ticks_label_real_values_not_padded_bounds():
     assert "band = { low: low - pad, high: high + pad }" in chart
 
 
-def test_score_histogram_leads_the_ranked_list():
+def test_benchmark_skyline_leads_the_ranked_list_and_states_its_coverage():
     html = source("site/index.html")
     # The tooltip resolves through .closest(".frontier-chart"), so that class on
     # the mount is a contract, not styling.
-    assert '<div class="frontier-chart" id="score-histogram-chart"></div>' in html
-    assert html.index('id="score-histogram"') < html.index('id="score-ranking-list"')
+    assert 'class="frontier-chart skyline-chart" id="benchmark-skyline-chart"' in html
+    assert html.index('id="benchmark-skyline"') < html.index('id="score-ranking-list"')
+    assert 'data-i18n="Benchmark Frontier"' in html
     script = source("site/assets/app.js")
-    # Non-percent units cannot share a 0-100 height axis.
-    assert 'record?.unit !== "percent"' in script
-    histogram = script.split("function scoreHistogramRows(", 1)[1].split("\nfunction ", 1)[0]
-    # Ties must fan into lanes; stacking them would bury a bar inside another.
-    assert "row.lane = lane" in histogram
-    assert "omitted" in histogram, "benchmarks under the report floor are counted, not dropped"
+    # principle.md: a count in a footnote cannot replace the missing records.
+    # Every source participates; incomplete records have inspectable marks.
+    assert "scorePopulation(" in script
+    assert "skyline-pending-point" in script
+    assert "{n} benchmarks · {s} sources" in script
+    assert 'id="benchmark-skyline-note"' in html
+    assert "lower-is-better percentages become 100 minus the original value" in html
+
+
+def test_no_surface_calls_a_benchmark_external():
+    # design.md, "Show all the data, unify the vocabulary": "external" describes
+    # where a record was collected, not what it is, and it invites a reader to
+    # discount most of the corpus. The source name carries the provenance.
+    script = source("site/assets/app.js")
+    html = source("site/index.html")
+    assert 't("External benchmark")' not in script
+    assert '"External benchmark":' not in script, "no zh entry for a label nothing renders"
+    assert "External benchmark" not in html
 
 
 def test_score_ranking_and_adoption_state_their_distinct_measures():

@@ -5085,79 +5085,85 @@ dialog {
   font-weight: 600;
   min-width: 2.5rem;
 }
-/* The histogram sits on the light page ground, not inside .frontier-panel, so
-   it uses the :root tokens. The panel's own chart classes (.frontier-tick and
-   friends) are tuned for its #0d1519 island and measure 1.64:1 against --canvas,
-   which is why none of them are reused here. */
-.score-histogram { margin: 0 0 1.5rem; }
-.score-histogram-title { font-size: 1rem; margin: 0 0 .6rem; font-weight: 600; }
-.score-histogram-note { color: var(--muted); font-size: .8rem; margin: .4rem 0 0; }
-.iso-ground { fill: #dde4e8; stroke: var(--line); stroke-width: 1; }
-.iso-grid { stroke: var(--line); stroke-width: .5; }
-.iso-axis-tick { fill: var(--muted); font-size: 11px; }
-.iso-bar { cursor: pointer; }
-/* One hue per domain, each face a step down the same hue so the solid reads as
-   one object rather than three colours. */
-.iso-domain-coding .iso-bar-top { fill: #4f8fd6; }
-.iso-domain-coding .iso-bar-left { fill: var(--blue); }
-.iso-domain-coding .iso-bar-right { fill: var(--blue-deep); }
-.iso-domain-math .iso-bar-top { fill: #6fb3a9; }
-.iso-domain-math .iso-bar-left { fill: var(--sea); }
-.iso-domain-math .iso-bar-right { fill: #35695f; }
-.iso-domain-agents .iso-bar-top { fill: #e88a6a; }
-.iso-domain-agents .iso-bar-left { fill: var(--orange); }
-.iso-domain-agents .iso-bar-right { fill: #a1442a; }
-.iso-domain-vision .iso-bar-top { fill: #9a8fc4; }
-.iso-domain-vision .iso-bar-left { fill: var(--violet); }
-.iso-domain-vision .iso-bar-right { fill: #524a7d; }
-.iso-domain-knowledge .iso-bar-top { fill: #dfb454; }
-.iso-domain-knowledge .iso-bar-left { fill: var(--gold); }
-.iso-domain-knowledge .iso-bar-right { fill: #8e6716; }
-.iso-domain-language .iso-bar-top { fill: #8d9aa2; }
-.iso-domain-language .iso-bar-left { fill: #64757f; }
-.iso-domain-language .iso-bar-right { fill: #41525b; }
-.iso-domain-other .iso-bar-top { fill: #b9c4ca; }
-.iso-domain-other .iso-bar-left { fill: #94a3ab; }
-.iso-domain-other .iso-bar-right { fill: #6d7d86; }
-.iso-bar-top, .iso-bar-left, .iso-bar-right {
-  stroke: var(--panel);
-  stroke-width: .6;
-  stroke-linejoin: round;
+/* Time × score × unique model cards, projected without hiding the score axis. */
+.benchmark-skyline { margin: 0 0 2rem; }
+.skyline-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.skyline-heading h2 { font-size: 1.5rem; margin: 0; }
+.skyline-subtitle { margin: .15rem 0 0; color: var(--muted); font-size: 1rem; }
+.skyline-count { color: #876014; font-size: .9rem; font-weight: 600; white-space: nowrap; }
+.skyline-chart { overflow-x: auto; margin-top: .5rem; }
+.skyline-chart svg { display: block; width: 100%; min-width: 960px; max-width: none; }
+.skyline-chart:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.skyline-note { font-size: .875rem; color: var(--muted); margin: .65rem 0; max-width: 95ch; }
+.skyline-method { font-size: .875rem; color: var(--muted); max-width: 95ch; }
+.skyline-method summary { cursor: pointer; color: var(--ink); }
+.skyline-method p { margin: .6rem 0; }
+.skyline-floor { fill: #edf2f5; stroke: var(--edge); stroke-width: 1; }
+.skyline-wall { fill: #f7f9fa; stroke: var(--edge); stroke-width: 1; }
+.skyline-grid { stroke: #b7c6ce; stroke-width: .7; opacity: .5; }
+.skyline-axis { stroke: var(--muted); stroke-width: 1; }
+.skyline-tick { fill: var(--muted); font-size: 16px; }
+.skyline-axis-title { fill: var(--ink); font-size: 16px; font-weight: 500; }
+.skyline-region { fill: var(--muted); opacity: .5; font-size: 17px; font-style: italic; pointer-events: none; }
+.skyline-slice { fill: var(--blue); fill-opacity: .025; stroke: var(--blue); stroke-opacity: .18; stroke-dasharray: 4 6; }
+.skyline-slice-edge { stroke: var(--blue); stroke-width: 1; stroke-dasharray: 4 6; opacity: .6; }
+.skyline-slice-label { fill: var(--blue); font-size: 16px; }
+.skyline-domain-code { --skyline-color: #255ea8; }
+.skyline-domain-science { --skyline-color: #28796d; }
+.skyline-domain-agent { --skyline-color: #c95532; }
+.skyline-domain-multimodal { --skyline-color: #7860ad; }
+.skyline-domain-other { --skyline-color: #71818c; }
+.skyline-point { cursor: pointer; }
+.skyline-pending-point { cursor: pointer; }
+.skyline-pending-point:focus { outline: none; }
+.skyline-pending-cap { fill: var(--skyline-color); stroke: var(--panel); stroke-width: .8; }
+.skyline-pending-point:hover .skyline-pending-cap,
+.skyline-pending-point:focus .skyline-pending-cap,
+.skyline-pending-point.is-selected .skyline-pending-cap { stroke: var(--ink); stroke-width: 2; }
+.skyline-point:focus { outline: none; }
+.skyline-mark { opacity: .3; }
+.skyline-stem { stroke: var(--skyline-color); stroke-width: 2.5; stroke-linecap: round; }
+.skyline-cap, .skyline-foot { fill: var(--skyline-color); }
+.skyline-cap { stroke: var(--panel); stroke-width: 1; }
+.skyline-point.is-pareto .skyline-mark,
+.skyline-point:hover .skyline-mark,
+.skyline-point:focus .skyline-mark,
+.skyline-point.is-selected .skyline-mark { opacity: 1; }
+.skyline-ring { fill: none; stroke: #b57d18; stroke-width: 2.5; display: none; }
+.skyline-point.is-pareto .skyline-ring { display: inline; }
+.skyline-point:hover .skyline-ring,
+.skyline-point:focus .skyline-ring,
+.skyline-point.is-selected .skyline-ring { display: inline; stroke: var(--ink); stroke-width: 2.5; }
+.skyline-pareto-path { fill: none; stroke: #b57d18; stroke-width: 2.2; stroke-linejoin: round; }
+.skyline-projection { fill: var(--skyline-color); opacity: .38; }
+.skyline-projection.is-pareto { opacity: 1; stroke: #b57d18; stroke-width: 2; }
+.skyline-guide, .skyline-guide-tip { display: none; pointer-events: none; }
+.skyline-guide { stroke: var(--skyline-color); stroke-width: 1.5; stroke-dasharray: 5 5; }
+.skyline-guide-tip { fill: var(--panel); stroke: var(--skyline-color); stroke-width: 2; }
+.skyline-labels { pointer-events: none; }
+.skyline-label { font-size: 16px; font-weight: 600; fill: var(--ink); stroke: var(--panel); stroke-width: 4; paint-order: stroke; pointer-events: none; }
+.skyline-label-leader { stroke: #b57d18; stroke-width: 1; opacity: .6; }
+.skyline-point .skyline-label { display: none; }
+.skyline-point:hover .skyline-label,
+.skyline-point:focus .skyline-label,
+.skyline-point.is-selected .skyline-label,
+.skyline-point:hover .skyline-guide,
+.skyline-point:focus .skyline-guide,
+.skyline-point.is-selected .skyline-guide,
+.skyline-point:hover .skyline-guide-tip,
+.skyline-point:focus .skyline-guide-tip,
+.skyline-point.is-selected .skyline-guide-tip { display: inline; }
+.skyline-legend { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; list-style: none; padding: 0; margin: .4rem 0; color: var(--muted); font-size: .875rem; }
+.skyline-legend li { display: flex; align-items: center; gap: .4rem; }
+.skyline-swatch { width: .6rem; height: .6rem; border-radius: 50%; background: var(--skyline-color); }
+.skyline-swatch-pareto { background: transparent; border: 2px solid #b57d18; width: .8rem; height: .8rem; }
+.skyline-empty { margin: .5rem 0; }
+@media (max-width: 640px) {
+  .skyline-heading { align-items: flex-start; flex-direction: column; gap: .2rem; }
+  .skyline-count { margin: .3rem 0; }
+  .score-filter { flex-wrap: wrap; }
+  .score-filter > span { flex-basis: 100%; }
 }
-/* A partly hidden bar must still show focus, so the cue is a stroke and a
-   lightened top rather than a size change, which would break the painter's
-   assumption that each bar stays inside its own footprint. */
-.iso-bar:hover .iso-bar-top,
-.iso-bar:focus-visible .iso-bar-top,
-.iso-bar.is-selected .iso-bar-top { fill: #fff; }
-.iso-bar:focus { outline: none; }
-.iso-bar:focus-visible .iso-bar-top,
-.iso-bar:focus-visible .iso-bar-left,
-.iso-bar:focus-visible .iso-bar-right { stroke: var(--ink); stroke-width: 1.4; }
-.iso-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .35rem .9rem;
-  list-style: none;
-  margin: .5rem 0 0;
-  padding: 0;
-  font-size: .78rem;
-  color: var(--muted);
-}
-.iso-legend-item { display: flex; align-items: center; gap: .35rem; }
-.iso-legend-swatch {
-  width: .7rem;
-  height: .7rem;
-  border-radius: 2px;
-  background: var(--line);
-}
-.iso-domain-coding .iso-legend-swatch { background: var(--blue); }
-.iso-domain-math .iso-legend-swatch { background: var(--sea); }
-.iso-domain-agents .iso-legend-swatch { background: var(--orange); }
-.iso-domain-vision .iso-legend-swatch { background: var(--violet); }
-.iso-domain-knowledge .iso-legend-swatch { background: var(--gold); }
-.iso-domain-language .iso-legend-swatch { background: #64757f; }
-.iso-domain-other .iso-legend-swatch { background: #94a3ab; }
 .score-source-heading { font-size: .8rem; margin: 1rem 0 .4rem; color: var(--muted); }
 .score-browse-result { align-items: flex-start; flex-direction: column; gap: .25rem; }
 .score-browse-result .benchmark-result-facts { white-space: normal; }

@@ -1,5 +1,10 @@
 # Repository Instructions
 
+Read `principle.md` before changing a benchmark-facing surface. Its full-corpus
+coverage rule applies to charts, search, tables, counts, and exports: start from
+1,259+ benchmark records across 4+ sources, and investigate any unexplained
+reduction to a few dozen. Missing measurements must not remove records.
+
 ## Glob rule: showcase and UI communication
 
 Applies to `README*`, `docs/**`, `.github/ISSUE_TEMPLATE/**`, `site/**`, and

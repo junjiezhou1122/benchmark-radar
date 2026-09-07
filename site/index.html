@@ -474,8 +474,8 @@
         <div class="score-browse-header">
           <h1 id="leaderboard-heading" data-i18n="Reported benchmark scores">Reported benchmark scores</h1>
           <label class="score-filter" for="leaderboard-score-filter">
-            <span data-i18n="Highest score under">Highest score under</span>
-            <input id="leaderboard-score-filter" name="lscore" type="range" min="10" max="100" step="10" value="70" list="score-filter-steps">
+            <span data-i18n="Show benchmarks with highest reported score below:">Show benchmarks with highest reported score below:</span>
+            <input id="leaderboard-score-filter" name="lscore" type="range" min="10" max="100" step="10" value="70" list="score-filter-steps" aria-controls="benchmark-skyline-chart score-ranking-list">
             <output id="leaderboard-score-value" for="leaderboard-score-filter">70</output>
           </label>
           <datalist id="score-filter-steps">
@@ -486,10 +486,23 @@
           </datalist>
         </div>
 
-        <section class="score-histogram" id="score-histogram" aria-labelledby="score-histogram-heading">
-          <h2 class="score-histogram-title" id="score-histogram-heading" data-i18n="Every benchmark: when it appeared, how often it is reported, how high scores reach">Every benchmark: when it appeared, how often it is reported, how high scores reach</h2>
-          <div class="frontier-chart" id="score-histogram-chart"></div>
-          <p class="score-histogram-note" id="score-histogram-note"></p>
+        <section class="benchmark-skyline" id="benchmark-skyline" aria-labelledby="benchmark-skyline-heading">
+          <div class="skyline-heading">
+            <div>
+              <h2 id="benchmark-skyline-heading" data-i18n="Benchmark Frontier">Benchmark Frontier</h2>
+              <p class="skyline-subtitle" data-i18n="Where difficult benchmarks earn adoption">Where difficult benchmarks earn adoption</p>
+            </div>
+            <p class="skyline-count" id="benchmark-skyline-count" role="status"></p>
+          </div>
+          <div class="frontier-chart skyline-chart" id="benchmark-skyline-chart" tabindex="0" role="region" aria-label="Benchmark Frontier chart" data-i18n-aria="Benchmark Frontier chart"></div>
+          <p class="skyline-note" id="benchmark-skyline-note"></p>
+          <details class="skyline-method">
+            <summary data-i18n="How to read the frontier">How to read the frontier</summary>
+            <p data-i18n="skyline.reading">Every benchmark has a mark. Stems place benchmarks with complete measurements on time, score, and unique model-card adoption axes. Gold rings mark the Pareto frontier; the side wall projects score against adoption. Dots below the axes keep benchmarks with incomplete measurements visible. Hover or focus any mark for its evidence; use arrow keys to move between marks.</p>
+            <p data-i18n="skyline.pareto">A benchmark is Pareto when no other eligible benchmark has an equal or lower score and equal or greater adoption, with at least one strict advantage. Time never affects this test. The score slice cannot promote a dominated benchmark onto the frontier.</p>
+            <p data-i18n="skyline.scope">Adoption counts distinct documents. Only declared percentage metrics with known adoption enter the numeric axes; lower-is-better percentages become 100 minus the original value. Height uses log1p(count); labels and Pareto use raw counts. Unknown values stay unknown, and benchmarks without scores remain visible at every cutoff. A shared scale does not make test protocols equivalent or prove a benchmark is solved.</p>
+            <p data-i18n="skyline.regions">Hard frontier, Emerging and Saturated are reading guides, not assigned categories. Release dates take priority; otherwise the earliest dated evidence in the registry is shown as first observed.</p>
+          </details>
         </section>
 
         <section class="score-ranking leaderboard-top" aria-label="Ranked by data points" data-i18n-aria="Ranked by data points">
@@ -512,7 +525,7 @@
             <div class="benchmark-search">
               <h2 class="benchmark-search-label" id="benchmark-search-heading">
                 <label for="benchmark-search-input"
-                       data-i18n="Browse scored benchmarks">Browse scored benchmarks</label>
+                       data-i18n="Browse all benchmarks">Browse all benchmarks</label>
               </h2>
               <input id="benchmark-search-input" type="search" autocomplete="off"
                      class="benchmark-search-input"

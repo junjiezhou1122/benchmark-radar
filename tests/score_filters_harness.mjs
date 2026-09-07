@@ -1,6 +1,7 @@
 // Execute production functions with small deterministic inputs, without a browser.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { skylineModel, skylineGeometry, skylineFrontierSteps, scorePopulation, matchesScoreCutoff } from '../site/assets/skyline.js';
 const source = readFileSync('site/assets/app.js', 'utf8');
 function fn(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -48,19 +49,19 @@ state.benchmarkIndex = [
 ];
 state.lscore = 70;
 const scoreNames = ['scoreRecord','matchesScoreFilter','scoreBrowseRows','frontierDefaultEntry','externalDisplayFactor'];
-const scores = new Function('state', `${scoreNames.map(fn).join('\n')}\nreturn {${scoreNames.join(',')}};`)(state);
-assert.deepEqual(scores.scoreBrowseRows().map(r=>[r.id,r.rank]), [['external',1],['curated',2]]);
+const scores = new Function('state', 'scorePopulation', 'matchesScoreCutoff', `${scoreNames.map(fn).join('\n')}\nreturn {${scoreNames.join(',')}};`)(state, scorePopulation, matchesScoreCutoff);
+assert.deepEqual(scores.scoreBrowseRows().map(r=>[r.id,r.rank]), [['external',1],['curated',2],['missing',3]]);
 assert.equal(scores.frontierDefaultEntry(state.data.model_card_leaderboard).id,'external');
 assert.equal(scores.matchesScoreFilter(summary(69.999)),true);
 assert.equal(scores.matchesScoreFilter(summary(70)),false);
-assert.equal(scores.matchesScoreFilter(summary(60,0)),false);
+assert.equal(scores.matchesScoreFilter(summary(60,0)),true);
 state.lscore=100;
-assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['at100','over70','external','curated']);
+assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['at100','over70','external','curated','missing']);
 state.lscore=90;
-assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['over70','external','curated']);
+assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['over70','external','curated','missing']);
 // An intermediate step the old three-option filter could not express.
 state.lscore=40;
-assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), []);
+assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['missing']);
 state.lscore=70;
 state.benchmarkIndex=null;
 assert.deepEqual(scores.scoreBrowseRows().map(r=>r.id), ['curated']);
@@ -75,50 +76,145 @@ assert.equal(cutoff('5'), 70, 'below the slider minimum falls back');
 assert.equal(cutoff('999'), 70, 'above the slider maximum falls back');
 assert.equal(cutoff('44'), 40, 'an off-step value snaps to the nearest step');
 
-// --- Score histogram ---------------------------------------------------------
-const histNames = ['histogramDomain','scoreHistogramRows'];
-const histConsts = source.match(/const HISTOGRAM_MIN_REPORTS = \d+;/)[0] + '\n'
-  + source.match(/const HISTOGRAM_DOMAINS = \{[\s\S]*?\n\};/)[0];
-const hist = new Function(`${histConsts}\n${histNames.map(fn).join('\n')}\nreturn {${histNames.join(',')}};`)();
-
-assert.equal(hist.histogramDomain('coding_agent'), 'Coding');
-assert.equal(hist.histogramDomain('reasoning'), 'Math');
-assert.equal(hist.histogramDomain(undefined), 'Other', 'an unmapped domain still gets a colour');
-
-const obs = (n, at, value) => Array.from({length: n}, (_, i) => ({reported_at: at, value: value - i}));
-const bench = {
-  kept: {unit: 'percent', score_summary: {numeric_count: 4, display_max: 60}, organization_count: 2,
-    observations: obs(4, '2026-02-01', 60)},
-  thin: {unit: 'percent', score_summary: {numeric_count: 2, display_max: 55},
-    observations: obs(2, '2026-02-01', 55)},
-  elo: {unit: 'elo', score_summary: {numeric_count: 9, display_max: 3206},
-    observations: obs(9, '2026-02-01', 3206)},
+// --- Benchmark Frontier: identity, normalization and dominance ----------------
+const entry = (id, count, extra = {}) => ({
+  benchmark_id: id, name: id, released: '2025-01-01', domain: 'science',
+  // A deliberately wrong summary guards against ever using it or score counts.
+  card_count: 999,
+  adopters: Array.from({length: count}, (_, n) => ({
+    model_card_id: `card-${n}`, published: '2026-01-01', url: `https://example.org/${n}`,
+  })), ...extra,
+});
+const record = (value, extra = {}) => ({
+  unit: 'percent', direction: 'higher_is_better', metric: 'accuracy',
+  observations: [{value, source_id: 'card-0', reported_at: '2026-01-01'}], ...extra,
+});
+const tracks = {
+  hardest: record(10), twin: record(10), adopted: record(20),
+  dominated: record(30), sameScore: record(20), sameAdoption: record(21),
+  all: record(100), zero: record(0),
 };
-const entries = [{benchmark_id: 'kept', name: 'Kept', domain: 'math'}];
-
-const model = hist.scoreHistogramRows(bench, entries, 100);
-// A 3206 Elo on a 0-100 height axis would sit beside a percentage as though the
-// two measured the same thing.
-assert.deepEqual(model.rows.map((row) => row.id), ['kept'], 'only percent tracks are plotted');
-assert.equal(model.rows[0].domain, 'Math');
-assert.equal(model.rows[0].reports, 4);
-assert.equal(model.rows[0].name, 'Kept');
-// Benchmarks under the report floor are counted, not silently dropped: the
-// caption reports how many the figure leaves out.
-assert.equal(model.omitted, 1, 'the 2-report benchmark is counted as omitted');
-
-assert.equal(hist.scoreHistogramRows(bench, entries, 50).rows.length, 0, 'the cutoff hides a 60 from a <50 view');
-assert.equal(hist.scoreHistogramRows({}, [], 100).rows.length, 0);
-
-// Every bar needs its own footprint, or the front one hides the back one.
-const tied = {
-  a: {unit: 'percent', score_summary: {numeric_count: 3, display_max: 70}, observations: obs(3, '2026-02-01', 70)},
-  b: {unit: 'percent', score_summary: {numeric_count: 3, display_max: 80}, observations: obs(3, '2026-02-01', 80)},
-  c: {unit: 'percent', score_summary: {numeric_count: 3, display_max: 90}, observations: obs(3, '2026-02-01', 90)},
+const cards = [entry('hardest',2), entry('twin',2,{released:'2020-01-01'}),
+  entry('adopted',5), entry('dominated',4), entry('sameScore',3),
+  entry('sameAdoption',5), entry('all',6), entry('zero',0)];
+const model = skylineModel(tracks,cards,[],100);
+const paretoIds = (m) => m.rows.filter((row)=>row.pareto).map((row)=>row.id).sort();
+assert.deepEqual(paretoIds(model), ['adopted','all','hardest','twin','zero']);
+assert.equal(model.rows.length,8,'coincident benchmarks retain their identities');
+assert.equal(model.rows.find(r=>r.id==='zero').adoption,0,'known zero adoption stays valid');
+assert.equal(model.rows.find(r=>r.id==='twin').date,'2020-01-01','time is displayed but never used for dominance');
+for (let cut = 10; cut <= 100; cut += 10) {
+  const sliced = skylineModel(tracks,cards,[],cut);
+  assert.deepEqual(sliced.rows, model.rows.filter((row)=>cut===100 || row.score<cut));
+  assert.equal(sliced.rows.some(row=>row.score===cut),cut===100,'cutoff is strict except All');
+  assert.deepEqual(skylineGeometry(sliced.eligible).project(.5,20,2),
+    skylineGeometry(model.eligible).project(.5,20,2),'a slice never rescales its survivors');
+}
+const duplicate = entry('repeats',2);
+duplicate.adopters.push({...duplicate.adopters[0]});
+const duplicated = skylineModel({repeats:record(45,{observations:Array(100).fill({value:45})})},[duplicate],[],100);
+assert.equal(duplicated.rows[0].adoption,2,'repeated cards and repeated score rows cannot inflate adoption');
+assert.equal(duplicated.rows[0].score,45);
+const reversed = skylineModel({error:record(90,{
+  direction:'lower_is_better',observations:[{value:90},{value:25}],
+})},[entry('error',1)],[],100);
+assert.equal(reversed.rows[0].score,75,'best normalized score is 100 minus the LOWEST error');
+assert.equal(reversed.rows[0].rawScore,25);
+assert.equal(skylineModel({error:record(25,{direction:'lower_is_better'})},[entry('error',1)],[],70).rows.length,0);
+const invalids = {
+  elo:record(50,{unit:'elo'}), dollars:record(5,{unit:'usd'}),
+  fraction:record(.7,{unit:undefined}), unknown:record(30,{direction:undefined}),
+  bogus:record(30,{direction:'inferred'}), negative:record(-1), high:record(101),
+  unscored:record(null), unmeasured:record(10), undated:record(10,{observations:[{value:10}]}),
 };
-const lanes = hist.scoreHistogramRows(tied, [], 100);
-assert.equal(lanes.rows.length, 3);
-assert.equal(new Set(lanes.rows.map((row) => `${row.first}|${row.reports}|${row.lane}`)).size, 3,
-  'three benchmarks sharing a date and a report count get three distinct lanes');
+const invalidModel = skylineModel(invalids,
+  Object.keys(invalids).filter(id=>id!=='unmeasured').map(id=>entry(id,0,{released:null})),[],100);
+assert.deepEqual(invalidModel.rows,[]);
+assert.equal(invalidModel.pending.length,10,'missing fields never remove a benchmark');
+assert.equal(invalidModel.all.filter(row=>row.missing.includes('scale')).length,7);
+assert.equal(invalidModel.all.find(row=>row.id==='unmeasured').adoption,null,'unknown adoption is not zero');
+assert.equal(invalidModel.all.find(row=>row.id==='unscored').score,null,'unknown score is not zero');
+assert.equal(invalidModel.population,10);
+assert(invalidModel.pending.every(row=>row.pareto===null),'incomplete measurements cannot qualify for Pareto');
+const datesModel = skylineModel({date:record(40,{first_reported_at:'2024-04-03'})},
+  [entry('date',1,{released:'2026-02-30',adopters:[{model_card_id:'x',published:'2023-12-11'}]})],[],100);
+assert.equal(datesModel.rows[0].date,'2023-12-11','earliest actual evidence is used if release is absent or invalid');
+assert.equal(datesModel.rows[0].dateBasis,'observed');
+assert.equal(model.rows.find(r=>r.id==='hardest').sourceUrl,'https://example.org/0');
+assert.equal(model.rows.find(r=>r.id==='hardest').domain,'Science');
+assert.equal(skylineModel({other:record(20)},[entry('other',1,{domain:'unmapped'})],[],100).rows[0].domain,'Other');
+assert.deepEqual(skylineFrontierSteps(model.rows),[
+  {score:0,adoption:0},{score:10,adoption:0},{score:10,adoption:2},
+  {score:20,adoption:2},{score:20,adoption:5},{score:100,adoption:5},{score:100,adoption:6},
+],'staircase corners use raw score and adoption, with shared corners drawn once');
+const g = skylineGeometry(model.eligible);
+assert(g.project(1,0)[0]>g.project(0,0)[0],'time increases to the right');
+assert(g.project(.5,0)[1]>g.project(.5,100)[1],'low scores are in front');
+assert(g.project(.5,20,5)[1]<g.project(.5,20,2)[1],'adoption grows upward');
+assert(g.project(.5,20,1)[1]-g.project(.5,20,2)[1]
+  >g.project(.5,20,5)[1]-g.project(.5,20,6)[1],'heights use a logarithmic scale');
 
-console.log('Date windows, deduplication, cutoff boundaries, source-neutral ranking, shared scale, and benchmark bars passed.');
+// Exercise production SVG construction without a browser or a DOM.
+function svgElement(tag,attrs={},text=null) {
+  return {tag,attrs,text,children:[],append(...children){this.children.push(...children);}};
+}
+const translate = (key,params={})=>Object.entries(params).reduce((s,[k,v])=>s.replaceAll(`{${k}}`,v),key);
+const chart = new Function('skylineGeometry','skylineFrontierSteps','svgElement','t','metricLabel','shorten','formatDate','makeFrontierPointInteractive','scoreSourceLabel',
+  `${fn('skylineChart')}\nreturn skylineChart;`)(skylineGeometry,skylineFrontierSteps,svgElement,translate,
+  (n,label)=>`${n} ${label}`, (s,n)=>s.slice(0,n), x=>x, (node,details)=>{node.details=details;}, x=>x);
+const flatten = (node)=>[node,...node.children.flatMap(flatten)];
+for (const cutoff of [10,70,100]) {
+  const m=skylineModel(tracks,cards,[],cutoff);
+  const nodes=flatten(chart(m,cutoff));
+  assert.equal(nodes.filter(n=>'data-frontier-point' in n.attrs).length,m.rows.length);
+  assert.equal(nodes.filter(n=>'data-frontier-anchor' in n.attrs).length,m.rows.length);
+  assert.equal(nodes.filter(n=>n.attrs.class?.startsWith('skyline-projection ')).length,m.rows.length);
+  assert.equal(nodes.filter(n=>n.attrs.class==='skyline-guide').length,m.rows.length);
+  assert.equal(nodes.filter(n=>n.attrs.class==='skyline-slice').length,cutoff<100?1:0);
+  assert.equal(new Set(nodes.filter(n=>'data-benchmark-id' in n.attrs).map(n=>n.attrs['data-benchmark-id'])).size,m.rows.length);
+  assert(!JSON.stringify(nodes).includes('NaN'));
+  assert(!JSON.stringify(nodes).includes('Infinity'));
+  const labelLayer=nodes.find(n=>n.attrs.class==='skyline-labels');
+  assert.equal(labelLayer.children.filter(n=>n.tag==='text').length,m.rows.filter(r=>r.pareto).length);
+}
+assert(!JSON.stringify(chart(skylineModel({},[],[],70),70)).includes('NaN'),'empty chart retains usable axes');
+// A complete rebuilt corpus exercises crowded labels and the production input contract.
+const corpus = JSON.parse(readFileSync('site/data/radar.json','utf8'));
+const catalog = JSON.parse(readFileSync('site/data/benchmark-index.json','utf8')).benchmarks;
+const benchmarkRecords=corpus.benchmark_score_progression.benchmarks;
+const corpusEntries=corpus.model_card_leaderboard.entries;
+const full=skylineModel(benchmarkRecords,corpusEntries,catalog,100);
+const expected=catalog.length+Object.keys(benchmarkRecords).length;
+assert.equal(full.population,expected);
+assert.equal(full.visible.length,expected);
+assert(full.population>=1259,'principle.md: investigate a corpus smaller than 1,259 records');
+assert(full.sources>=4,'principle.md: every source belongs to the same population');
+assert.equal(new Set(full.all.map(row=>row.id)).size,expected,'source rows are never silently merged');
+assert.equal(full.all.filter(row=>row.source==='opencompass_hub').length,
+  catalog.filter(row=>row.source==='opencompass_hub').length,'unscored OpenCompass records remain present');
+state.data=corpus;
+state.benchmarkIndex=catalog;
+for(const cutoff of [10,30,70,100]) {
+  state.lscore=cutoff;
+  const current=skylineModel(benchmarkRecords,corpusEntries,catalog,cutoff);
+  assert.deepEqual(current.visible,full.all.filter(row=>matchesScoreCutoff(row.summary,cutoff)));
+  assert.equal(current.visible.length+current.hidden,expected);
+  assert.equal(current.rows.length+current.pending.length,current.visible.length);
+  assert.equal(current.unscored,full.unscored,'unknown scores stay visible at every cutoff');
+  assert.deepEqual(current.visible.map(row=>row.id).sort(), scores.scoreBrowseRows().map(row=>row.id).sort(),
+    'chart and browser must show exactly the same filtered record IDs');
+  const rendered=chart(current,cutoff);
+  const drawn=flatten(rendered);
+  assert.equal(drawn.filter(node=>'data-benchmark-id' in node.attrs).length,current.visible.length,
+    'every visible record has its own inspectable SVG mark');
+  const maxY=Number(rendered.attrs.viewBox.split(' ').at(-1));
+  for(const text of drawn.filter(n=>n.tag==='text')) {
+    assert(text.attrs.x>=0 && text.attrs.x<=1110 && text.attrs.y>=0 && text.attrs.y<=maxY,
+      `${text.text}: label anchor outside viewBox`);
+  }
+}
+const selected=new Set([catalog.find(row=>row.source==='opencompass_hub').slug]);
+const querySlice=skylineModel(benchmarkRecords,corpusEntries,catalog,70,selected);
+assert.deepEqual(querySlice.visible.map(row=>row.id),[...selected]);
+assert.equal(querySlice.population,expected,'a search never redefines the universe');
+console.log('Full-corpus coverage, source parity, unknown measurements, score slicing, Pareto, and SVG construction passed.');

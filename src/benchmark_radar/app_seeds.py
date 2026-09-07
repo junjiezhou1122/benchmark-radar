@@ -17,6 +17,7 @@ one side has an obvious counterpart on the other.
 
 from __future__ import annotations
 
+import math
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -165,21 +166,52 @@ def _leaderboard_seed(
     return {**seed, **browse_seed}
 
 
+def _browser_score_summary(record: dict[str, Any]) -> dict[str, Any] | None:
+    """Match scoreBrowserSummary: preserve source values except declared error percentages."""
+    summary = record.get("score_summary")
+    values = [
+        row["value"]
+        for row in record.get("observations", [])
+        if isinstance(row.get("value"), (int, float))
+        and not isinstance(row["value"], bool)
+        and math.isfinite(row["value"])
+    ]
+    if not summary and values:
+        summary = {
+            "numeric_count": len(values),
+            "display_max": max(values),
+            "unit": record.get("unit"),
+            "display_multiplier": 1,
+        }
+    if (
+        record.get("unit") == "percent"
+        and record.get("direction") == "lower_is_better"
+        and values
+        and all(0 <= value <= 100 for value in values)
+    ):
+        return {**(summary or {}), "display_max": 100 - min(values), "normalized_from_lower": True}
+    return summary
+
+
 def _score_browser_seed(
     dashboard: dict[str, Any], external_index: list[dict[str, Any]]
 ) -> dict[str, str]:
     """The default list rendered by renderBenchmarkSearch, at DEFAULT_SCORE_CUTOFF."""
     board = dashboard.get("model_card_leaderboard") or {}
     progression = (dashboard.get("benchmark_score_progression") or {}).get("benchmarks") or {}
+    named = {
+        entry["benchmark_id"]: entry
+        for entry in board.get("entries", [])
+        if entry.get("benchmark_id")
+    }
     rows = [
         {
-            "id": entry["benchmark_id"],
-            "name": entry["name"],
+            "id": benchmark_id,
+            "name": named.get(benchmark_id, {}).get("name") or benchmark_id,
             "source": "curated",
-            "summary": progression.get(entry["benchmark_id"], {}).get("score_summary"),
+            "summary": _browser_score_summary(record),
         }
-        for entry in board.get("entries", [])
-        if entry.get("benchmark_id") in progression
+        for benchmark_id, record in progression.items()
     ] + [
         {
             "id": record["slug"],
@@ -192,11 +224,11 @@ def _score_browser_seed(
     rows = [
         row
         for row in rows
-        if row["summary"]
-        and row["summary"]["numeric_count"] > 0
-        and row["summary"]["display_max"] < DEFAULT_SCORE_CUTOFF
+        if not (row["summary"] or {}).get("numeric_count")
+        or (row["summary"] or {}).get("display_max") is None
+        or row["summary"]["display_max"] < DEFAULT_SCORE_CUTOFF
     ]
-    rows.sort(key=lambda row: (-row["summary"]["numeric_count"], row["id"]))
+    rows.sort(key=lambda row: (-(row["summary"] or {}).get("numeric_count", 0), row["id"]))
     shown = rows[:50]
     if not shown:
         return {}
@@ -204,18 +236,27 @@ def _score_browser_seed(
         "curated": "Curated registry",
         "llm_stats": "LLM Stats",
         "artificial_analysis": "Artificial Analysis",
+        "opencompass_hub": "OpenCompass Hub",
     }
     content = ""
     ranking = ""
     for rank, row in enumerate(shown, 1):
-        summary = row["summary"]
-        value = _display_value(summary["display_max"])
+        summary = row["summary"] or {}
+        value = (
+            _display_value(summary["display_max"])
+            if summary.get("display_max") is not None
+            else None
+        )
         unit = summary.get("unit")
         suffix = "%" if unit == "percent" else f" {unit}" if unit else ""
-        factor = " · raw score ×100" if summary["display_multiplier"] == 100 else ""
-        highest = f"Highest {value}{suffix}{factor}"
+        factor = " · raw score ×100" if summary.get("display_multiplier") == 100 else ""
+        highest = f"Highest {value}{suffix}{factor}" if value is not None else "No score reported"
         label = names.get(row["source"], row["source"])
-        count = _metric_label(summary["numeric_count"], "data point")
+        count = (
+            _metric_label(summary["numeric_count"], "data point")
+            if summary.get("numeric_count")
+            else "No score reported"
+        )
         pressed = "true" if rank == 1 else "false"
         content += (
             '<button class="benchmark-result score-browse-result" '
@@ -225,7 +266,8 @@ def _score_browser_seed(
             f'<span class="benchmark-result-facts">{esc(highest)}</span></button>'
         )
         if rank <= 5:
-            width = summary["numeric_count"] / shown[0]["summary"]["numeric_count"] * 100
+            maximum = (shown[0]["summary"] or {}).get("numeric_count") or 1
+            width = summary.get("numeric_count", 0) / maximum * 100
             ranking += (
                 '<li class="leaderboard-top-row">'
                 f'<span class="leaderboard-top-rank">{rank:02}</span>'

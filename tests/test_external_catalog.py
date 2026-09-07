@@ -347,6 +347,15 @@ def test_index_has_one_row_per_source_record(normalized: dict) -> None:
     assert len(index) == 1148
     assert len({row["key"] for row in index}) == 1148
     assert len({row["slug"] for row in index}) == 1148
+    by_key = {record["key"]: record for record in records}
+    for row in index:
+        provenance = by_key[row["key"]].get("provenance") or {}
+        assert row["first_observed"] == provenance.get("crawled_at")
+        assert row["source_url"] == provenance.get("source_url")
+    # A record needs neither scores nor adoption to carry its own date/source.
+    unscored = next(row for row in index if row["source"] == "opencompass_hub")
+    assert unscored["first_observed"]
+    assert unscored["score_summary"] is None
 
 
 @pytest.fixture(scope="module")

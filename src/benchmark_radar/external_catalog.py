@@ -542,10 +542,16 @@ def build_benchmark_index(
                 "source": record["source"],
                 "publisher": publisher["name"] if publisher else None,
                 "released": record.get("released"),
+                # A missing benchmark release date is not a model announcement
+                # date. Carry the actual crawl evidence into the compact view
+                # so unscored records remain inspectable without loading shards.
+                "first_observed": (record.get("provenance") or {}).get("crawled_at"),
+                "source_url": (record.get("provenance") or {}).get("source_url"),
                 "openness": openness.get("status", "unknown"),
                 "modality": record.get("modality"),
                 "score_count": series.get("observation_count", 0),
                 "score_summary": series.get("score_summary"),
+                "score_direction": series.get("direction"),
                 "has_paper": any(item["kind"] == "paper" for item in artifacts),
                 "has_repo": any(item["kind"] == "repo" for item in artifacts),
                 "repo_kind": repository.get("kind"),

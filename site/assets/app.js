@@ -1,3 +1,4 @@
+import { SKYLINE_DOMAINS, skylineModel, skylineGeometry, skylineFrontierSteps, scorePopulation, matchesScoreCutoff, scoreBrowserSummary } from "./skyline.js";
 import {
   CATEGORY_COLORS,
   FALLBACK_COLORS,
@@ -363,6 +364,50 @@ function toggleLang() {
 const I18N = {
   en: {},
   zh: {
+    "Full benchmark catalog could not be loaded.": "未能加载完整的 benchmark 目录。",
+    "Loading all benchmark sources…": "正在加载全部 benchmark 来源…",
+    "Pareto: {p} of {n} benchmarks with comparable score scales and recorded adoption.": "{n} 个 benchmark 的分数刻度可比较且采用量已记录，其中 {p} 个位于 Pareto 前沿。",
+    "{visible} visible · {scored} with scores · {unknown} without scores · {hidden} hidden by filters": "显示 {visible} 个 · {scored} 个有成绩 · {unknown} 个未报告成绩 · 筛选隐藏 {hidden} 个",
+    "{n} benchmarks · {s} sources": "{n} 个 benchmark · {s} 个来源",
+    "Not verified for comparison": "尚未确认可用于比较",
+    "Score scale": "分数刻度",
+    "Not recorded": "未记录",
+    "No benchmarks match these filters.": "没有 benchmark 符合这些筛选条件。",
+    "No score reported": "未报告成绩",
+    "Incomplete measurements": "测量信息不完整",
+    "Browse all benchmarks": "查找全部 benchmark",
+    "Benchmark Frontier": "Benchmark 前沿",
+    "Benchmark Frontier chart": "Benchmark 前沿图",
+    "Where difficult benchmarks earn adoption": "哪些难题，正在被更多模型卡采用",
+    "Show benchmarks with highest reported score below:": "只看最高报告分数低于此值的 benchmark：",
+    "How to read the frontier": "怎样读这张前沿图",
+    "skyline.reading": "每个 benchmark 都有一个标记。测量完整的 benchmark 按时间、分数和独立模型卡采用量绘成细柱。金色圆环标出 Pareto 前沿，侧墙投影展示分数与采用量。下方圆点保留测量不完整的 benchmark。悬停或聚焦可查看证据，方向键可切换标记。",
+    "skyline.pareto": "如果没有另一个 benchmark 的分数不高于它、采用量不低于它，且至少一项严格占优，它就位于 Pareto 前沿。时间不参与判断。拖动分数上限，也不会把原本被支配的点变成前沿点。",
+    "skyline.scope": "采用量按独立文档计数。只有明确采用百分比指标、且采用量已知的 benchmark 才进入数值坐标；越低越好的百分比换算为 100 减去原值。柱高用 log1p(count)，标签和 Pareto 计算用原始数量。未知值保留为未知；没有成绩的 benchmark 在任何分数上限下都可见。刻度一致不代表测试条件相同，也不能据此认定 benchmark 已被解决。",
+    "skyline.regions": "“难题前沿”“新兴评测”和“趋于饱和”只是读图提示，并非给 benchmark 自动分类。时间优先采用发布日期；没有发布日期时，使用登记册中最早的有日期证据，并标为“首次观测”。",
+    "Released / first observed →": "发布／首次观测时间 →",
+    "Lower scores at the front": "低分在前方",
+    "Score × adoption": "分数 × 采用量",
+    "Unique model cards": "独立模型卡数量",
+    "Hard frontier": "难题前沿",
+    "Emerging": "新兴评测",
+    "Saturated": "趋于饱和",
+    "Pareto frontier": "Pareto 前沿",
+    "Original score": "原始分数",
+    "lower is better": "越低越好",
+    "First observed": "首次观测",
+    "Metric": "指标",
+    "Instrument": "评测版本",
+    "Protocol": "测试条件",
+    "Score reported": "成绩报告日期",
+    "Code": "代码",
+    "Science": "科学",
+    "Agent": "智能体",
+    "Multimodal": "多模态",
+    "Model-card measurements are unavailable.": "模型卡测量数据暂时不可用。",
+    "Catalog coverage unavailable.": "暂时无法读取目录覆盖范围。",
+    "Checking catalog coverage…": "正在读取目录覆盖范围…",
+    "3D skyline of {n} benchmarks. Time runs left to right, lower scores sit at the front, and height is unique model-card adoption. Gold rings mark the Pareto frontier; the side wall projects score against adoption.": "{n} 个 benchmark 的三维天际线。时间从左向右，低分在前，高度表示独立模型卡采用量。金色圆环标出 Pareto 前沿，侧墙展示分数与采用量的投影。",
     // --- Brackets and chrome -------------------------------------------------
     "Skip to content": "跳到主要内容",
     "Benchmark Radar": "Benchmark 雷达日报",
@@ -432,9 +477,6 @@ const I18N = {
     "data point": "条成绩记录",
     "data points": "条成绩记录",
     "Data points": "成绩记录数",
-    "Every benchmark: when it appeared, how often it is reported, how high scores reach": "每个 benchmark：何时出现、被报告多少次、最高分多少",
-    "{n} benchmarks reported by at least {k} model cards. Percentage scores only; {x} reported fewer times are left out because they would stack on the same spot.": "{n} 个被至少 {k} 份模型卡报告过的 benchmark。仅统计百分比成绩；另有 {x} 个报告次数更少的 benchmark 未显示，因为它们会挤在同一位置。",
-    "Isometric chart of {n} benchmarks. Position is when each was first reported and how many model cards report it; height is its highest reported score.": "{n} 个 benchmark 的等距立体图。位置表示首次被报告的时间和被多少份模型卡报告，高度表示最高成绩。",
     "Benchmark": "Benchmark",
     "Highest score": "最高分",
     "Reported by": "报告来源",
@@ -1070,7 +1112,6 @@ const I18N = {
     "introduced in the same paper": "出自同一篇论文",
     "has a related variant": "存在相关变体",
     "Related records": "相关记录",
-    "External benchmark": "外部benchmark",
     "Loading benchmark details…": "正在加载benchmark详情…",
     "Could not load details for this benchmark.": "无法加载该benchmark的详情。",
     "Ranked by how many curated model cards report each benchmark, which measures vendor reporting convention rather than benchmark quality. A crawled score count answers a different question: AIME 2025 carries 115 crawled scores and GPQA Diamond 26 model cards, and those are different measures rather than competing ones.":
@@ -4595,29 +4636,19 @@ function scoreCutoff(value) {
 }
 
 function matchesScoreFilter(summary) {
-  return Number.isFinite(summary?.display_max)
-    && summary.numeric_count > 0
-    && (state.lscore >= 100 || summary.display_max < state.lscore);
+  return matchesScoreCutoff(summary, state.lscore);
 }
 
 function scoreBrowseRows(board = state.data?.model_card_leaderboard) {
-  const curated = (board?.entries || []).map((entry) => ({
-    id: entry.benchmark_id, name: entry.name, source: "curated", curated: entry,
-    summary: scoreRecord(entry.benchmark_id)?.score_summary,
-  }));
-  const external = (state.benchmarkIndex || []).map((record) => ({
-    id: record.slug, name: record.name, source: record.source, external: record,
-    summary: record.score_summary,
-  }));
-  return [...curated, ...external]
+  return scorePopulation(state.data?.benchmark_score_progression?.benchmarks, board?.entries, state.benchmarkIndex || [])
     .filter((row) => matchesScoreFilter(row.summary))
-    .sort((a, b) => b.summary.numeric_count - a.summary.numeric_count
+    .sort((a, b) => (b.summary?.numeric_count || 0) - (a.summary?.numeric_count || 0)
       || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .map((row, index) => ({ ...row, rank: index + 1 }));
 }
 
 function scoreSummaryLabel(summary) {
-  if (!Number.isFinite(summary?.display_max)) return t("No numeric score");
+  if (!Number.isFinite(summary?.display_max)) return t("No score reported");
   const value = summary.display_max.toLocaleString("en", { maximumFractionDigits: 1 });
   const unit = summary.unit === "percent" ? "%" : summary.unit ? ` ${summary.unit}` : "";
   return `${value}${unit}`;
@@ -4651,7 +4682,7 @@ function setScoreFilter(value) {
 function renderScoreSelectionNote() {
   const curated = scoreRecord(state.lfrontier);
   const external = (state.benchmarkIndex || []).find((row) => row.slug === state.lfrontier);
-  const summary = curated?.score_summary || external?.score_summary;
+  const summary = curated ? scoreBrowserSummary(curated) : external?.score_summary;
   const known = curated || external || (state.data?.model_card_leaderboard?.entries || [])
     .some((entry) => entry.benchmark_id === state.lfrontier);
   const outside = Boolean(state.lfrontierExplicit && known && !matchesScoreFilter(summary));
@@ -4665,7 +4696,7 @@ function renderScoreSelectionNote() {
 
 function renderScoreRanking(rows) {
   const visible = state.scoreRankingExpanded ? rows.slice(0, state.benchmarkVisibleLimit) : rows.slice(0, 5);
-  const maximum = rows[0]?.summary.numeric_count || 1;
+  const maximum = rows[0]?.summary?.numeric_count || 1;
   replaceChildren(byId("score-ranking-list"), visible.map((row) => {
     const button = element("button", {
       className: "score-ranking-link",
@@ -4683,9 +4714,9 @@ function renderScoreRanking(rows) {
       element("span", { className: "leaderboard-top-rank", text: String(row.rank).padStart(2, "0") }),
       element("span", { className: "leaderboard-top-name" }, [button]),
       element("span", { className: "leaderboard-top-bar" }, [
-        element("span", { className: "leaderboard-top-bar-fill", attrs: { style: `width:${(row.summary.numeric_count / maximum * 100).toFixed(1)}%` } }),
+        element("span", { className: "leaderboard-top-bar-fill", attrs: { style: `width:${((row.summary?.numeric_count || 0) / maximum * 100).toFixed(1)}%` } }),
       ]),
-      element("span", { className: "leaderboard-top-count", text: metricLabel(row.summary.numeric_count, "data point") }),
+      element("span", { className: "leaderboard-top-count", text: row.summary?.numeric_count ? metricLabel(row.summary.numeric_count, "data point") : t("No score reported") }),
     ]);
   }));
   const more = byId("score-ranking-more");
@@ -4694,19 +4725,21 @@ function renderScoreRanking(rows) {
   byId("score-ranking-empty").hidden = rows.length > 0;
 }
 
+function benchmarkQueryIds(board) {
+  return state.benchmarkQuery ? new Set([
+    ...searchCuratedEntries(board, state.benchmarkQuery).map((entry) => entry.benchmark_id),
+    ...searchBenchmarkIndex(state.benchmarkIndex || [], state.benchmarkQuery).map((record) => record.slug),
+  ]) : null;
+}
+
 function renderBenchmarkSearch() {
   const container = byId("benchmark-search-results");
   const status = byId("benchmark-search-status");
   if (!container || !status || !state.data) return;
   const board = state.data.model_card_leaderboard;
   let rows = scoreBrowseRows(board);
-  if (state.benchmarkQuery) {
-    const matches = new Set([
-      ...searchCuratedEntries(board, state.benchmarkQuery).map((entry) => entry.benchmark_id),
-      ...searchBenchmarkIndex(state.benchmarkIndex || [], state.benchmarkQuery).map((record) => record.slug),
-    ]);
-    rows = rows.filter((row) => matches.has(row.id));
-  }
+  const matches = benchmarkQueryIds(board);
+  if (matches) rows = rows.filter((row) => matches.has(row.id));
   const shown = rows.slice(0, state.benchmarkVisibleLimit);
   replaceChildren(container, shown.map(scoreBrowseResultRow));
   renderScoreRanking(rows);
@@ -4730,194 +4763,252 @@ function renderBenchmarkSearch() {
   more.hidden = shown.length >= rows.length;
   byId("leaderboard-score-filter").value = state.lscore;
   byId("leaderboard-score-value").textContent = state.lscore >= 100 ? t("All") : state.lscore;
-  renderScoreHistogram();
+  renderBenchmarkSkyline();
 }
 
-function isoPointX(originX, tile, x, y) {
-  return originX + (x - y) * (tile / 2);
-}
-
-function isoPointY(originY, tile, x, y, height) {
-  return originY + (x + y) * (tile / 4) - height;
-}
-
-function isoFace(points) {
-  return points.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
-}
-
-function scoreHistogramBar(row, geometry) {
-  const { originX, originY, tile, rise, xOf, yOf } = geometry;
-  const inset = 0.09;
-  const x0 = xOf(row) + inset;
-  const x1 = xOf(row) + 1 - inset;
-  const y0 = yOf(row) + inset;
-  const y1 = yOf(row) + 1 - inset;
-  const px = (x, y) => isoPointX(originX, tile, x, y);
-  const py = (x, y, h) => isoPointY(originY, tile, x, y, h);
-  const h = row.best * rise;
-  // Only the two faces meeting at the near corner can face the viewer.
-  const top = [[px(x0, y0), py(x0, y0, h)], [px(x1, y0), py(x1, y0, h)],
-    [px(x1, y1), py(x1, y1, h)], [px(x0, y1), py(x0, y1, h)]];
-  const left = [[px(x0, y1), py(x0, y1, h)], [px(x1, y1), py(x1, y1, h)],
-    [px(x1, y1), py(x1, y1, 0)], [px(x0, y1), py(x0, y1, 0)]];
-  const right = [[px(x1, y1), py(x1, y1, h)], [px(x1, y0), py(x1, y0, h)],
-    [px(x1, y0), py(x1, y0, 0)], [px(x1, y1), py(x1, y1, 0)]];
-  const group = svgElement("g", {
-    class: `iso-bar iso-domain-${row.domain.toLowerCase()}`,
-    tabindex: "0",
-    role: "button",
-    "aria-pressed": "false",
-    "data-frontier-point": "",
+function skylineChart(model, cutoff) {
+  const geometry = skylineGeometry(model.all);
+  const { width, maximum, project, timeFraction, startYear, endYear } = geometry;
+  const pendingGroups = [
+    ["Incomplete measurements", model.pending.filter((row) => Number.isFinite(row.displayScore))],
+    ["No score reported", model.pending.filter((row) => !Number.isFinite(row.displayScore))],
+  ].filter(([, rows]) => rows.length);
+  const columns = 100;
+  const height = 570 + pendingGroups.reduce((sum, [, rows]) => sum + 56 + Math.ceil(rows.length / columns) * 12, 0);
+  const points = (vertices) => vertices.map((point) => point.map((v) => v.toFixed(2)).join(",")).join(" ");
+  const line = (a, b, className) => svgElement("line", {
+    x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: className,
   });
-  group.append(
-    svgElement("polygon", { class: "iso-bar-right", points: isoFace(right) }),
-    svgElement("polygon", { class: "iso-bar-left", points: isoFace(left) }),
-    svgElement("polygon", { class: "iso-bar-top", points: isoFace(top) }),
-  );
-  return group;
-}
-
-function scoreHistogramDate(date) {
-  const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const name = t(names[Number(date.slice(5, 7)) - 1]);
-  const year = date.slice(0, 4);
-  // Chinese puts the year first; "9 月 2025" is English order in Chinese words.
-  return getLang() === "zh" ? `${year} 年 ${name}` : `${name} ${year}`;
-}
-
-function scoreHistogramChart(model) {
-  const narrow = typeof window !== "undefined" && window.innerWidth <= 760;
-  const tile = narrow ? 40 : 64;
-  const rise = (narrow ? 0.9 : 1.25);
-  const slots = model.dates.length;
-  // The lane axis stops just past the busiest benchmark rather than at a round
-  // number, so an outlier reported 27 times does not stretch an empty apron
-  // across the whole figure.
-  const lanes = model.maxReports + 1;
-  const margin = { top: 30, right: 20, bottom: 40, left: narrow ? 40 : 60 };
-  const xIndex = new Map(model.dates.map((date, index) => [date, index]));
-  const xOf = (row) => xIndex.get(row.first) + row.lane * 0.42;
-  const yOf = (row) => row.reports;
-  const originX = margin.left + lanes * (tile / 2);
-  const tallest = Math.max(...model.rows.map((row) => (
-    row.best * rise - (xOf(row) + yOf(row)) * (tile / 4)
-  )), 0);
-  const originY = margin.top + tallest;
-  const width = Math.max(360, (slots + lanes) * (tile / 2) + margin.left + margin.right);
-  const height = originY + (slots + lanes) * (tile / 4) + margin.bottom;
-  const geometry = { originX, originY, tile, rise, xOf, yOf };
-  const px = (x, y) => isoPointX(originX, tile, x, y);
-  const py = (x, y, h) => isoPointY(originY, tile, x, y, h);
+  const textAt = (position, text, className = "skyline-tick", anchor = "middle") => svgElement("text", {
+    x: position[0], y: position[1], class: className, "text-anchor": anchor,
+  }, text);
   const svg = svgElement("svg", {
-    viewBox: `0 0 ${Math.round(width)} ${Math.round(height)}`,
-    role: "group",
-    "aria-label": t(
-      "Isometric chart of {n} benchmarks. Position is when each was first reported and how many model cards report it; height is its highest reported score.",
-    ).replace("{n}", String(model.rows.length)),
+    viewBox: `0 0 ${width} ${height}`, role: "group",
+    "aria-label": t("3D skyline of {n} benchmarks. Time runs left to right, lower scores sit at the front, and height is unique model-card adoption. Gold rings mark the Pareto frontier; the side wall projects score against adoption.", { n: model.visible.length }),
   });
   svg.append(svgElement("polygon", {
-    class: "iso-ground",
-    points: isoFace([[px(0, 0), py(0, 0, 0)], [px(slots, 0), py(slots, 0, 0)],
-      [px(slots, lanes), py(slots, lanes, 0)], [px(0, lanes), py(0, lanes, 0)]]),
+    class: "skyline-floor", points: points([project(0, 0), project(1, 0), project(1, 100), project(0, 100)]),
+  }), svgElement("polygon", {
+    class: "skyline-wall", points: points([project(0, 0), project(0, 100), project(0, 100, maximum), project(0, 0, maximum)]),
   }));
-  for (let slot = 0; slot <= slots; slot += 1) {
-    svg.append(svgElement("line", {
-      class: "iso-grid",
-      x1: px(slot, 0).toFixed(2), y1: py(slot, 0, 0).toFixed(2),
-      x2: px(slot, lanes).toFixed(2), y2: py(slot, lanes, 0).toFixed(2),
+  // A translucent cutting plane stays on the full 0–100 score axis.
+  if (cutoff < 100) {
+    svg.append(svgElement("polygon", {
+      class: "skyline-slice", points: points([project(0, cutoff), project(1, cutoff),
+        project(1, cutoff, maximum), project(0, cutoff, maximum)]),
+    }), line(project(0, cutoff), project(1, cutoff), "skyline-slice-edge"));
+    const label = project(1, cutoff);
+    svg.append(textAt([label[0] + 12, label[1] - 12], `< ${cutoff}`, "skyline-slice-label", "start"));
+  }
+  for (let score = 0; score <= 100; score += 20) {
+    svg.append(line(project(0, score), project(1, score), "skyline-grid"),
+      line(project(0, score), project(0, score, maximum), "skyline-grid"));
+    const right = project(1, score);
+    svg.append(textAt([right[0] + 20, right[1] + 5], String(score), "skyline-tick", "start"));
+  }
+  const countTicks = [...new Set([0, 1, 2, 5, 10, 20, 50, 100, maximum])]
+    .filter((count) => count <= maximum).sort((a, b) => a - b);
+  let lastTickY = Infinity;
+  for (const count of countTicks) {
+    const wall = project(0, 100, count);
+    if (lastTickY - wall[1] < 19 && count !== maximum) continue;
+    // Avoid a final maximum tick crowding a nearby round-number tick.
+    if (count !== maximum && project(0, 100, count)[1] - project(0, 100, maximum)[1] < 19) continue;
+    svg.append(line(project(0, 0, count), wall, "skyline-grid"),
+      textAt([wall[0] - 14, wall[1] + 5], String(count), "skyline-tick", "end"));
+    lastTickY = wall[1];
+  }
+  svg.append(line(project(0, 100), project(0, 100, maximum), "skyline-axis"),
+    line(project(0, 0), project(1, 0), "skyline-axis"),
+    line(project(1, 0), project(1, 100), "skyline-axis"));
+  const yearStep = Math.max(1, Math.ceil((endYear - startYear) / 7));
+  for (let year = startYear; year <= endYear; year += yearStep) {
+    const fraction = timeFraction(Date.UTC(year, 0, 1));
+    const front = project(fraction, 0);
+    svg.append(line(front, project(fraction, 100), "skyline-grid"),
+      textAt([front[0], front[1] + 28], String(year)));
+  }
+  svg.append(textAt([650, 547], t("Released / first observed →"), "skyline-axis-title"),
+    textAt([1018, 346], t("Highest score"), "skyline-axis-title"),
+    textAt([1027, 365], t("0–100")),
+    textAt([980, 517], t("Lower scores at the front"), "skyline-tick", "end"),
+    textAt([95, 36], t("Score × adoption"), "skyline-axis-title", "start"),
+    svgElement("text", { x: 25, y: 195, transform: "rotate(-90 25 195)",
+      class: "skyline-axis-title", "text-anchor": "middle" }, t("Unique model cards")));
+  for (const [fraction, score, label] of [[0.28, 14, "Hard frontier"], [0.82, 12, "Emerging"], [0.72, 85, "Saturated"]]) {
+    svg.append(textAt(project(fraction, score), t(label), "skyline-region"));
+  }
+  // This path lives only on the score × adoption wall: no time ordering is implied.
+  const steps = skylineFrontierSteps(model.rows);
+  if (steps.length) svg.append(svgElement("polyline", {
+    class: "skyline-pareto-path", points: points(steps.map((row) => project(0, row.score, row.adoption))),
+  }));
+  for (const row of model.rows) {
+    const wall = project(0, row.score, row.adoption);
+    svg.append(svgElement("circle", {
+      cx: wall[0], cy: wall[1], r: row.pareto ? 4.5 : 3,
+      class: `skyline-projection skyline-domain-${row.domain.toLowerCase()}${row.pareto ? " is-pareto" : ""}`,
     }));
   }
-  for (let lane = 0; lane <= lanes; lane += 5) {
-    svg.append(svgElement("line", {
-      class: "iso-grid",
-      x1: px(0, lane).toFixed(2), y1: py(0, lane, 0).toFixed(2),
-      x2: px(slots, lane).toFixed(2), y2: py(slots, lane, 0).toFixed(2),
-    }));
-    if (lane > 0) {
-      // On the far edge, where the bars grow away from the label rather than
-      // over it. The near edge buried these behind the tallest column.
-      svg.append(svgElement("text", {
-        class: "iso-axis-tick", "text-anchor": "start",
-        x: (px(slots + 0.15, lane + 0.5) + 6).toFixed(2),
-        y: (py(slots + 0.15, lane + 0.5, 0) + 4).toFixed(2),
-      }, t("{n} reports").replace("{n}", String(lane))));
-    }
+  const labels = [];
+  const labelPositions = new Map();
+  for (const row of model.rows.filter((row) => row.pareto).sort((a, b) => a.score - b.score || a.id.localeCompare(b.id))) {
+    const tip = project(timeFraction(row.time), row.score, row.adoption);
+    const labelWidth = Math.min(245, row.name.length * 7.4);
+    const left = Math.min(width - labelWidth - 12, tip[0] + 12);
+    let top = tip[1] - 14;
+    while (labels.some((box) => left < box.right && left + labelWidth > box.left && Math.abs(top - box.top) < 20)) top -= 22;
+    labels.push({ left, right: left + labelWidth, top });
+    labelPositions.set(row.id, [left, top]);
   }
-  const labelled = new Set();
-  model.dates.forEach((date, index) => {
-    const month = date.slice(0, 7);
-    if (labelled.has(month)) return;
-    labelled.add(month);
-    if (narrow && labelled.size % 2 === 0) return;
-    svg.append(svgElement("text", {
-      class: "iso-axis-tick", "text-anchor": "start",
-      x: px(index + 0.4, lanes).toFixed(2),
-      y: (py(index + 0.4, lanes, 0) + 14).toFixed(2),
-    }, scoreHistogramDate(date)));
-  });
-  // Painter's algorithm: ascending x + y draws far bars before near ones. This
-  // holds only while every bar sits on the shared ground plane inside its own
-  // footprint, which is what the lane offset preserves.
-  [...model.rows]
-    .sort((a, b) => (xOf(a) + yOf(a)) - (xOf(b) + yOf(b)) || xOf(a) - xOf(b))
-    .forEach((row) => {
-      const bar = scoreHistogramBar(row, geometry);
-      bar.setAttribute("aria-label", `${row.name}. ${t("Highest score")} ${row.best.toLocaleString("en", { maximumFractionDigits: 1 })}. ${metricLabel(row.reports, "report")}. ${t("First reported")} ${scoreHistogramDate(row.first)}. ${t("Click to pin benchmark details")}.`);
-      makeFrontierPointInteractive(bar, {
-        kind: t("Benchmark"),
-        title: row.name,
-        rows: [
-          { label: t("Highest score"), value: row.best.toLocaleString("en", { maximumFractionDigits: 1 }) },
-          { label: t("Reported by"), value: metricLabel(row.reports, "model card") },
-          { label: t("First reported"), value: scoreHistogramDate(row.first) },
-          { label: t("Domain"), value: t(row.domain) },
-        ],
-      });
-      svg.append(bar);
+  // Paint distant stems first. Identical positions retain distinct focus targets.
+  const rows = [...model.rows].sort((a, b) => b.score - a.score || a.time - b.time || a.id.localeCompare(b.id));
+  const labelLayer = svgElement("g", { class: "skyline-labels", "aria-hidden": "true" });
+  for (const row of rows) {
+    const x = timeFraction(row.time);
+    const foot = project(x, row.score);
+    const tip = project(x, row.score, row.adoption);
+    const wall = project(0, row.score, row.adoption);
+    const label = labelPositions.get(row.id) || [Math.min(width - 255, tip[0] + 12), tip[1] - 14];
+    const group = svgElement("g", {
+      class: `skyline-point skyline-domain-${row.domain.toLowerCase()}${row.pareto ? " is-pareto" : ""}`,
+      tabindex: "0", role: "button", "aria-pressed": "false", "data-frontier-point": "", "data-benchmark-id": row.id,
+      "aria-label": `${row.name}. ${t("Highest score")}: ${row.score.toLocaleString("en", { maximumFractionDigits: 2 })}. ${metricLabel(row.adoption, "model card")}. ${t(row.dateBasis === "released" ? "Released" : "First observed")}: ${row.date}. ${row.pareto ? t("Pareto frontier") : ""}`,
     });
+    group.append(line(tip, wall, "skyline-guide"),
+      svgElement("circle", { cx: wall[0], cy: wall[1], r: 6, class: "skyline-guide-tip" }),
+      line(foot, tip, "skyline-stem skyline-mark"),
+      svgElement("circle", { cx: foot[0], cy: foot[1], r: 2, class: "skyline-foot skyline-mark" }),
+      svgElement("circle", { cx: tip[0], cy: tip[1], r: 5, class: "skyline-cap skyline-mark", "data-frontier-anchor": "" }),
+      svgElement("circle", { cx: tip[0], cy: tip[1], r: 10, class: "skyline-ring" }));
+    const name = textAt(label, shorten(row.name, 34), "skyline-label", "start");
+    const leader = line(tip, [label[0] - 3, label[1] - 4], "skyline-label-leader");
+    if (row.pareto) labelLayer.append(leader, name);
+    else group.append(name);
+    makeFrontierPointInteractive(group, {
+      kind: row.pareto ? t("Pareto frontier") : t("Benchmark"), title: row.name,
+      rows: [
+        { label: t("Highest score"), value: `${row.score.toLocaleString("en", { maximumFractionDigits: 2 })} / 100` },
+        ...(row.inverted ? [{ label: t("Original score"), value: `${row.rawScore}% · ${t("lower is better")}` }] : []),
+        { label: t("Unique model cards"), value: String(row.adoption) },
+        { label: t(row.dateBasis === "released" ? "Released" : "First observed"), value: formatDate(row.date) },
+        { label: t("Domain"), value: t(row.domain) },
+        { label: t("Metric"), value: row.metric || t("Unknown") },
+        { label: t("Instrument"), value: row.instrument || t("Unknown") },
+        { label: t("Protocol"), value: row.protocol || t("Unknown") },
+        { label: t("Score reported"), value: row.reportedAt ? formatDate(row.reportedAt) : t("Unknown") },
+        { label: t("Source"), value: row.sourceId || t("Unknown") },
+      ], url: row.sourceUrl,
+    });
+    svg.append(group);
+  }
+  svg.append(labelLayer);
+  // Every record that cannot occupy the numeric axes gets its own mark here.
+  // These are not bars of height zero: adoption and score stay null in data.
+  let pendingY = 582;
+  for (const [heading, records] of pendingGroups) {
+    svg.append(textAt([45, pendingY], `${t(heading)} · ${records.length.toLocaleString()}`, "skyline-axis-title", "start"));
+    svg.append(line([45, pendingY + 12], [1060, pendingY + 12], "skyline-grid"));
+    records.forEach((row, index) => {
+      const cx = 50 + (index % columns) * 10.1;
+      const cy = pendingY + 28 + Math.floor(index / columns) * 12;
+      const group = svgElement("g", {
+        class: `skyline-pending-point skyline-domain-${row.domain.toLowerCase()}`,
+        tabindex: "0", role: "button", "aria-pressed": "false", "data-frontier-point": "", "data-benchmark-id": row.id,
+        "aria-label": `${row.name}. ${scoreSourceLabel(row.source)}. ${t(heading)}.`,
+      });
+      group.append(svgElement("circle", {
+        cx, cy, r: 3.7, class: "skyline-pending-cap", "data-frontier-anchor": "",
+      }));
+      makeFrontierPointInteractive(group, {
+        kind: scoreSourceLabel(row.source), title: row.name,
+        rows: [
+          { label: t("Highest score"), value: Number.isFinite(row.displayScore)
+            ? `${row.displayScore.toLocaleString("en", { maximumFractionDigits: 2 })}${row.summary?.unit === "percent" ? "%" : ""}` : t("No score reported") },
+          { label: t("Unique model cards"), value: row.adoption === null ? t("Not recorded") : String(row.adoption) },
+          { label: t("Score scale"), value: row.score === null ? t("Not verified for comparison") : "0–100" },
+          { label: t(row.dateBasis === "released" ? "Released" : "First observed"), value: row.date ? formatDate(row.date) : t("Not recorded") },
+          { label: t("Domain"), value: t(row.domain) },
+        ], url: row.sourceUrl,
+      });
+      svg.append(group);
+    });
+    pendingY += 56 + Math.ceil(records.length / columns) * 12;
+  }
   return svg;
 }
 
-function scoreHistogramLegend(model) {
-  const domains = [...new Set(model.rows.map((row) => row.domain))].sort();
-  return element("ul", { className: "iso-legend" }, domains.map((domain) => element(
-    "li", { className: `iso-legend-item iso-domain-${domain.toLowerCase()}` }, [
-      element("span", { className: "iso-legend-swatch", attrs: { "aria-hidden": "true" } }),
-      element("span", { text: t(domain) }),
-    ],
-  )));
+function skylineLegend() {
+  return element("ul", { className: "skyline-legend" }, [
+    ...Object.keys(SKYLINE_DOMAINS).map((domain) => element("li", {
+      className: `skyline-domain-${domain.toLowerCase()}`,
+    }, [element("span", { className: "skyline-swatch", attrs: { "aria-hidden": "true" } }), element("span", { text: t(domain) })])),
+    element("li", {}, [element("span", { className: "skyline-swatch skyline-swatch-pareto", attrs: { "aria-hidden": "true" } }), element("span", { text: t("Pareto frontier") })]),
+  ]);
 }
 
-function renderScoreHistogram(cutoff = state.lscore) {
-  const host = byId("score-histogram-chart");
+function enableSkylineKeyboard(svg) {
+  const points = [...svg.querySelectorAll("[data-frontier-point]")];
+  points.forEach((point, index) => point.setAttribute("tabindex", index === 0 ? "0" : "-1"));
+  svg.addEventListener("focusin", (event) => {
+    const active = event.target.closest("[data-frontier-point]");
+    if (active) points.forEach((point) => point.setAttribute("tabindex", point === active ? "0" : "-1"));
+  });
+  svg.addEventListener("keydown", (event) => {
+    const point = event.target.closest("[data-frontier-point]");
+    if (!point) return;
+    let index = points.indexOf(point);
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") index += 1;
+    else if (event.key === "ArrowLeft" || event.key === "ArrowUp") index -= 1;
+    else if (event.key === "Home") index = 0;
+    else if (event.key === "End") index = points.length - 1;
+    else return;
+    event.preventDefault();
+    points[(index + points.length) % points.length]?.focus();
+  });
+}
+
+function renderBenchmarkSkyline(cutoff = state.lscore) {
+  const host = byId("benchmark-skyline-chart");
   if (!host) return;
-  const note = byId("score-histogram-note");
-  const benchmarks = state.data?.benchmark_score_progression?.benchmarks;
-  if (!benchmarks) return;
-  // Every redraw detaches the nodes the shared frontier selection points at.
-  clearFrontierPointSelection();
-  const model = scoreHistogramRows(benchmarks, state.data?.model_card_leaderboard?.entries, cutoff);
-  if (!model.rows.length) {
-    const empty = [element("p", { className: "empty-state", text: t("No benchmarks match this cutoff.") })];
-    if (cutoff < 100) {
-      const all = element("button", { className: "clear-button", text: t("All scored"), attrs: { type: "button" } });
-      all.addEventListener("click", () => setScoreFilter(100));
-      empty.push(all);
-    }
-    replaceChildren(host, empty);
-    if (note) note.textContent = "";
+  // Do not briefly present the small registry as the whole population while
+  // the catalog is loading, or turn a failed load into a plausible tiny chart.
+  if (!state.benchmarkIndex) {
+    const message = t(state.benchmarkIndexLoaded ? "Full benchmark catalog could not be loaded." : "Loading all benchmark sources…");
+    replaceChildren(host, [element("p", { className: "empty-state", text: message })]);
+    byId("benchmark-skyline-count").textContent = "";
+    byId("benchmark-skyline-note").textContent = "";
     return;
   }
-  const svg = scoreHistogramChart(model);
-  replaceChildren(host, [svg, scoreHistogramLegend(model), frontierTooltip()]);
-  enableFrontierTouchTargets(svg);
-  if (note) {
-    note.textContent = t(
-      "{n} benchmarks reported by at least {k} model cards. Percentage scores only; {x} reported fewer times are left out because they would stack on the same spot.",
-    ).replace("{n}", String(model.rows.length))
-      .replace("{k}", String(HISTOGRAM_MIN_REPORTS))
-      .replace("{x}", String(model.omitted));
+  const benchmarks = state.data?.benchmark_score_progression?.benchmarks;
+  const entries = state.data?.model_card_leaderboard?.entries;
+  if (!benchmarks || !entries) {
+    replaceChildren(host, [element("p", { className: "empty-state", text: t("Model-card measurements are unavailable.") })]);
+    byId("benchmark-skyline-count").textContent = "";
+    byId("benchmark-skyline-note").textContent = "";
+    return;
   }
+  // Selection in another chart survives a slider preview.
+  if (host.contains(selectedFrontierPoint) || host.contains(describedFrontierPoint)) clearFrontierPointSelection();
+  const model = skylineModel(benchmarks, entries, state.benchmarkIndex || [], cutoff,
+    benchmarkQueryIds(state.data.model_card_leaderboard));
+  const svg = skylineChart(model, cutoff);
+  const contents = [svg, skylineLegend()];
+  if (!model.visible.length) contents.push(element("p", { className: "empty-state skyline-empty", text: t("No benchmarks match these filters.") }));
+  contents.push(frontierTooltip());
+  replaceChildren(host, contents);
+  enableFrontierTouchTargets(svg);
+  enableSkylineKeyboard(svg);
+  byId("benchmark-skyline-count").textContent = t("{n} benchmarks · {s} sources", {
+    n: model.population.toLocaleString(), s: model.sources,
+  });
+  const coverage = [t("{visible} visible · {scored} with scores · {unknown} without scores · {hidden} hidden by filters", {
+    visible: model.visible.length.toLocaleString(), scored: (model.visible.length - model.unscored).toLocaleString(),
+    unknown: model.unscored.toLocaleString(), hidden: model.hidden.toLocaleString(),
+  }), t("Pareto: {p} of {n} benchmarks with comparable score scales and recorded adoption.", {
+    p: model.rows.filter((row) => row.pareto).length, n: model.rows.length,
+  })];
+  byId("benchmark-skyline-note").textContent = coverage.join(". ");
 }
 
 function initBenchmarkSearch() {
@@ -5848,12 +5939,18 @@ function renderFrontierPicker(scored, selectedValue) {
   renderScoreSelectionNote();
 }
 
-// "External benchmark · 115 reported scores · LLM Stats": what the eyebrow, the
-// badge and the scores-block heading used to say between them, on one line
-// (issue #298). The score count comes from the record rather than the shard so
-// it is present before the shard lands.
+// "115 reported scores · LLM Stats": what the eyebrow, the badge and the
+// scores-block heading used to say between them, on one line (issue #298). The
+// score count comes from the record rather than the shard so it is present
+// before the shard lands.
+//
+// It does not say "External benchmark". A benchmark is a benchmark; "external"
+// describes where the record was collected, not what the thing is, and it
+// invites a reader to discount most of the corpus. The source name carries the
+// provenance the layer rule asks for. See "Show all the data, unify the
+// vocabulary" in design.md.
 function externalSubline(record, meta) {
-  const parts = [t("External benchmark")];
+  const parts = [];
   if (record.score_count) {
     parts.push(metricLabel(record.score_count, "reported score", "reported scores"));
   }
@@ -6033,89 +6130,6 @@ function renderFrontierTaskPreview(entry) {
 // vendor reporting its own successive models. That is a real property of vendor
 // reporting rather than something to engineer around, so the chart draws what
 // exists and `evidence` states what it can support.
-
-// --- Score histogram -----------------------------------------------------------
-//
-// One bar per benchmark: x is when it was first reported, y is how many model
-// cards have reported it, z (height) is the highest score anyone reached, and
-// colour is its domain. Three constraints are load-bearing:
-//
-// 1. Only `percent` tracks are plotted. The corpus also carries `elo` (values
-//    reaching 3206) and `usd` (thousands), and a 0-100 height axis cannot hold
-//    those without implying a rating and a percentage measure the same thing.
-// 2. Only benchmarks reported HISTOGRAM_MIN_REPORTS times or more. With every
-//    benchmark included, 45 of 82 land on an already-occupied cell and 21 stack
-//    in a single footprint, because 34 are reported exactly once and 14 twice.
-//    A log y does not separate them: they collide at identical values, not at
-//    large ones. Those are also the benchmarks with the least to show on a time
-//    axis. The caption states how many are left out.
-// 3. Ties that remain get a small lane offset rather than being drawn on top of
-//    each other, so no bar is ever fully buried by another.
-
-const HISTOGRAM_MIN_REPORTS = 3;
-
-const HISTOGRAM_DOMAINS = {
-  coding: "Coding", coding_agent: "Coding",
-  math: "Math", reasoning: "Math",
-  agent: "Agents", tool_use: "Agents", computer_use: "Agents",
-  multimodal: "Vision", vision: "Vision",
-  science: "Knowledge", knowledge: "Knowledge", biology: "Knowledge",
-  factuality: "Knowledge", ai_research: "Knowledge",
-  long_context: "Language", multilingual: "Language",
-  instruction_following: "Language", human_preference: "Language",
-};
-
-function histogramDomain(domain) {
-  return HISTOGRAM_DOMAINS[domain] || "Other";
-}
-
-function scoreHistogramRows(benchmarks, entries, cutoff) {
-  const named = new Map((entries || []).map((entry) => [entry.benchmark_id, entry]));
-  const rows = [];
-  let omitted = 0;
-  Object.entries(benchmarks || {}).forEach(([id, record]) => {
-    if (record?.unit !== "percent") return;
-    const summary = record.score_summary;
-    if (!summary || !summary.numeric_count) return;
-    const observations = (record.observations || []).filter((observation) => (
-      typeof observation?.value === "number" && Number.isFinite(observation.value)
-      && typeof observation.reported_at === "string"
-    ));
-    if (!observations.length) return;
-    if (typeof summary.display_max !== "number") return;
-    if (cutoff < 100 && summary.display_max >= cutoff) return;
-    if (observations.length < HISTOGRAM_MIN_REPORTS) { omitted += 1; return; }
-    const entry = named.get(id) || {};
-    rows.push({
-      id,
-      name: entry.name || id,
-      first: observations.reduce((a, b) => (a.reported_at <= b.reported_at ? a : b)).reported_at,
-      reports: observations.length,
-      best: summary.display_max,
-      domain: histogramDomain(entry.domain),
-      organizations: record.organization_count || 0,
-    });
-  });
-  rows.sort((a, b) => (a.first < b.first ? -1 : a.first > b.first ? 1 : 0)
-    || a.reports - b.reports || (a.id < b.id ? -1 : 1));
-  // Remaining exact ties share a footprint, so fan them into lanes instead of
-  // stacking them where the front bar would hide the ones behind it.
-  const seen = new Map();
-  rows.forEach((row) => {
-    const key = `${row.first}|${row.reports}`;
-    const lane = seen.get(key) || 0;
-    seen.set(key, lane + 1);
-    row.lane = lane;
-  });
-  const dates = [...new Set(rows.map((row) => row.first))].sort();
-  return {
-    rows,
-    dates,
-    omitted,
-    maxReports: rows.length ? Math.max(...rows.map((row) => row.reports)) : 0,
-    maxBest: rows.length ? Math.max(...rows.map((row) => row.best)) : 0,
-  };
-}
 
 function scoreRecord(benchmarkId) {
   return state.data?.benchmark_score_progression?.benchmarks?.[benchmarkId] || null;
@@ -6416,7 +6430,7 @@ function positionFrontierTooltip(tooltip, group) {
   const host = tooltip.parentElement;
   if (!host) return;
   const hostBox = host.getBoundingClientRect();
-  const pointBox = group.getBoundingClientRect();
+  const pointBox = (group.querySelector("[data-frontier-anchor]") || group).getBoundingClientRect();
   const gap = 10;
   const centered = pointBox.left + pointBox.width / 2 - tooltip.offsetWidth / 2;
   const viewportMaxLeft = Math.max(8, window.innerWidth - tooltip.offsetWidth - 8);
@@ -6426,18 +6440,23 @@ function positionFrontierTooltip(tooltip, group) {
     Math.min(hostBox.right - tooltip.offsetWidth - 8, viewportMaxLeft),
   );
   const left = Math.max(minLeft, Math.min(centered, maxLeft));
-  tooltip.style.left = `${left - hostBox.left}px`;
+  tooltip.style.left = `${left - hostBox.left + host.scrollLeft}px`;
 
   const above = pointBox.top - tooltip.offsetHeight - gap;
   const below = pointBox.bottom + gap;
   const viewportMaxTop = Math.max(8, window.innerHeight - tooltip.offsetHeight - 8);
-  const top =
+  let top =
     above >= 8
       ? above
       : below + tooltip.offsetHeight <= window.innerHeight - 8
         ? below
         : Math.max(8, Math.min(pointBox.top - tooltip.offsetHeight / 2, viewportMaxTop));
-  tooltip.style.top = `${top - hostBox.top}px`;
+  // The skyline scrolls horizontally on narrow screens; its tooltip must stay
+  // inside the scrollport rather than being clipped above the chart.
+  if (host.classList.contains("skyline-chart")) {
+    top = Math.max(hostBox.top + 8, Math.min(top, hostBox.bottom - tooltip.offsetHeight - 8));
+  }
+  tooltip.style.top = `${top - hostBox.top + host.scrollTop}px`;
 }
 
 function repositionFrontierTooltip() {
@@ -6595,7 +6614,7 @@ function enableFrontierTouchTargets(svg) {
     let nearest = null;
     let nearestDistance = Infinity;
     svg.querySelectorAll("[data-frontier-point]").forEach((group) => {
-      const box = group.getBoundingClientRect();
+      const box = (group.querySelector("[data-frontier-anchor]") || group).getBoundingClientRect();
       const distance = Math.hypot(
         event.clientX - (box.left + box.right) / 2,
         event.clientY - (box.top + box.bottom) / 2,
@@ -8625,7 +8644,7 @@ function bindEvents() {
     byId("leaderboard-score-value").textContent = value >= 100 ? t("All") : value;
     // The chart previews the drag; the list still settles on release, because
     // re-filtering it would also rebuild the frontier chart on every tick.
-    renderScoreHistogram(value);
+    renderBenchmarkSkyline(value);
   });
   scoreFilter.addEventListener("change", (event) => setScoreFilter(event.target.value));
   byId("benchmark-search-more").addEventListener("click", () => {
@@ -8682,6 +8701,7 @@ function bindEvents() {
   window.addEventListener("resize", repositionDayTooltip);
   window.addEventListener("resize", repositionFrontierTooltip);
   window.addEventListener("scroll", repositionFrontierTooltip, { passive: true });
+  byId("benchmark-skyline-chart").addEventListener("scroll", repositionFrontierTooltip, { passive: true });
   // The frontier chart picks its viewBox width from the viewport, so crossing the
   // 760px breakpoint has to redraw it. Without this a page loaded wide and then
   // narrowed (or a rotated phone) keeps the 920-unit box until some unrelated

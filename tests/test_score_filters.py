@@ -134,6 +134,31 @@ def test_browser_date_and_score_filter_contracts():
     )
 
 
+def test_seed_keeps_benchmarks_without_scores_or_registry_joins():
+    data = {
+        "model_card_leaderboard": {"entries": []},
+        "benchmark_score_progression": {
+            "benchmarks": {"unjoined": {"score_summary": score_summary([{"value": 50}])}}
+        },
+    }
+    index = [
+        {"slug": "unknown", "name": "Unknown score", "source": "opencompass_hub"},
+        {
+            "slug": "high",
+            "name": "Above cutoff",
+            "source": "llm_stats",
+            "score_summary": score_summary([{"value": 90}]),
+        },
+    ]
+    seeds = _score_browser_seed(data, index)
+    rendered = "".join(seeds.values())
+    assert "unjoined" in rendered
+    assert "Unknown score" in rendered
+    assert "No score reported" in rendered
+    assert "Above cutoff" not in rendered
+    assert "2 of 2 matches" in rendered
+
+
 def test_seed_and_browser_format_scores_identically():
     """The seed and app.js must print one decimal the same way, half-up included."""
     node = shutil.which("node")
