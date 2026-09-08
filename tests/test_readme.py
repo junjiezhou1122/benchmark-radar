@@ -12,7 +12,7 @@ README = Path("README.md")
 README_ZH = Path("README.zh-CN.md")
 SKILL = Path("skills/benchmark-radar/SKILL.md")
 TECHNICAL_REPORT = "https://zenodo.org/records/22167102"
-REPORT_PDF = "docs/technical-report/latex/main.pdf"
+REPORT_PDF = "https://github.com/ktwu01/benchmark-radar-paper/blob/main/main.pdf"
 
 
 def _run(day: int) -> RadarRun:

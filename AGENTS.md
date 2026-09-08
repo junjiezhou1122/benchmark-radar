@@ -176,11 +176,18 @@ inputs retain their source spelling.
 
 ### Technical report and deposit files
 
+The paper lives in `ktwu01/benchmark-radar-paper`, mounted as a Git submodule at
+`docs/technical-report/latex`. Initialize it with
+`git submodule update --init --recursive`, including in clean worktrees. Commit
+and push paper edits in that repository first, then commit the reviewed submodule
+pointer here. Overleaf sync changes the paper repository, not this pinned pointer.
+
 - Report source: `docs/technical-report/latex/main.tex`. This is the single
   source of truth for the report. Edit it directly. Nothing generates it from
   Python, Markdown, or the running site.
 - Built PDF: `docs/technical-report/latex/main.pdf`, tracked so the report reads
-  on GitHub. Rebuild and commit it with any change to `main.tex`.
+  on GitHub in the paper repository. Rebuild and commit it with any change to
+  `main.tex`.
 - The four PDF figures have native TikZ sources under `latex/figures/`.
   `make` builds them from the dated `latex/figure-data.tex` export. Refresh that
   export only after auditing a clean corpus rebuild; review and commit the
@@ -250,7 +257,8 @@ exact file. A deposit copies the reviewed PDF to a versioned name under
 - Run the full CI sequence locally and get it passing before opening a PR. Do
   not open one against a red local run.
 - Run it against a clean checkout (`git worktree add --detach <tmp> <branch>`),
-  not your working copy. Generated files such as `site/data/radar.json`,
+  not your working copy. Run `git submodule update --init --recursive` in that
+  worktree before checks. Generated files such as `site/data/radar.json`,
   `site/data/benchmark-index.json` and `site/data/benchmarks/` are gitignored
   and absent on a fresh CI runner, so a working copy that happens to have them
   on disk passes tests that CI fails.

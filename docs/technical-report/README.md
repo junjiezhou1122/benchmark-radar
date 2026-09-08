@@ -1,9 +1,29 @@
 # Benchmark Radar technical report
 
-This directory holds the LaTeX source, the built PDF, and the deposit metadata
-for the citable Benchmark Radar technical report. `latex/main.tex` is the single
-source of truth for the report. Edit it directly; nothing generates it from
-Python, Markdown, or the running site.
+The [paper repository](https://github.com/ktwu01/benchmark-radar-paper) holds the
+LaTeX source, built PDF, and all figures. It is mounted here as the `latex/` Git
+submodule, pinned to a reviewed paper commit. This directory keeps the software
+audit notes and frozen deposit metadata. `latex/main.tex` remains the single
+source of manuscript prose; edit it directly.
+
+For Overleaf setup and the writing workflow, see the
+[paper README](https://github.com/ktwu01/benchmark-radar-paper#write-together-in-overleaf).
+Overleaf sync is manual and updates the paper repository. Updating this
+repository requires a separate PR that advances the submodule pointer.
+
+## Get the paper
+
+New clones should use `git clone --recurse-submodules`. In an existing checkout
+or a new clean worktree, run this from the repository root:
+
+```bash
+git submodule update --init --recursive
+```
+
+The submodule checks out a specific commit. Before editing it locally, create a
+branch inside it with `git switch -c paper/my-revision`. Commit and push the
+paper changes there first, then commit the `docs/technical-report/latex` pointer
+in this repository. The paper README includes the update commands.
 
 The current manuscript evaluates software version 0.10.0, its full collection and
 publication pipeline, the public collection sources, the 1,283-entry web search
@@ -18,9 +38,9 @@ cd docs/technical-report/latex
 make
 ```
 
-That writes `latex/main.pdf`, which is tracked so the report is readable
-directly on GitHub. Commit the rebuilt PDF alongside any change to `main.tex`,
-so the checked-in PDF always matches the checked-in source.
+That writes `latex/main.pdf`, tracked in the paper repository so the report
+reads directly on GitHub. Commit the rebuilt PDF alongside any change to `main.tex`,
+then update the parent repository's submodule pointer.
 
 ## arXiv upload
 
@@ -31,9 +51,9 @@ make arxiv
 
 That writes `arxiv.tar.gz`. arXiv runs no BibTeX pass of its own, so the tarball
 ships the built `main.bbl` rather than `references.bib`, together with
-`figure-data.tex` and the native figure sources. It also flattens every
-figure into one `figures/` directory, because the use-case screenshots live in
-`assets/use-case-492/` in this repository and that path does not exist upstream.
+`figure-data.tex` and the native figure sources. All images, including the
+use-case screenshots, live in the paper repository's `figures/` directory, so the
+package needs no parent-repository files.
 Unpack the tarball and build it once on its own before uploading.
 
 ## Figures
@@ -51,10 +71,9 @@ manuscript rebuild does not silently pick up a new corpus. To refresh it, first
 run the six-step clean-checkout CI sequence in `AGENTS.md`, then:
 
 ```bash
-cd docs/technical-report/latex
-make refresh-figure-data  # Python reads the freshly rebuilt index and radar.json
-make check-figure-data    # verifies the export, including input SHA-256 hashes
-make
+python scripts/export_report_figure_data.py
+python scripts/export_report_figure_data.py --check
+make -C docs/technical-report/latex
 ```
 
 Review the cutoff, related prose and tables, all four figures, and the rendered
@@ -75,8 +94,8 @@ catalog count as the manuscript. The search illustration remains unembedded.
 The graphical abstract (`figures/abstract_overview.png`) is an authored raster
 asset, not one of these four generated diagrams.
 
-The use-case screenshots in `assets/use-case-492/` are likewise committed
-assets, captured from the running site.
+The use-case screenshots are included in `latex/figures/` so Overleaf and
+standalone builds work. The original evidence remains in `assets/use-case-492/`.
 
 ## Deposit
 
