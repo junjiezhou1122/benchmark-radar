@@ -126,8 +126,8 @@ the finding still holds at the current cutoff.
 
 ## Audited inputs
 
-The report derives its quantitative claims from these versioned files and from
-the current README and report documentation:
+The report derives its quantitative claims from versioned source evidence and
+the catalog artifacts rebuilt from it:
 
 - `site/data/radar.json` (generated from the dated snapshots)
 - `site/data/benchmark-index.json` (generated from normalized catalogs)
@@ -136,12 +136,8 @@ the current README and report documentation:
 - `data/benchmark_scores.yml`
 - `site/data/models.json`
 - `config.yml`
-- `docs/reports/ai-benchmark-landscape-report.md`
-- `docs/source-probe-evidence.md`
 
-The last two are project-history and data-validation context, not evidence for a
-benchmark claim. Rebuild and review the report when any of those inputs or the
-report text changes.
+Rebuild and review the report when these inputs or the report text change.
 
 ## Licensing
 
