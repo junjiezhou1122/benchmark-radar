@@ -244,7 +244,7 @@ The collaboration call is authored in `docs/technical-report/latex/main.tex` and
 2. Add the `/claim` and seven-day expiry workflow, then test it on one scored issue.
 3. Add the contributor-points calculator and retroactively prefix every merged non-`ktwu01` pull request.
 4. Review currently unscored open issues and prefix those ready for public assignment.
-5. Add the bilingual call-for-cases subsection to the report builder, pointing at the coordination issue.
+5. Add the bilingual call-for-cases subsection to `docs/technical-report/latex/main.tex`, pointing at the coordination issue.
 
 ## The Assignment
 
