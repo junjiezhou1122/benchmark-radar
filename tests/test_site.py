@@ -1316,6 +1316,7 @@ def test_static_html_references_existing_local_assets():
         "data/radar.json",
         "blog/",
         "leaderboard/",
+        "saturation/",
         "trends/",
         "explore/",
         "rubric/",
