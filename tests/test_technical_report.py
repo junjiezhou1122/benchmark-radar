@@ -54,7 +54,9 @@ def test_manuscript_embeds_use_case_figures() -> None:
 
     for name in names:
         assert name in source
-        assert (ROOT / "assets" / "use-case-492" / name).is_file()
+        assert (LATEX / "figures" / name).read_bytes() == (
+            ROOT / "assets" / "use-case-492" / name
+        ).read_bytes()
 
 
 def test_frozen_deposit_is_present_and_is_never_a_write_target() -> None:
