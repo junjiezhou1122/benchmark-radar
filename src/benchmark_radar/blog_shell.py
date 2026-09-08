@@ -94,10 +94,9 @@ class BlogPost:
 
 @dataclass(frozen=True)
 class SiteChrome:
-    """The masthead, section nav, and footer extracted from ``index.html``."""
+    """The masthead and footer extracted from ``index.html``."""
 
     header: str
-    navigation: str
     footer: str
 
 
@@ -177,6 +176,8 @@ def _adapt_navigation(nav: str) -> str:
 
 def _adapt_header(header: str) -> str:
     header = _strip_comments(header)
+    navigation = _region(header, r'<nav class="view-nav".*?</nav>', "section nav")
+    header = header.replace(navigation, _adapt_navigation(navigation), 1)
     # Same host-relative rule as the section nav: the badge keeps the site
     # feed, but a local preview or mirror must not eject to the canonical
     # domain on click.
@@ -219,13 +220,11 @@ def _page_footer(footer: str, updated: str) -> str:
 
 
 def extract_site_chrome(dashboard_html: str) -> SiteChrome:
-    """Pull the shared masthead, nav, and footer out of ``site/index.html``."""
+    """Pull the shared masthead and footer out of ``site/index.html``."""
     header = _region(dashboard_html, r'<header class="masthead">.*?</header>', "masthead")
-    navigation = _region(dashboard_html, r'<nav class="view-nav".*?</nav>', "section nav")
     footer = _region(dashboard_html, r"<footer>.*?</footer>", "footer")
     return SiteChrome(
         header=_adapt_header(header),
-        navigation=_adapt_navigation(navigation),
         footer=_strip_comments(footer),
     )
 
@@ -284,7 +283,6 @@ def render_page(
 <body class="blog-page">
 <a class="skip-link" href="#main-content">Skip to content</a>
 {chrome.header}
-{chrome.navigation}
 <main id="main-content" tabindex="-1"><div class="blog-view">{body}</div></main>
 {_page_footer(chrome.footer, updated)}
 </body>

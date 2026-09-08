@@ -475,6 +475,7 @@ const I18N = {
     Today: "今日",
     Leaderboard: "排行榜",
     Trends: "趋势",
+    Trend: "趋势",
     Explore: "探索",
     Blog: "博客",
     Rubric: "评分标准",

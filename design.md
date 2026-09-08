@@ -74,6 +74,39 @@ active indicator, and Back and Forward should restore meaningful states.
 Show a concise answer first, then offer the evidence and method behind it.
 Expansion should be clear and reversible.
 
+## Keep page titles close and quiet
+
+[Issue #581](https://github.com/ktwu01/benchmark-radar/issues/581) sets the
+Leaderboard heading as the spacing baseline. Every primary page title should
+start at the same compact distance below the menubar. Switching sections must
+not make the title jump down the page. Controls beside a title align to the top;
+a taller filter must not vertically center the title lower than its peers.
+
+Good:
+
+- `Leaderboard`, `Saturation`, `Trend`, and the Blog title share one top offset.
+- The Blog title uses the same scale as `Saturation`, even when it is longer.
+- `Trend` identifies the Trends page without a second label or open caveat.
+
+Bad:
+
+- Leaving the generic page padding on Saturation, Trends, or Blog while
+  Leaderboard uses compact spacing.
+- Stacking `Recent activity`, `Signals over time`, and “Counts describe
+  discovery volume, not scientific quality” before the reader reaches the
+  chart.
+- Stacking `Daily brief`, the Blog title, a descriptive paragraph, and a
+  collection-day count when the title already identifies the page.
+
+Use one title when one title is enough. Eyebrows, decks, counts, and caveats do
+not belong in the open title area merely because the data exists. If page-level
+coverage context remains necessary, put it in one closed, keyboard- and
+touch-accessible `(i)` immediately to the right of the title. Give the control
+an accessible name and keep its contents out of the layout while closed. A
+loading failure or empty state remains visible; it must never be hidden in the
+note. Figure-specific coverage and method text still follow the figure-caption
+rule below.
+
 Mobile layout must preserve the surface's primary task. On Today, matching
 results come first; the daily briefing follows as context for the scan date.
 

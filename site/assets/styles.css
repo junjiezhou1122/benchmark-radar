@@ -109,7 +109,6 @@ a {
 }
 
 .masthead,
-.view-nav,
 main,
 footer {
   width: min(1680px, calc(100% - 48px));
@@ -117,15 +116,30 @@ footer {
 }
 
 .masthead {
+  position: sticky;
+  top: 0;
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1.25rem;
   min-height: 80px;
   border-bottom: 1px solid var(--edge);
+  background: color-mix(in srgb, var(--canvas) 96%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.masthead-main {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 0.9rem;
 }
 
 .brand {
   display: inline-flex;
+  flex: 0 0 auto;
   gap: 0.85rem;
   align-items: center;
   color: var(--ink);
@@ -134,10 +148,10 @@ footer {
 
 .brand strong {
   display: block;
-  font-family: var(--display);
-  font-size: clamp(1.25rem, 3vw, 1.75rem);
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  font-family: var(--utility);
+  font-size: 0.975rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
   line-height: 1;
 }
 
@@ -415,16 +429,14 @@ button.repo-badge svg {
 }
 
 .view-nav {
-  position: sticky;
-  top: 0;
-  z-index: 50;
   display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
   align-items: stretch;
   gap: 0.3rem;
   padding-block: 0.5rem;
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--canvas) 96%, transparent);
-  backdrop-filter: blur(12px);
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .view-nav button,
@@ -476,13 +488,11 @@ main {
   padding: clamp(2.25rem, 4vw, 3.75rem) 0 6rem;
 }
 
-/* The leaderboard's primary object is the figure, so its top chrome is a
-   budget rather than a canvas: on a 1440x900 laptop the chart began at
-   y=1356, entirely below the fold, behind KPI cards and accordions that
-   summarise it. Those moved below the figure; this recovers the last of the
-   gap so the visualization is visibly underway on load. */
+/* Primary page titles stay close to the shared masthead so switching sections
+   does not make the heading jump down the page. */
 #leaderboard-view,
-#saturation-view {
+#saturation-view,
+#trends-view {
   padding-top: clamp(1.25rem, 2vw, 1.75rem);
 }
 
@@ -4245,7 +4255,6 @@ footer {
 
 @media (max-width: 760px) {
   .masthead,
-  .view-nav,
   main,
   footer {
     width: min(100% - 28px, 1440px);
@@ -4261,15 +4270,24 @@ footer {
   }
 
   .masthead {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     min-height: 64px;
     padding-block: 0.75rem;
-    /* Brand plus the four-square grid exceed 320px-class viewports, so the
-       controls drop to a second row instead of overflowing off-screen. */
-    flex-wrap: wrap;
     row-gap: 0.5rem;
   }
 
+  .masthead-main {
+    display: contents;
+  }
+
+  .brand {
+    grid-column: 1;
+    min-width: 0;
+  }
+
   .masthead-end {
+    grid-column: 2;
     grid-template-columns: repeat(4, 44px);
     gap: 0.5rem;
   }
@@ -4284,8 +4302,9 @@ footer {
   }
 
   .view-nav {
-    overflow-x: auto;
-    scrollbar-width: thin;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
   }
 
   .view-nav button,
@@ -5112,7 +5131,7 @@ dialog {
 /* Score browsing leads the page; adoption remains a separate view below it. */
 .score-browse-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 1rem;
@@ -5124,6 +5143,7 @@ dialog {
   max-width: none;
 }
 .score-filter { display: flex; align-items: center; gap: .6rem; margin-bottom: 1.25rem; }
+.score-browse-header > .score-filter { margin-bottom: 0; }
 .score-filter input[type="range"] {
   flex: 1 1 auto;
   min-width: 5rem;
