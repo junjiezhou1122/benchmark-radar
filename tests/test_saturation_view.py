@@ -267,7 +267,7 @@ def test_the_search_field_carries_the_panel_weight_through_affordance():
 
     field = styles.split(".benchmark-search-input {", 1)[1].split("}", 1)[0]
     assert "border: 2px solid var(--ink)" in field
-    assert "background: white" in field
+    assert "background-color: white" in field
 
     label = styles.split(".benchmark-search-label {", 1)[1].split("}", 1)[0]
     assert "font-size: 0.78rem" in label, "the label must not grow"

@@ -483,24 +483,26 @@
               <p class="skyline-subtitle" data-i18n="Which difficult benchmarks have been tested most">Which difficult benchmarks have been tested most</p>
             </div>
           </div>
-          <label class="score-filter" for="leaderboard-score-filter">
-            <span data-i18n="Show benchmarks with highest reported score below:">Show benchmarks with highest reported score below:</span>
-            <input id="leaderboard-score-filter" name="lscore" type="range" min="10" max="100" step="10" value="70" list="score-filter-steps" data-score-filter aria-controls="benchmark-skyline-chart">
-            <output id="leaderboard-score-value" for="leaderboard-score-filter">70</output>
-          </label>
-          <datalist id="score-filter-steps">
-            <option value="10"></option><option value="20"></option><option value="30"></option>
-            <option value="40"></option><option value="50"></option><option value="60"></option>
-            <option value="70"></option><option value="80"></option><option value="90"></option>
-            <option value="100" label="All"></option>
-          </datalist>
-          <label class="skyline-height-control" for="benchmark-skyline-height">
-            <span data-i18n="Height">Height</span>
-            <select id="benchmark-skyline-height">
-              <option value="models" data-i18n="Models with reported scores">Models with reported scores</option>
-              <option value="documents" data-i18n="Source documents">Source documents</option>
-            </select>
-          </label>
+          <div class="skyline-toolbar">
+            <label class="score-filter" for="leaderboard-score-filter">
+              <span data-i18n="Show benchmarks with highest reported score below:">Show benchmarks with highest reported score below:</span>
+              <input id="leaderboard-score-filter" name="lscore" type="range" min="10" max="100" step="10" value="70" list="score-filter-steps" data-score-filter aria-controls="benchmark-skyline-chart">
+              <output id="leaderboard-score-value" for="leaderboard-score-filter">70</output>
+            </label>
+            <datalist id="score-filter-steps">
+              <option value="10"></option><option value="20"></option><option value="30"></option>
+              <option value="40"></option><option value="50"></option><option value="60"></option>
+              <option value="70"></option><option value="80"></option><option value="90"></option>
+              <option value="100" label="All"></option>
+            </datalist>
+            <label class="skyline-height-control" for="benchmark-skyline-height">
+              <span data-i18n="Height">Height</span>
+              <select id="benchmark-skyline-height">
+                <option value="models" data-i18n="Models with reported scores">Models with reported scores</option>
+                <option value="documents" data-i18n="Source documents">Source documents</option>
+              </select>
+            </label>
+          </div>
           <div class="frontier-chart skyline-chart" id="benchmark-skyline-chart" tabindex="0" role="region" aria-label="Benchmark Frontier chart" data-i18n-aria="Benchmark Frontier chart"></div>
           <div class="skyline-caption">
             <div id="benchmark-skyline-legend" aria-label="Chart legend" data-i18n-aria="Chart legend"></div>

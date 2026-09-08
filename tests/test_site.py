@@ -437,7 +437,14 @@ def test_top_right_utilities_use_shared_icon_geometry_and_contact_control():
     assert ".repo-badges" not in styles
     assert 'class="repo-badge-glyph" id="lang-toggle-label">中<' in html
     assert 'class="brand-icon github-icon"' in html
-    assert "grid-template-columns: repeat(4, 2.1rem)" in styles
+    assert "grid-template-columns: repeat(4, 44px)" in styles
+    mobile_badge = (
+        styles.split("@media (max-width: 760px)", 1)[1]
+        .split(".repo-badge {", 1)[1]
+        .split("}", 1)[0]
+    )
+    assert "width: 44px" in mobile_badge
+    assert "height: 44px" in mobile_badge
     assert "flex: 0 0 1.5rem" in styles
     assert ".repo-badge svg," in styles
 
