@@ -37,6 +37,13 @@ two input JSON files. `--check` recomputes the export and fails if the exported
 file differs from those local inputs. Do not hand-edit the numbers or hashes.
 The script does not update manuscript prose or PDF files.
 
+The paper's main findings use its `scripts/audit_findings.py` exporter, which
+reads the same frozen index and every detail shard. Documentation, score, and
+date analyses retain the full source-record population; percentage-scale or
+model-report eligibility must not determine which records survive. Run both
+paper audits in `--check` mode, as documented in the paper README. The generated
+CSV and JSON provide all records and their available measurements.
+
 Verify the exported hashes against the paper README and preserve the release
 cutoff. For manuscript edits, rebuild and inspect the figures and manuscript using the
 [paper's build instructions](https://github.com/ktwu01/benchmark-radar-paper#build-locally).
