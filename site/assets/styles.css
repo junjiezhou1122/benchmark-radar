@@ -1,16 +1,16 @@
 :root {
   color-scheme: light;
-  --panel: #f7f9fa;
-  --canvas: #e7ecef;
+  --panel: #f9fbfc;
+  --canvas: #edf1f3;
   --ink: #15242a;
   --muted: #5f7078;
-  --line: #bdc9ce;
+  --line: #cbd5da;
   /* Borders and dividers, deliberately not `--ink`. The page used the text
      colour to draw every card edge and row separator, so a screen of data read
      as a grid of hard near-black boxes and the rules competed with the words
      inside them (issue #333). One step darker than `--line` so a card edge
      still reads as an edge against `--panel`, nowhere near the ink. */
-  --edge: #aebbc1;
+  --edge: #b8c5cc;
   /* One corner radius for every panel, card, table and control. */
   --radius: 10px;
   --radius-sm: 6px;
@@ -32,7 +32,7 @@
   --body: "Avenir Next", Avenir, "Segoe UI", sans-serif;
   --display: var(--body);
   --utility: "SFMono-Regular", "Cascadia Code", "Roboto Mono", monospace;
-  --shadow: 0 16px 50px rgb(27 48 56 / 8%);
+  --shadow: 0 3px 16px rgb(27 48 56 / 5%);
 }
 
 [hidden] {
@@ -45,6 +45,7 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
 }
 
 /* Nothing on this page is meant to be reached by scrolling sideways: every
@@ -108,7 +109,6 @@ a {
 }
 
 .masthead,
-.view-nav,
 main,
 footer {
   width: min(1680px, calc(100% - 48px));
@@ -116,15 +116,30 @@ footer {
 }
 
 .masthead {
+  position: sticky;
+  top: 0;
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 72px;
+  gap: 1.25rem;
+  min-height: 80px;
   border-bottom: 1px solid var(--edge);
+  background: color-mix(in srgb, var(--canvas) 96%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.masthead-main {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 0.9rem;
 }
 
 .brand {
   display: inline-flex;
+  flex: 0 0 auto;
   gap: 0.85rem;
   align-items: center;
   color: var(--ink);
@@ -133,10 +148,10 @@ footer {
 
 .brand strong {
   display: block;
-  font-family: var(--display);
-  font-size: clamp(1.25rem, 3vw, 1.75rem);
-  font-weight: 400;
-  letter-spacing: 0.025em;
+  font-family: var(--utility);
+  font-size: 0.975rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
   line-height: 1;
 }
 
@@ -415,16 +430,22 @@ button.repo-badge svg {
 
 .view-nav {
   display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
   align-items: stretch;
-  border-bottom: 1px solid var(--line);
+  gap: 0.3rem;
+  padding-block: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .view-nav button,
 .view-nav a {
   min-width: 112px;
-  padding: 0.85rem 1.25rem;
+  min-height: 44px;
+  padding: 0.8rem 1.15rem;
   border: 0;
-  border-right: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
   font-family: var(--utility);
@@ -432,6 +453,12 @@ button.repo-badge svg {
   letter-spacing: 0.05em;
   text-align: center;
   text-decoration: none;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.view-nav :is(button, a):not(.nav-active):hover {
+  background: var(--panel);
+  color: var(--ink);
 }
 
 .view-nav .nav-active {
@@ -461,13 +488,11 @@ main {
   padding: clamp(2.25rem, 4vw, 3.75rem) 0 6rem;
 }
 
-/* The leaderboard's primary object is the figure, so its top chrome is a
-   budget rather than a canvas: on a 1440x900 laptop the chart began at
-   y=1356, entirely below the fold, behind KPI cards and accordions that
-   summarise it. Those moved below the figure; this recovers the last of the
-   gap so the visualization is visibly underway on load. */
+/* Primary page titles stay close to the shared masthead so switching sections
+   does not make the heading jump down the page. */
 #leaderboard-view,
-#saturation-view {
+#saturation-view,
+#trends-view {
   padding-top: clamp(1.25rem, 2vw, 1.75rem);
 }
 
@@ -559,12 +584,25 @@ input {
   min-height: 44px;
   padding: 0.55rem 2.25rem 0.55rem 0.75rem;
   border: 1px solid var(--line);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background-color: var(--panel);
   color: var(--ink);
   font-family: var(--body);
   font-size: 0.9rem;
   letter-spacing: normal;
+}
+
+input[type="search"] {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%235f7078' stroke-width='1.7' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='m16 16 4.5 4.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 0.8rem center;
+  padding-left: 2.5rem;
+}
+
+input:not([type="range"]):focus-visible,
+select:focus-visible {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgb(37 94 168 / 10%);
 }
 
 .content-grid {
@@ -678,15 +716,17 @@ input {
    "why it matters" support beneath it, and a quiet metadata chip row. */
 .briefing-insight + .briefing-insight {
   margin-top: 1.35rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--line);
 }
 
 .briefing-insight-head {
   margin: 0 0 0.3rem;
   font-family: var(--display);
-  font-size: 1.12rem;
+  font-size: 1.02rem;
   font-weight: 600;
   letter-spacing: -0.01em;
-  line-height: 1.25;
+  line-height: 1.4;
 }
 
 .briefing-insight-body {
@@ -1017,11 +1057,12 @@ a.briefing-chip-sources:focus-visible {
 .record-summary {
   display: grid;
   grid-template-columns: 26px 38px minmax(0, 1fr) 150px;
-  gap: 1rem;
+  gap: 0.85rem;
   align-items: start;
-  padding: 1.5rem 0;
+  padding: 1.25rem 0;
   cursor: pointer;
   list-style: none;
+  transition: background 140ms ease;
 }
 
 /* Model card rows carry no rank number, so they have three children where a
@@ -1041,13 +1082,14 @@ a.briefing-chip-sources:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: 26px;
+  height: 26px;
+  margin-top: 0.2rem;
   border: 1px solid var(--line);
   border-radius: 50%;
   color: var(--blue-deep);
   font-family: var(--utility);
-  font-size: 2.2rem;
+  font-size: 1.35rem;
   line-height: 1;
   transition:
     transform 140ms ease,
@@ -1065,8 +1107,9 @@ a.briefing-chip-sources:focus-visible {
 
 /* The whole row is the click target; a subtle wash announces the affordance
    before the chevron is noticed (issue #248). */
-.record-summary:hover {
-  background: color-mix(in srgb, var(--panel) 55%, transparent);
+.record-summary:hover,
+.record-summary:focus-visible {
+  background: color-mix(in srgb, var(--blue) 4%, var(--panel));
 }
 
 .record-card[open] {
@@ -1121,6 +1164,7 @@ a.briefing-chip-sources:focus-visible {
 }
 
 .signal-rank {
+  padding-top: 0.35rem;
   color: var(--orange);
   font-family: var(--utility);
   font-size: 0.78rem;
@@ -1130,8 +1174,26 @@ a.briefing-chip-sources:focus-visible {
   overflow-wrap: anywhere;
   margin: 0.2rem 0 0.55rem;
   font-family: var(--display);
-  font-size: 1.45rem;
-  line-height: 1.05;
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+#today-list {
+  padding-inline: 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+#today-list:empty {
+  display: none;
+}
+
+#today-view .section-title {
+  margin-bottom: 0.75rem;
+  border-bottom: 0;
+  padding-bottom: 0;
 }
 
 .record-heading p {
@@ -1960,6 +2022,7 @@ td a {
 .today-filters .search-field input {
   width: 100%;
   min-width: 0;
+  background-color: white;
 }
 
 .today-filters .date-field {
@@ -2541,6 +2604,7 @@ td a {
   margin: 0;
   padding: 0;
   border: 1px solid var(--line);
+  border-radius: var(--radius);
   background: var(--panel);
 }
 
@@ -2549,8 +2613,14 @@ td a {
   grid-template-columns: 2rem minmax(0, 16rem) minmax(0, 1fr) 6.5rem;
   gap: 0.75rem;
   align-items: center;
-  padding: 0.3rem 0.85rem;
+  padding: 0.55rem 0.85rem;
   border-bottom: 1px solid var(--line);
+  transition: background 140ms ease;
+}
+
+.leaderboard-top-row:hover,
+.leaderboard-top-row:focus-within {
+  background: color-mix(in srgb, var(--blue) 4%, var(--panel));
 }
 
 .leaderboard-top-row:last-child {
@@ -2646,23 +2716,16 @@ td a {
   margin: 1.75rem 0 2.5rem;
 }
 
-/* --canvas rather than --panel: against the main area the brighter surface
-   read as an overlay sitting on top of the page rather than part of it
-   (issue #298). The search field keeps its white fill and heavy border, so
-   the control the panel exists for still carries the contrast. */
+/* A slate search rail connects the light page to the dark score chart. The
+   white search field remains its strongest affordance. */
 .benchmark-navigator {
   position: sticky;
-  top: 1rem;
-  max-height: calc(100vh - 2rem);
+  top: 5rem;
+  max-height: calc(100vh - 6rem);
   overflow-y: auto;
   padding: 1.25rem;
   border: 1px solid var(--edge);
-  /* A real grey, not the page background. At --canvas the panel was the exact
-     colour of the page behind it, so beside the near-black figure it read as
-     something floating on the page rather than part of it. The search field
-     keeps its white fill and heavy border, so the control the panel exists for
-     still carries the contrast. */
-  background: #c3ccd1;
+  background: #e0e7eb;
   box-shadow: var(--shadow);
 }
 
@@ -2753,7 +2816,7 @@ td a {
   width: 100%;
   padding: 0.7rem 2.2rem 0.7rem 0.75rem;
   border: 1px solid #536168;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: #162228;
   color: #f3f6f7;
 }
@@ -4082,7 +4145,7 @@ dialog::backdrop {
 
 .stale-banner {
   margin: 0;
-  padding: 0.6rem 0;
+  padding: 0.6rem max(24px, calc((100% - 1680px) / 2));
   border-bottom: 1px solid var(--edge);
   font-family: var(--utility);
   font-size: 0.75rem;
@@ -4192,7 +4255,6 @@ footer {
 
 @media (max-width: 760px) {
   .masthead,
-  .view-nav,
   main,
   footer {
     width: min(100% - 28px, 1440px);
@@ -4208,21 +4270,31 @@ footer {
   }
 
   .masthead {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     min-height: 64px;
-    /* Brand plus the four-square grid exceed 320px-class viewports, so the
-       controls drop to a second row instead of overflowing off-screen. */
-    flex-wrap: wrap;
+    padding-block: 0.75rem;
     row-gap: 0.5rem;
   }
 
+  .masthead-main {
+    display: contents;
+  }
+
+  .brand {
+    grid-column: 1;
+    min-width: 0;
+  }
+
   .masthead-end {
-    grid-template-columns: repeat(4, 2.1rem);
+    grid-column: 2;
+    grid-template-columns: repeat(4, 44px);
     gap: 0.5rem;
   }
 
   .repo-badge {
-    width: 2.1rem;
-    height: 2.1rem;
+    width: 44px;
+    height: 44px;
   }
 
   .repo-badge::after {
@@ -4230,7 +4302,9 @@ footer {
   }
 
   .view-nav {
-    overflow-x: auto;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
   }
 
   .view-nav button,
@@ -4314,6 +4388,27 @@ footer {
   .record-summary {
     grid-template-columns: 24px 30px minmax(0, 1fr);
     gap: 0.65rem;
+  }
+
+  .record-summary::before {
+    width: 24px;
+    height: 24px;
+  }
+
+  .record-card h3 {
+    font-size: 1.05rem;
+  }
+
+  #today-list {
+    padding-inline: 0.7rem;
+  }
+
+  input[type="search"] {
+    font-size: 1rem;
+  }
+
+  .stale-banner {
+    padding-inline: 14px;
   }
 
   /* Needed because `.record-summary.record-summary-unranked` carries two
@@ -4545,13 +4640,13 @@ footer {
 
 .benchmark-search-input {
   width: 100%;
-  padding: 0.6rem 0.7rem;
+  padding: 0.6rem 0.7rem 0.6rem 2.5rem;
   /* Ink, not `--edge`. This border is the affordance that tells a reader the
      panel's whole point is to be typed into -- it is not a divider, so the
      softening the rest of the page got would read here as "disabled". */
   border: 2px solid var(--ink);
   border-radius: var(--radius-sm);
-  background: white;
+  background-color: white;
   color: inherit;
   font: inherit;
   font-size: 0.95rem;
@@ -4610,26 +4705,29 @@ footer {
 
 .benchmark-result {
   display: flex;
+  flex-shrink: 0;
   flex-direction: column;
   gap: 0.2rem;
   width: 100%;
-  padding: 0.5rem 0.6rem;
-  border: 1px solid var(--border);
+  min-height: 44px;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid transparent;
   border-radius: 6px;
-  background: var(--surface);
+  background: var(--panel);
   color: inherit;
   text-align: left;
   cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
 }
 
 .benchmark-result:hover,
 .benchmark-result:focus-visible {
-  border-color: var(--accent);
+  border-color: var(--blue);
 }
 
 .benchmark-result[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--surface-strong, var(--surface));
+  border-color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 9%, var(--panel));
 }
 
 .benchmark-result-name {
@@ -4654,15 +4752,15 @@ footer {
 /* Openness is a statement about what we know, so `unknown` is neutral rather
    than a warning. Only a positive verdict gets emphasis. */
 .benchmark-openness {
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 999px;
   padding: 0.05rem 0.45rem;
   font-size: 0.72rem;
 }
 
 .benchmark-openness-open {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--blue);
+  color: var(--blue);
 }
 
 /* Issue #240 collapse defaults: the findings panel and the adoption table are
@@ -4993,12 +5091,9 @@ footer {
   border-radius: var(--radius-sm);
 }
 
-/* The selected navigation item is the only solid dark block on the page, so
-   leaving it square made it the one hard-cornered shape among rounded ones.
-   Rounded at the top only: it sits on the nav's bottom rule and reads as a tab
-   attached to the page below it, not as a floating chip. */
+/* The active view keeps the familiar ink fill within the shared navigation. */
 .view-nav .nav-active {
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-radius: var(--radius-sm);
 }
 
 dialog {
@@ -5036,11 +5131,11 @@ dialog {
 /* Score browsing leads the page; adoption remains a separate view below it. */
 .score-browse-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 1rem;
-  margin-bottom: .5rem;
+  margin-bottom: 1rem;
 }
 .score-browse-header h1 {
   margin: 0;
@@ -5048,20 +5143,66 @@ dialog {
   max-width: none;
 }
 .score-filter { display: flex; align-items: center; gap: .6rem; margin-bottom: 1.25rem; }
-.score-filter input[type="range"] { flex: 1 1 auto; max-width: 20rem; accent-color: var(--blue); }
+.score-browse-header > .score-filter { margin-bottom: 0; }
+.score-filter input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 5rem;
+  max-width: 20rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
 .score-filter output {
+  padding: .25rem .55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--blue-deep);
+  text-align: center;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   min-width: 2.5rem;
 }
 /* Time × score × the selected raw count. */
-.benchmark-skyline { margin: 0 0 2rem; }
+.benchmark-skyline {
+  margin: 0 0 2rem;
+  padding: clamp(1rem, 2vw, 1.5rem);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.skyline-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem 1.5rem;
+  margin-top: 1rem;
+  padding: .55rem .85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--canvas);
+}
+.skyline-toolbar .score-filter {
+  flex: 1 1 36rem;
+  margin: 0;
+  font-size: .85rem;
+}
+.skyline-toolbar .skyline-height-control {
+  margin: 0;
+  min-width: 0;
+  max-width: 100%;
+}
 .skyline-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
 .skyline-heading h2 { font-size: 1.5rem; margin: 0; }
 .skyline-subtitle { margin: .15rem 0 0; color: var(--muted); font-size: 1rem; }
 .skyline-count { color: #876014; font-size: .9rem; font-weight: 600; white-space: nowrap; }
 .skyline-height-control { display: flex; align-items: center; gap: .6rem; margin-top: .85rem; color: var(--muted); font-size: .875rem; }
-.skyline-height-control select { max-width: 100%; padding: .4rem 1.7rem .4rem .6rem; color: var(--ink); background: var(--panel); border: 1px solid var(--edge); border-radius: 6px; font: inherit; }
+.skyline-height-control select { min-width: 0; max-width: 100%; padding: .4rem 1.7rem .4rem .6rem; color: var(--ink); background: var(--panel); border: 1px solid var(--edge); border-radius: 6px; font: inherit; }
 .skyline-chart { overflow-x: auto; margin-top: .5rem; }
 .skyline-chart svg { display: block; width: 100%; min-width: 1100px; max-width: 1300px; margin: 0 auto; }
 .skyline-chart svg.skyline-has-undated { min-width: 1500px; max-width: 1830px; }
@@ -5156,9 +5297,14 @@ dialog {
 .skyline-swatch-unknown { background: var(--panel); border: 1.5px solid var(--muted); }
 .skyline-swatch-proxy { background: var(--panel); border: 1.5px dashed var(--muted); }
 .skyline-source-coverage { margin: .25rem 0 .7rem; color: var(--muted); font-size: .8rem; }
-.skyline-caption { position: relative; padding-right: 2.5rem; margin-top: .7rem; }
+.skyline-caption {
+  position: relative;
+  padding: .75rem 2.5rem 0 0;
+  margin-top: .7rem;
+  border-top: 1px solid var(--line);
+}
 .skyline-caption .skyline-method { margin: 0; }
-.skyline-caption .skyline-method > summary { position: absolute; top: .1rem; right: 0; }
+.skyline-caption .skyline-method > summary { position: absolute; top: .85rem; right: 0; }
 .skyline-method-body { margin-top: .9rem; padding: .25rem 1rem; border-left: 2px solid var(--line); color: var(--muted); font-size: .875rem; max-width: 85ch; }
 .skyline-method:not([open]) > .skyline-method-body { display: none; }
 .skyline-method-body p { margin: .5rem 0; line-height: 1.6; }
@@ -5168,6 +5314,12 @@ dialog {
   .skyline-count { margin: .3rem 0; }
   .score-filter { flex-wrap: wrap; }
   .score-filter > span { flex-basis: 100%; }
+  .skyline-toolbar .skyline-height-control {
+    flex-direction: column;
+    align-items: stretch;
+    gap: .25rem;
+    width: 100%;
+  }
 }
 .score-source-heading { font-size: .8rem; margin: 1rem 0 .4rem; color: var(--muted); }
 .score-browse-result { align-items: flex-start; flex-direction: column; gap: .25rem; }

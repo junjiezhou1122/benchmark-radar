@@ -270,6 +270,9 @@ def test_each_generated_page_marks_its_navigation_entry_current(tmp_path):
     }
     for path, identifying_attribute in ids.items():
         page = (tmp_path / path / "index.html").read_text(encoding="utf-8")
+        header = re.search(r'<header class="masthead".*?</header>', page, re.S).group(0)
+        assert page.count('<nav class="view-nav"') == 1
+        assert '<nav class="view-nav"' in header
         opening = re.search(
             rf"<(?:a|button)\b(?=[^>]*{re.escape(identifying_attribute)})[^>]*>", page
         )

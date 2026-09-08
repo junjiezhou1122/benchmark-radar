@@ -269,6 +269,22 @@ def test_visible_navigation_items_use_the_same_active_state():
     assert '.view-nav button[aria-current="page"]' not in styles
 
 
+def test_primary_section_titles_share_compact_spacing_and_trends_uses_one_title():
+    html = Path("site/index.html").read_text(encoding="utf-8")
+    styles = Path("site/assets/styles.css").read_text(encoding="utf-8")
+    compact = styles.split("#leaderboard-view,", 1)[1].split("}", 1)[0]
+    assert "#saturation-view," in compact
+    assert "#trends-view" in compact
+    score_header = styles.split(".score-browse-header {", 1)[1].split("}", 1)[0]
+    assert "align-items: flex-start" in score_header
+    assert ".score-browse-header > .score-filter { margin-bottom: 0; }" in styles
+    trends = html.split('id="trends-view"', 1)[1].split("</section>", 1)[0]
+    assert '<h1 id="trends-heading" data-i18n="Trend">Trend</h1>' in trends
+    assert "Recent activity" not in trends
+    assert "Signals over time" not in trends
+    assert "Counts describe discovery volume" not in trends
+
+
 def test_recommendation_threshold_does_not_gate_inclusion_and_rows_carry_no_badge():
     script = Path("site/assets/app.js").read_text(encoding="utf-8")
 
@@ -437,7 +453,14 @@ def test_top_right_utilities_use_shared_icon_geometry_and_contact_control():
     assert ".repo-badges" not in styles
     assert 'class="repo-badge-glyph" id="lang-toggle-label">中<' in html
     assert 'class="brand-icon github-icon"' in html
-    assert "grid-template-columns: repeat(4, 2.1rem)" in styles
+    assert "grid-template-columns: repeat(4, 44px)" in styles
+    mobile_badge = (
+        styles.split("@media (max-width: 760px)", 1)[1]
+        .split(".repo-badge {", 1)[1]
+        .split("}", 1)[0]
+    )
+    assert "width: 44px" in mobile_badge
+    assert "height: 44px" in mobile_badge
     assert "flex: 0 0 1.5rem" in styles
     assert ".repo-badge svg," in styles
 
@@ -1309,6 +1332,7 @@ def test_static_html_references_existing_local_assets():
         "data/radar.json",
         "blog/",
         "leaderboard/",
+        "saturation/",
         "trends/",
         "explore/",
         "rubric/",

@@ -17,6 +17,47 @@ again after reading the unified index.
 **If a main surface contains only a few dozen benchmarks, assume records are
 missing and investigate. Do not present that subset as Benchmark Radar.**
 
+### Paper analyses must use the frozen full catalog
+
+For the paper, use the **frozen v0.11.0 release**, software commit
+`8f46bbfa91f5d9900c8b08a5d552c3df5c9597b0`, and verify the released input hashes.
+Do not substitute current `main`, the live website, or a newer collection.
+The 1,259+ baseline is a coverage alarm, not a replacement for the record count
+computed from that frozen catalog.
+
+This requirement applies separately to every main results table and analysis,
+including documentation, reported scores, headroom, and dates. Reading the full
+index and then selecting only model reports does not satisfy it. Neither does
+placing the full census in an appendix while the main findings describe only
+a few dozen report benchmarks. Trace each reduction through the actual joins,
+source predicates, and measurement requirements before accepting a result.
+
+Every analysis must export the complete source-record ID set, preserve available
+measurements, and report per-source coverage in its main table. Unknown units
+can prevent a headroom calculation; they cannot remove numeric scores from the
+score analysis. Unknown dates, documents, or organizations remain unknown on
+their records. A narrow statistic may supplement the full-catalog analysis only
+when its eligibility and missing evidence are explicit. Never invent a scale,
+merge similarly named records, or inflate a count to meet the coverage baseline.
+
+Keep the units of every count explicit. **Benchmark records, cited documents,
+scored models, organizations, and score observations are different quantities.**
+Only benchmark-record counts reconcile to the full catalog. A document count or
+a count of eligible records must never answer the question “how many benchmarks
+does the product cover?” Generate paper table cells and repeated quantitative
+claims from the same audited frozen inputs; check their consistency before
+building and delivering the PDF.
+
+Every numeric value below 100 appearing in the rendered paper must emit:
+`less than 100 is abnormal, ref to https://github.com/ktwu01/benchmark-radar/blob/main/principle.md`.
+Check PDF text and rendered figure images, including page numbers, citations,
+dates, model versions, percentages, and individual source counts; do not silently
+exempt categories. Report the page, number, and surrounding text for review.
+This is a warning requirement, not permission to alter the frozen evidence.
+Missing PDF extraction or OCR tools must fail visibly. Regression tests must
+verify warning emission and prevent the removed report-subset exporter and
+`example-data.tex` from returning.
+
 Check which sources, records, and fields disappeared at each join or filter.
 A successful render, plausible Pareto frontier, or passing test does not excuse
 missing most of the population. Each surface starts from the same catalog;

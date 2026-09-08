@@ -155,15 +155,14 @@ def _index_page(
         title, heading, description = _INDEX_TITLE, _INDEX_HEADING, _INDEX_DESCRIPTION
         action = f'<a class="secondary-link" href="{BLOG_ARCHIVE_PATH}">Full archive</a>'
         crumb = "Blog"
-    count = (
-        f"{len(shown)} of {len(posts)} collection days"
-        if not archive and len(shown) < len(posts)
-        else f"{len(posts)} collection days"
-    )
+    details = ""
+    if archive:
+        details = (
+            f'<p class="blog-lede">{esc(description)}</p>'
+            f'<p class="blog-meta">{len(posts)} collection days</p>'
+        )
     body = f"""<header class="blog-hero">
-  <p class="eyebrow">Daily brief</p><h1>{esc(heading)}</h1>
-  <p class="blog-lede">{esc(description)}</p>
-  <p class="blog-meta">{esc(count)}</p>
+  <h1>{esc(heading)}</h1>{details}
   <div class="blog-actions">{action}
     <a class="secondary-link" href="{BLOG_FEED_PATH}">RSS</a></div>
 </header>
@@ -284,7 +283,7 @@ def _chrome_i18n_script(chrome: SiteChrome, app_js: str) -> dict[str, str]:
     them with the same contract. Keys come from the chrome itself, so a new
     badge or nav label is covered without touching this function.
     """
-    chrome_html = chrome.header + chrome.navigation + chrome.footer
+    chrome_html = chrome.header + chrome.footer
     keys = set(re.findall(r'data-i18n(?:-title|-aria)?="([^"]+)"', chrome_html))
     keys.update(_TOGGLE_I18N_KEYS)
     keys.update(_BADGE_I18N_KEYS)
