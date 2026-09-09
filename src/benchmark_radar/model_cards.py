@@ -49,7 +49,7 @@ DEFAULT_REGISTRY_PATH = Path("data/model_cards.yml")
 # spot-checked on the shipped one.
 _REQUIRED_BENCHMARK_FIELDS = ("id", "name", "domain", "caveat")
 _REQUIRED_CARD_FIELDS = ("id", "organization", "model", "url", "benchmarks")
-_REQUIRED_SOURCE_DOCUMENT_FIELDS = ("id", "name", "url", "document_type", "benchmarks")
+_REQUIRED_SOURCE_DOCUMENT_FIELDS = ("id", "name", "publisher", "url", "document_type", "benchmarks")
 
 
 def _benchmark_summary(benchmark: dict[str, Any]) -> dict[str, Any]:

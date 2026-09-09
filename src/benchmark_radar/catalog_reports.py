@@ -60,7 +60,7 @@ def normalize_reports(registry: dict[str, Any], scores: dict[str, Any]) -> dict[
                 "document_type": str(source["document_type"]),
                 "title": str(source["name"]),
                 "model_name": None,
-                "organization": None,
+                "organization": source["publisher"],
                 "published": str(source.get("published") or "") or None,
                 "retrieved_at": str(source.get("retrieved_at") or "") or None,
             }
@@ -115,6 +115,7 @@ def normalize_reports(registry: dict[str, Any], scores: dict[str, Any]) -> dict[
         rows = []
         for result in track.get("observations", []):
             card = cards[result["source_id"]]
+            publisher_run = result.get("measurement_kind") == "benchmark_publisher_run"
             rows.append(
                 {
                     **result,
@@ -133,8 +134,12 @@ def normalize_reports(registry: dict[str, Any], scores: dict[str, Any]) -> dict[
                     "reported_date": result["reported_at"],
                     "date_precision": "document_publication",
                     "source_url": str(card["url"]),
-                    "reported_by": "third_party" if result.get("reported_by") else "self_reported",
-                    "measured_by": result.get("reported_by") or result["organization"],
+                    "reported_by": "third_party"
+                    if publisher_run or result.get("reported_by")
+                    else "self_reported",
+                    "measured_by": card["publisher"]
+                    if publisher_run
+                    else result.get("reported_by") or result["organization"],
                     "document_id": f"{SOURCE}:{result['source_id']}",
                     "comparable_group": json.dumps(
                         [key, result["instrument"], result["protocol"]],

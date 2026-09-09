@@ -52,11 +52,9 @@
 #
 # PROVENANCE
 #
-# Every row names the `source_id` it was read from. A model-card source must
-# exist in model_cards.yml; a benchmark-owned leaderboard or report that is not
-# a model card is declared in `sources` below. `read_from` records how:
-# `pdf_text` and `html_text` were machine-extracted from the document and re-read
-# against the printed table; `table_image` means transcribed from a rendered image.
+# Every row names a `source_id` registered in model_cards.yml, either under
+# model_cards or the non-adoption source_documents list. `read_from` records
+# how the value was read: `pdf_text`, `html_text`, or `table_image`.
 #
 # `organization` is whose model was measured. `reported_by` is who published the
 # document. When they differ the row is a third-party citation: the publisher is

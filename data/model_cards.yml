@@ -1227,6 +1227,7 @@ benchmarks:
 source_documents:
   - id: frontier_challenge_leaderboard_2026_08_25
     name: FrontierChallenge leaderboard
+    publisher: ApodexAI
     document_type: benchmark_leaderboard
     url: https://apodexai.github.io/FrontierAgent/benchmarks/FrontierChallenge/
     benchmarks: [frontier_challenge]

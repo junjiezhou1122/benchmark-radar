@@ -82,15 +82,6 @@ _DIRECTIONS = ("higher_is_better", "lower_is_better")
 _BOUNDED_UNITS = {"percent": 100.0}
 
 _REQUIRED_BENCHMARK_FIELDS = ("benchmark_id", "metric", "direction", "unit")
-_REQUIRED_SOURCE_FIELDS = (
-    "id",
-    "title",
-    "publisher",
-    "document_type",
-    "url",
-    "benchmarks",
-    "retrieved_at",
-)
 _REQUIRED_RESULT_FIELDS = (
     "benchmark_id",
     "instrument",
@@ -194,31 +185,10 @@ def load_scores(path: Path = DEFAULT_SCORES_PATH) -> dict[str, Any]:
             "unit": str(benchmark["unit"]),
         }
 
-    source_rows = document.get("sources", [])
-    if not isinstance(source_rows, list):
-        raise BenchmarkScoreError(f"{path}: sources must be an array")
-    sources: dict[str, dict[str, Any]] = {}
-    for index, source in enumerate(source_rows):
-        label = f"{path}: source {index}"
-        _require(source, _REQUIRED_SOURCE_FIELDS, label=label)
-        source_id = str(source["id"])
-        if source_id in sources:
-            raise BenchmarkScoreError(f"{path}: duplicate source id {source_id!r}")
-        url = str(source["url"])
-        if not url.startswith(("https://", "http://")):
-            raise BenchmarkScoreError(f"{label} url must be HTTP(S)")
-        source_benchmarks = source["benchmarks"]
-        if not isinstance(source_benchmarks, list) or not source_benchmarks:
-            raise BenchmarkScoreError(f"{label} benchmarks must be a non-empty array")
-        sources[source_id] = {
-            "id": source_id,
-            "title": str(source["title"]),
-            "publisher": str(source["publisher"]),
-            "document_type": str(source["document_type"]),
-            "url": url,
-            "benchmarks": [str(item) for item in source_benchmarks],
-            "retrieved_at": _require_date(source["retrieved_at"], label=f"{label} retrieved_at"),
-        }
+    if "sources" in document:
+        raise BenchmarkScoreError(
+            f"{path}: register source_documents in the model card registry, not the score file"
+        )
 
     seen: set[tuple[str, ...]] = set()
     rows: list[dict[str, Any]] = []
@@ -250,7 +220,6 @@ def load_scores(path: Path = DEFAULT_SCORES_PATH) -> dict[str, Any]:
         if read_from not in _READ_FROM:
             raise BenchmarkScoreError(f"{label} read_from must be one of {', '.join(_READ_FROM)}")
         reported_at = _require_date(result["reported_at"], label=f"{label} reported_at")
-        score_source = sources.get(str(result["source_id"]))
         row = {
             # Stable within the curated trust domain. The tuple is already the
             # loader's uniqueness contract below, so publishing it gives every
@@ -277,9 +246,6 @@ def load_scores(path: Path = DEFAULT_SCORES_PATH) -> dict[str, Any]:
             "value": value,
             "read_from": read_from,
             "measurement_kind": str(result.get("measurement_kind") or "reported_self_score"),
-            "source_title": score_source["title"] if score_source else None,
-            "source_url": score_source["url"] if score_source else None,
-            "source_document_type": score_source["document_type"] if score_source else None,
             # Present only on a third-party citation: the publisher repeated
             # someone else's self-reported figure. Weaker evidence, and the UI
             # marks it rather than mixing it in.
@@ -307,7 +273,7 @@ def load_scores(path: Path = DEFAULT_SCORES_PATH) -> dict[str, Any]:
         seen.add(key)
         rows.append(row)
 
-    return {"benchmarks": metrics, "sources": sources, "results": rows}
+    return {"benchmarks": metrics, "results": rows}
 
 
 def _cross_check_sources(scores: dict[str, Any], registry: dict[str, Any]) -> None:
@@ -315,50 +281,36 @@ def _cross_check_sources(scores: dict[str, Any], registry: dict[str, Any]) -> No
 
     Provenance is the whole basis of this layer's claim to be readable-out-of-a
     -document rather than assembled from memory. A `source_id` with no matching
-    card or score-source declaration is a citation to nothing: it would render
+    card or source document is a citation to nothing: it would render
     as a linkless number that a reader cannot check, which is the one thing this
     dataset promises not to do.
     """
-    reported: dict[str, set[str]] = {
-        str(card["id"]): {str(ref) for ref in card["benchmarks"]}
-        for card in registry["model_cards"]
+    documents = {
+        str(document["id"]): document
+        for document in [*registry["model_cards"], *registry.get("source_documents", [])]
     }
-    reported.update(
-        {
-            str(source["id"]): {str(ref) for ref in source["benchmarks"]}
-            for source in registry.get("source_documents", [])
-        }
-    )
-    source_metadata = {
-        str(card["id"]): {
-            "title": str(card.get("title") or ""),
-            "url": str(card.get("url") or ""),
-            "document_type": str(card.get("document_type") or ""),
-        }
-        for card in registry["model_cards"]
+    reported = {
+        source_id: {str(ref) for ref in document["benchmarks"]}
+        for source_id, document in documents.items()
     }
-    source_metadata.update(
-        {
-            str(source["id"]): {
-                "title": str(source.get("title") or source.get("name") or ""),
-                "url": str(source.get("url") or ""),
-                "document_type": str(source.get("document_type") or ""),
-            }
-            for source in registry.get("source_documents", [])
-        }
-    )
     unknown = sorted({row["source_id"] for row in scores["results"]} - reported.keys())
     if unknown:
         raise BenchmarkScoreError(
-            "score rows cite source_ids absent from the model card registry and score source "
-            f"registry: {', '.join(unknown)}"
+            f"score rows cite source_ids absent from the model card registry: {', '.join(unknown)}"
         )
     for row in scores["results"]:
-        metadata = source_metadata[row["source_id"]]
-        if all(metadata.values()):
-            row["source_title"] = metadata["title"]
-            row["source_url"] = metadata["url"]
-            row["source_document_type"] = metadata["document_type"]
+        document = documents[row["source_id"]]
+        row["source_title"] = document.get("name") or document.get("model")
+        row["source_url"] = document.get("url")
+        row["source_document_type"] = document.get("document_type")
+        if row["measurement_kind"] == "benchmark_publisher_run" and (
+            document.get("document_type") != "benchmark_leaderboard"
+            or not document.get("publisher")
+        ):
+            raise BenchmarkScoreError(
+                f"{row['source_id']}: publisher-run scores require a registered "
+                "benchmark leaderboard with a named publisher"
+            )
     registry_ids = {str(benchmark["id"]) for benchmark in registry["benchmarks"]}
     stray = sorted(set(scores["benchmarks"]) - registry_ids)
     if stray:

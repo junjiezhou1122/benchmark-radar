@@ -55,7 +55,7 @@ def minimal_scores(**overrides) -> dict:
 def external_source(**overrides) -> dict:
     source = {
         "id": "alpha_leaderboard",
-        "title": "Alpha benchmark leaderboard",
+        "name": "Alpha benchmark leaderboard",
         "publisher": "Alpha Research",
         "document_type": "benchmark_leaderboard",
         "url": "https://example.com/alpha/leaderboard",
@@ -467,7 +467,6 @@ def test_cross_check_accepts_a_score_cited_to_an_external_benchmark_source(tmp_p
     path = write_scores(
         tmp_path,
         minimal_scores(
-            sources=[external_source()],
             results=[result(source_id="alpha_leaderboard", read_from="html_text")],
         ),
     )
@@ -486,36 +485,16 @@ def test_cross_check_accepts_a_score_cited_to_an_external_benchmark_source(tmp_p
     assert observation["source_document_type"] == "benchmark_leaderboard"
 
 
-def test_cross_check_uses_registry_source_metadata_over_score_file_copy(tmp_path):
-    path = write_scores(
-        tmp_path,
-        minimal_scores(
-            sources=[external_source()],
-            results=[result(source_id="alpha_leaderboard", read_from="html_text")],
-        ),
-    )
-    registry_source = external_source()
-    registry_source["title"] = "Reviewed title"
-    registry_source["url"] = "https://reviewed.example/alpha"
-    registry = {
-        "benchmarks": [{"id": "alpha"}],
-        "model_cards": [],
-        "source_documents": [registry_source],
-    }
-
-    observation = score_progression(load_scores(path), registry)["benchmarks"]["alpha"][
-        "observations"
-    ][0]
-
-    assert observation["source_title"] == "Reviewed title"
-    assert observation["source_url"] == "https://reviewed.example/alpha"
+def test_score_files_cannot_register_a_second_source_authority(tmp_path):
+    path = write_scores(tmp_path, minimal_scores(sources=[external_source()]))
+    with pytest.raises(BenchmarkScoreError, match="register source_documents"):
+        load_scores(path)
 
 
 def test_cross_check_rejects_an_external_source_that_does_not_cover_the_score(tmp_path):
     path = write_scores(
         tmp_path,
         minimal_scores(
-            sources=[external_source(benchmarks=["beta"])],
             results=[result(source_id="alpha_leaderboard")],
         ),
     )
@@ -571,3 +550,55 @@ def test_the_shipped_file_never_claims_a_trend_it_cannot_support():
         for series in record["series"]:
             if series["dated_points"] >= 3:
                 assert record["evidence"]["id"].endswith("_trend")
+
+
+def test_publisher_scores_preserve_evaluator_and_documents_through_normalization():
+    from benchmark_radar.catalog_reports import normalize_reports
+    from benchmark_radar.model_cards import adoption_rank
+
+    registry = load_registry()
+    normalized = normalize_reports(registry, load_scores())
+    key = "model-reports:frontier_challenge"
+    rows = [row for row in normalized["score_observations"] if row["key"] == key]
+    assert len(rows) == 13
+    assert {row["reported_by"] for row in rows} == {"third_party"}
+    assert {row["measured_by"] for row in rows} == {"ApodexAI"}
+    assert {row["measurement_kind"] for row in rows} == {"benchmark_publisher_run"}
+    assert len({row["model_id"] for row in rows}) == 12
+    record = next(row for row in normalized["source_records"] if row["key"] == key)
+    assert len(record["documents"]) == 1
+    document = record["documents"][0]
+    assert document["title"] == "FrontierChallenge leaderboard"
+    assert document["organization"] == "ApodexAI"
+    assert {row["document_id"] for row in rows} == {document["id"]}
+    assert {row["source_url"] for row in rows} == {document["source_url"]}
+    entry = next(
+        row
+        for row in adoption_rank(registry)["entries"]
+        if row["benchmark_id"] == "frontier_challenge"
+    )
+    assert entry["card_count"] == 0
+    # Existing vendor reports retain their evaluator and reporting semantics.
+    vendor = next(
+        row for row in normalized["score_observations"] if row["reported_by"] == "self_reported"
+    )
+    assert vendor["measured_by"] == vendor["organization"]
+
+
+@pytest.mark.parametrize("overrides", [{"publisher": None}, {"document_type": "model_card"}])
+def test_publisher_runs_require_a_named_benchmark_publisher(tmp_path, overrides):
+    path = write_scores(
+        tmp_path,
+        minimal_scores(
+            results=[
+                result(source_id="alpha_leaderboard", measurement_kind="benchmark_publisher_run")
+            ]
+        ),
+    )
+    registry = {
+        "benchmarks": [{"id": "alpha"}],
+        "model_cards": [],
+        "source_documents": [external_source(**overrides)],
+    }
+    with pytest.raises(BenchmarkScoreError, match="named publisher"):
+        score_progression(load_scores(path), registry)
