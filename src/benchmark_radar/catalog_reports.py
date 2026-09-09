@@ -23,6 +23,14 @@ def normalize_reports(registry: dict[str, Any], scores: dict[str, Any]) -> dict[
     progression = score_progression(scores, registry)["benchmarks"] if scores["results"] else {}
     entries = adoption_rank(registry)["entries"]
     cards = {str(card["id"]): card for card in registry["model_cards"]}
+    # A benchmark's publisher can run the leaderboard itself. That document is
+    # evidence like any card, so it joins the same citation map rather than
+    # leaving its score rows pointing at a document the catalog never sees.
+    owned_documents: dict[str, list[dict[str, Any]]] = {}
+    for source in registry.get("source_documents", []):
+        cards[str(source["id"])] = source
+        for ref in source["benchmarks"]:
+            owned_documents.setdefault(str(ref), []).append(source)
     records, series, observations = [], [], []
     for entry in entries:
         benchmark_id = entry["benchmark_id"]
@@ -43,6 +51,21 @@ def normalize_reports(registry: dict[str, Any], scores: dict[str, Any]) -> dict[
             }
             for card in entry["adopters"]
         ]
+        documents.extend(
+            {
+                "id": f"{SOURCE}:{source['id']}",
+                "source": SOURCE,
+                "source_id": str(source["id"]),
+                "source_url": str(source["url"]),
+                "document_type": str(source["document_type"]),
+                "title": str(source["name"]),
+                "model_name": None,
+                "organization": None,
+                "published": str(source.get("published") or "") or None,
+                "retrieved_at": str(source.get("retrieved_at") or "") or None,
+            }
+            for source in owned_documents.get(benchmark_id, [])
+        )
         url = entry["url"]
         artifact_kind = (
             "paper"
