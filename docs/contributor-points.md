@@ -28,10 +28,6 @@ This public ledger is rebuilt from GitHub once per day. Do not edit the totals b
 |---|---|---|---:|
 | [#541](https://github.com/ktwu01/benchmark-radar/issues/541) | @ergan-shang | 2026-09-15T02:16:37+00:00 | 18 |
 | [#533](https://github.com/ktwu01/benchmark-radar/issues/533) | @JunkaiWang-TheoPhy | 2026-09-11T01:53:54+00:00 | 8 |
-| [#456](https://github.com/ktwu01/benchmark-radar/issues/456) | @JunkaiWang-TheoPhy | 2026-09-08T15:04:16+00:00 | 8 |
-| [#455](https://github.com/ktwu01/benchmark-radar/issues/455) | @JunkaiWang-TheoPhy | 2026-09-08T10:11:38+00:00 | 12 |
-| [#410](https://github.com/ktwu01/benchmark-radar/issues/410) | @JunkaiWang-TheoPhy | 2026-09-08T10:12:57+00:00 | 2 |
-| [#401](https://github.com/ktwu01/benchmark-radar/issues/401) | @JunkaiWang-TheoPhy | 2026-09-08T14:39:46+00:00 | 3 |
 
 ## Earned points / 得分记录
 
