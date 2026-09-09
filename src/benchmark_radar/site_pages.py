@@ -10,7 +10,7 @@ of them.
 
 The pages derive from the shards exactly as the shards derive from the crawl
 CSVs, so they are generated and gitignored, never committed. The build calls
-this right after `normalize-external` writes the shards, and the sitemap build
+this right after `normalize-catalog` writes the shards, and the sitemap build
 scans the same shard directory for the URLs to list. A page never invents
 values: missing fields are omitted from the HTML, never shown as a zero, an
 empty string, or the literal word for a missing value. Scores stay partitioned
@@ -256,7 +256,7 @@ def _page_html(slug: str, shard: dict[str, Any]) -> str:
         scores_html = (
             '<p class="caveat">No reported scores are on record for this benchmark yet.</p>'
         )
-    interactive = f"{SITE_URL}/leaderboard/?lfrontier={slug}"
+    interactive = f"{SITE_URL}/saturation/?lfrontier={slug}"
     nav = _benchmark_nav(interactive)
     return f"""<!doctype html>
 <html lang="en">
@@ -345,7 +345,7 @@ def _directory_html(entries: list[tuple[str, str]]) -> str:
   <h1>Benchmark directory</h1>
   <p class="lede">Every benchmark in the catalog, each with its own page covering
     what it tests, who published it, and which scores are on record. The
-    interactive dashboard is <a href="{SITE_URL}/leaderboard/">here</a>.</p>
+    interactive dashboard is <a href="{SITE_URL}/saturation/">here</a>.</p>
   <p class="count">{count}</p>
   <ul>{links}</ul>
 </main>
@@ -391,7 +391,7 @@ def write_benchmark_pages(
     """
     if not shard_dir.is_dir():
         raise FileNotFoundError(
-            f"{shard_dir} holds no benchmark shards; run `benchmark-radar normalize-external` first"
+            f"{shard_dir} holds no benchmark shards; run `benchmark-radar normalize-catalog` first"
         )
     shard_paths = sorted(shard_dir.glob("*.json"))
     if not shard_paths:

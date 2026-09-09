@@ -78,7 +78,7 @@ def _read_object(path: Path, *, label: str) -> dict[str, Any]:
         value = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError as error:
         raise QueryError(
-            f"{label} is missing at {path}; run `benchmark-radar normalize-external` "
+            f"{label} is missing at {path}; run `benchmark-radar normalize-catalog` "
             "for catalog data or provide an explicit path",
             code="data_unavailable",
             status=503,
@@ -168,6 +168,12 @@ def _build_search_corpus(records: list[dict[str, Any]]) -> _SearchCorpus:
     total_field_lengths: Counter[str] = Counter()
     for record in records:
         field_tokens = {field: _tokens(_field_text(record.get(field))) for field in _FIELD_ORDER}
+        # Registered aliases are name evidence for every source. Keep the
+        # published display name and the shared ranking algorithm unchanged.
+        if record.get("aliases"):
+            field_tokens["name"] = _tokens(
+                _field_text(record.get("name")) + " " + _field_text(record["aliases"])
+            )
         field_counts = {field: Counter(tokens) for field, tokens in field_tokens.items()}
         all_tokens = frozenset().union(*(set(tokens) for tokens in field_tokens.values()))
         document_frequency.update(all_tokens)
@@ -616,7 +622,7 @@ class QueryService:
         path = self.paths.shards / f"{record['slug']}.json"
         if not path.exists():
             raise QueryError(
-                f"detail shard is missing at {path}; run `benchmark-radar normalize-external`",
+                f"detail shard is missing at {path}; run `benchmark-radar normalize-catalog`",
                 code="data_unavailable",
                 status=503,
             )

@@ -97,7 +97,7 @@ the same task terms and label every result as unverified Radar evidence.
 
 Use `--json` for agent work; omit it only when the user wants terminal-friendly
 text. Apply supported filters only when they come from the request. Do not run
-maintainer commands such as `normalize-external`, `classify`, or
+maintainer commands such as `normalize-catalog`, `classify`, or
 `build-data-release` for ordinary use.
 
 The service does not decide whether a benchmark satisfies the user's intent. After

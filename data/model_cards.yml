@@ -1090,17 +1090,18 @@ benchmarks:
     aliases: ["SkillsBench", "SkillsBench V1", "Skills Bench"]
     domain: agent
     url: https://skillsbench.ai/
+    released: '2026-02-13'  # First paper version: https://arxiv.org/abs/2602.12670
     caveat: >-
       Measures whether curated Agent Skills raise agent pass rates, not raw
       model capability; the meaningful figure is the paired no-Skills versus
-      curated-Skills gap. No release date is recorded because the paper has no
-      dated first submission; arXiv:2602.12670 first appeared in February 2026.
+      curated-Skills gap. The release date follows the paper's first submission.
 
   - id: swe_atlas
     name: SWE Atlas
     aliases: ["SWE Atlas", "SWE-Atlas"]
     domain: coding_agent
     url: https://github.com/scaleapi/SWE-Atlas
+    released: '2026-05-08'  # First paper version: https://arxiv.org/abs/2605.08366
     caveat: >-
       Reports three splits (Codebase Q&A, Test Writing, Refactoring) as
       separate figures; the split is part of the instrument.
@@ -1126,6 +1127,7 @@ benchmarks:
     name: ProgramBench
     domain: coding
     url: https://arxiv.org/abs/2605.03546
+    released: '2026-05-05'  # First paper version at the cited URL.
     caveat: >-
       Cleanroom program-rebuild tasks; most models score low, so small
       differences sit within run-to-run noise.
@@ -1160,6 +1162,7 @@ benchmarks:
     name: JobBench
     domain: professional
     url: https://arxiv.org/abs/2605.26329
+    released: '2026-05-25'  # First paper version at the cited URL.
     caveat: >-
       Professional job tasks aligned with human work; rubric grading moves the
       number beyond model capability alone.
@@ -1169,6 +1172,7 @@ benchmarks:
     aliases: ["Workspace-Bench", "Workspace Bench", "Workspace-Bench 1.0"]
     domain: professional
     url: https://arxiv.org/abs/2605.03596
+    released: '2026-05-05'  # First paper version at the cited URL.
     caveat: >-
       Large-scale file-workspace tasks; the environment and file dependencies
       are part of the measurement.

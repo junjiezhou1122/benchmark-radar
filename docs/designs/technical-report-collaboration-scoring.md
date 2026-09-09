@@ -236,7 +236,7 @@ Only future issue work uses the seven-day assignment rule. Every historical merg
 
 ## Distribution Plan
 
-The collaboration call is authored in `scripts/build_system_evaluation.py` and appears in a new working artifact, `output/pdf/benchmark-radar-technical-report-next-draft.pdf`, which links to the public master GitHub issue. The builder must never overwrite `output/pdf/benchmark-radar-technical-report-v0.9.0.pdf`; that deposited artifact remains byte-for-byte frozen. The repository's existing issue and pull-request workflow handles assignment, review, and evidence. Any quantitative claim change follows the documented clean-checkout generator sequence, then the draft PDF is rebuilt and visually inspected. A release filename and DOI command are chosen only when the next version is ready to deposit.
+The collaboration call is authored in `docs/technical-report/latex/main.tex` and appears in the tracked build `docs/technical-report/latex/main.pdf`, which links to the public master GitHub issue. Nothing writes to `output/pdf/benchmark-radar-technical-report-v0.9.0.pdf`; that deposited artifact remains byte-for-byte frozen. The repository's existing issue and pull-request workflow handles assignment, review, and evidence. Any quantitative claim change follows the documented clean-checkout generator sequence, then the draft PDF is rebuilt and visually inspected. A release filename and DOI command are chosen only when the next version is ready to deposit.
 
 ## Next Steps
 
@@ -244,7 +244,7 @@ The collaboration call is authored in `scripts/build_system_evaluation.py` and a
 2. Add the `/claim` and seven-day expiry workflow, then test it on one scored issue.
 3. Add the contributor-points calculator and retroactively prefix every merged non-`ktwu01` pull request.
 4. Review currently unscored open issues and prefix those ready for public assignment.
-5. Add the bilingual call-for-cases subsection to the report builder, pointing at the coordination issue.
+5. Add the bilingual call-for-cases subsection to `docs/technical-report/latex/main.tex`, pointing at the coordination issue.
 
 ## The Assignment
 

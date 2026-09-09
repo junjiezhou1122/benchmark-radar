@@ -1,5 +1,9 @@
 # Design principles
 
+The full-corpus coverage requirements in [principle.md](principle.md) govern
+every benchmark-facing surface. Missing measurements must not silently turn
+1,259+ benchmark records across 4+ sources into a chart of a few dozen.
+
 Benchmark Radar helps people find benchmarks, understand what changed, and
 inspect the evidence. Every part of the product should make one of those tasks
 easier.
@@ -41,7 +45,8 @@ accessible names, downloads, and citations are part of the product's trust.
 | --- | --- |
 | Today | Explain what appeared recently and why it matters |
 | Search | Find possible benchmarks across the corpus |
-| Leaderboard | Compare attention, adoption, or reported scores as separate modes |
+| Leaderboard | Compare Benchmark Frontier, recorded score counts and documentation |
+| Saturation | Find benchmarks and inspect their reported scores over time |
 | Trends | Show change across comparable time windows |
 | Blog | Publish dated, shareable analysis |
 | CLI and Skill | Let people and agents query local data |
@@ -69,19 +74,57 @@ active indicator, and Back and Forward should restore meaningful states.
 Show a concise answer first, then offer the evidence and method behind it.
 Expansion should be clear and reversible.
 
+## Keep page titles close and quiet
+
+[Issue #581](https://github.com/ktwu01/benchmark-radar/issues/581) sets the
+Leaderboard heading as the spacing baseline. Every primary page title should
+start at the same compact distance below the menubar. Switching sections must
+not make the title jump down the page. Controls beside a title align to the top;
+a taller filter must not vertically center the title lower than its peers.
+
+Good:
+
+- `Leaderboard`, `Saturation`, `Trend`, and the Blog title share one top offset.
+- The Blog title uses the same scale as `Saturation`, even when it is longer.
+- `Trend` identifies the Trends page without a second label or open caveat.
+
+Bad:
+
+- Leaving the generic page padding on Saturation, Trends, or Blog while
+  Leaderboard uses compact spacing.
+- Stacking `Recent activity`, `Signals over time`, and “Counts describe
+  discovery volume, not scientific quality” before the reader reaches the
+  chart.
+- Stacking `Daily brief`, the Blog title, a descriptive paragraph, and a
+  collection-day count when the title already identifies the page.
+
+Use one title when one title is enough. Eyebrows, decks, counts, and caveats do
+not belong in the open title area merely because the data exists. If page-level
+coverage context remains necessary, put it in one closed, keyboard- and
+touch-accessible `(i)` immediately to the right of the title. Give the control
+an accessible name and keep its contents out of the layout while closed. A
+loading failure or empty state remains visible; it must never be hidden in the
+note. Figure-specific coverage and method text still follow the figure-caption
+rule below.
+
 Mobile layout must preserve the surface's primary task. On Today, matching
 results come first; the daily briefing follows as context for the scan date.
 
 Explain a shared limitation once near the affected group. Do not repeat “not
 comparable” or “not enough history” in every card.
 
-## Keep evidence layers distinct
+## One catalog with typed evidence
 
-| Layer | Meaning | What the interface must show |
-| --- | --- | --- |
-| Radar | Daily discovery evidence | Source and date; label it as a signal |
-| Catalog | Normalized external records | Provenance and source identity |
-| Curated measurements | Reviewed adoption and score history | Protocol, date, and comparability |
+Model reports, OpenCompass Hub, Artificial Analysis and LLM Stats contribute
+benchmark records through the same contract. Source names identify provenance;
+they do not grant priority in ranking or access to a chart.
+
+| Evidence | What the interface must preserve |
+| --- | --- |
+| Benchmark record | Source identity, name and reviewed identity links |
+| Score observation | Value, model ID, units, protocol, date basis and citation |
+| Source document | Document identity, type, URL and benchmark references |
+| Daily discovery observation | Source, date and the mention or release observed |
 
 Search returns candidates, not recommendations. Recent attention, model-card
 adoption, and model scores answer different questions and must not share an
@@ -89,6 +132,31 @@ unlabelled ranking.
 
 Show empty, partial, stale, and incomparable states plainly. Do not replace
 missing evidence with guessed content.
+
+## Show all the data, unify the vocabulary
+
+A benchmark is a benchmark. The corpus holds one benchmark population assembled
+from several sources, not a first-class set and a lesser one. Any surface that
+counts, ranks, charts, or searches benchmarks covers the whole population by
+default.
+
+Never call a benchmark "external" in the interface. That word describes where a
+record was collected, not what the thing is, and it invites a reader to discount
+most of the corpus. Name the source instead: "Artificial Analysis", "LLM Stats",
+"OpenCompass Hub", "Model reports". Preserve the evidence fields above for
+each source. Missing measurements do not remove benchmark records.
+
+Each figure and browser starts from the complete catalog and states its own
+filter scope. Leaderboard's slider filters only Benchmark Frontier. Saturation
+shares that slider for browsing; a search queries the full catalog without
+changing the cutoff. Clearing the query restores filtered browsing. Prefer the
+count and unit the reader can already see over a private subset.
+
+When a measurement cannot span the population, restrict the calculation, not
+the represented records. Keep benchmarks with unknown or incompatible values
+visible in a labelled area and make each one inspectable. User filters may
+narrow the visible records, but the full, matching, unknown, and hidden counts
+must reconcile. A footnote about omitted records does not replace showing them.
 
 ## Load only what the current task needs
 
@@ -147,8 +215,18 @@ Before merging a user-facing change, check:
 - Can an expert reach the provenance, protocol, and caveats?
 - Is one answer or action clearly primary?
 - Did a new choice replace or demote an old one?
-- Are Radar, Catalog, adoption, and scores still distinguishable?
+- Are Radar, Catalog, adoption, and scores still distinguishable by label,
+  while every one of them still appears in counts, charts, and search?
+- Does any user-facing string say "external"? Name the source instead.
+- Do the figure and the list beside it cover the same rows and agree on totals?
 - Do the first response and hydrated page agree?
 - Does it work at 320px with long content, keyboard navigation, direct URLs,
   Back and Forward, slow loading, and empty or error states?
 - Does it load only the data needed for the current task?
+
+## Figure captions
+
+Put legends below their figure. Leave only the keys needed to read its colors
+and shapes expanded. Collect counts, coverage, exclusions and method text in
+one closed information note beside the legend. Use [principle.md](principle.md)
+for the full-corpus, missing-data and Frontier filter rules.

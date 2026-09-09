@@ -5,30 +5,29 @@ on:
     branches: [main]
     paths:
       - "data/snapshots/**"
-      # The curated Model Card Adoption Rank is a deploy input like the
-      # snapshots are: a maintenance commit that only adds a model card must
-      # rebuild the dashboard, or the published ranking silently stays behind
-      # the registry until some unrelated change happens to trigger Pages.
+      # Report documents and scores feed the same catalog as source snapshots.
       - "data/model_cards.yml"
       # benchmark_scores.yml feeds the score-progression and insights layers of
       # the same dashboard build, and config.yml sets the published dashboard
       # URL during `benchmark-radar export`, so both are deploy inputs too.
       - "data/benchmark_scores.yml"
       - "config.yml"
-      # The external catalog build reads the committed crawl CSVs and the
-      # hand-edited identity.yml, and writes the search index and per-benchmark
+      # The catalog build reads the committed crawl CSVs and the
+      # reviewed identity rules, and writes the search index and per-benchmark
       # shards into site/data/. Its inputs are deploy inputs: a recrawl or an
       # identity edit must rebuild the published shards, or the site keeps
       # serving last month's catalog.
       - "data/leaderboard_snapshots/**"
-      # The registry beside those CSVs, not just the CSVs. `normalize-external`
+      # The registry beside those CSVs, not just the CSVs. `normalize-catalog`
       # reads this file for the crawl id, the column mapping and crawled_at, so
       # a commit that only corrects one of those changes the catalog the build
       # produces. Missing here, such a commit would never deploy: the shards it
       # would have changed are ignored now, so there is no companion `site/**`
       # edit left to trigger the build on its behalf.
       - "data/leaderboard_snapshots.yml"
-      - "data/external/identity.yml"
+      - "data/catalog/identity.yml"
+      - "data/catalog/benchmark_dates.yml"
+      - "data/catalog/llm_stats_identity_overrides.yml"
       - "site/**"
       # The dashboard build imports the package transitively through
       # snapshots.py. Keep the trigger broad so a new scoring, insight, rubric,
@@ -66,6 +65,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          submodules: recursive
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
@@ -86,7 +86,7 @@ jobs:
           # Rebuilding here is also what makes a recrawl or an identity edit
           # reach the published site rather than serving whatever the last
           # commit happened to carry.
-          benchmark-radar normalize-external
+          benchmark-radar normalize-catalog
           # The classification store is derived and intentionally untracked.
           # Build it in the fresh Pages checkout before publishing radar.json.
           # The MVP uses NullExtractor, so this makes no external/model calls.

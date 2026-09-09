@@ -296,6 +296,20 @@ def test_rebuild_writes_a_small_latest_day_bootstrap(tmp_path):
     assert bootstrap["benchmark_score_progression"] == dashboard["benchmark_score_progression"]
     assert bootstrap_path.stat().st_size < output.stat().st_size
 
+    trends_path = output.with_name("radar-trends.json")
+    assert trends_path.exists()
+    trends = json.loads(trends_path.read_text(encoding="utf-8"))
+    assert [day["date"] for day in trends["days"]] == ["2026-07-26", "2026-07-27"]
+    assert all("evidence_items" not in day for day in trends["days"])
+    assert all("briefing" not in day for day in trends["days"])
+    assert all("questions" not in day for day in trends["days"])
+    assert trends["days"][-1]["evidence_count"] == dashboard["days"][-1]["evidence_count"]
+    assert trends["corpus"] == {"aggregates": dashboard["corpus"]["aggregates"]}
+    assert trends_path.stat().st_size < output.stat().st_size
+    assert trends_path.stat().st_size <= bootstrap_path.stat().st_size or len(trends["days"]) > len(
+        bootstrap["days"]
+    )
+
 
 def test_rebuild_can_publish_the_feed_from_the_same_snapshot_history(tmp_path, site_shell):
     snapshot_dir = tmp_path / "snapshots"
@@ -328,6 +342,18 @@ def test_rebuild_writes_the_sitemap_at_the_site_root(tmp_path, site_shell):
     shard_dir.mkdir()
     for slug in ("alpha-bench", "zeta-bench"):
         (shard_dir / f"{slug}.json").write_text("{}", encoding="utf-8")
+
+    data_output.parent.mkdir(parents=True, exist_ok=True)
+    (data_output.parent / "benchmark-index.json").write_text(
+        json.dumps(
+            {
+                "benchmarks": [],
+                "document_registry": {
+                    "entries": [{"rank": 1, "name": "Alpha", "document_count": 1}]
+                },
+            }
+        )
+    )
 
     rebuild_dashboard(
         snapshot_dir,

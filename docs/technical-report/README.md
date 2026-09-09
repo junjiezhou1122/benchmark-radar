@@ -1,59 +1,53 @@
-# Benchmark Radar v0.9.0 technical report
+# Benchmark Radar technical report
 
-This directory tracks the source and deposit metadata for the citable Benchmark
-Radar technical report. The report evaluates software version 0.9.0, its full
-collection and publication pipeline, all 37 public collection sources, the
-1,242-entry web search surface, and the public data snapshot dated 2026-08-29.
+The manuscript, PDF, figures, and Overleaf instructions live in
+**[benchmark-radar-paper](https://github.com/ktwu01/benchmark-radar-paper)**,
+mounted here as the `latex/` Git submodule.
 
-Build the PDF after installing ReportLab:
+## Frozen paper data: v0.11.0
+
+All paper data is cut off at the
+[v0.11.0 release](https://github.com/ktwu01/benchmark-radar/releases/tag/v0.11.0),
+software commit `8f46bbfa91f5d9900c8b08a5d552c3df5c9597b0`, with discovery
+through **2026-09-07**. The release includes the frozen input archive, checksums,
+and paper PDF. Follow the [paper's cutoff rule](latex/README.md#data-cutoff-rule-v0110).
+Routine paper edits must not incorporate newer inputs or advance the cutoff.
+The existing audit remains valid for unchanged inputs.
+
+## Reproduce the paper's numbers with Python
+
+The exporter stays in this software repository. It reads
+`site/data/benchmark-index.json` and `site/data/radar.json`, then writes directly
+to `docs/technical-report/latex/figure-data.tex` inside the paper submodule.
+
+Use a clean checkout at the release commit above, then rebuild the inputs using the
+[clean-checkout CI sequence](../../AGENTS.md#before-opening-a-pull-request).
+From that Benchmark Radar checkout's root:
 
 ```bash
-python3 scripts/build_system_evaluation.py \
-  --doi 10.5281/zenodo.22167102
+git submodule update --init --recursive
+git -C docs/technical-report/latex switch -c paper/reproduce-v0.11.0
+python scripts/export_report_figure_data.py
+python scripts/export_report_figure_data.py --check
+git -C docs/technical-report/latex diff -- figure-data.tex
 ```
 
-The builder writes
-`output/pdf/benchmark-radar-technical-report-v0.9.0.pdf`. The reserved DOI appears
-in the PDF itself. Upload that PDF to the Zenodo record described by
-`zenodo-metadata.json`, then publish the record.
+The export contains the data cutoff, numerical macros, and SHA-256 hashes of the
+two input JSON files. `--check` recomputes the export and fails if the exported
+file differs from those local inputs. Do not hand-edit the numbers or hashes.
+The script does not update manuscript prose or PDF files.
 
-The published v0.9.0 PDF is frozen. Do not overwrite it when preparing a new
-manuscript or adding a contributor. Build the working next draft explicitly:
+The paper's main findings use its `scripts/audit_findings.py` exporter, which
+reads the same frozen index and every detail shard. Documentation, score, and
+date analyses retain the full source-record population; percentage-scale or
+model-report eligibility must not determine which records survive. Run both
+paper audits in `--check` mode, as documented in the paper README. The generated
+CSV and JSON provide all records and their available measurements.
 
-```bash
-python3 scripts/build_system_evaluation.py \
-  --next-draft \
-  --doi 10.5281/zenodo.22167102
-```
-
-This writes `output/pdf/benchmark-radar-technical-report-next-draft.pdf` and
-uses the draft byline and contributor affiliations. Do not change the frozen
-`zenodo-metadata.json` for draft work; prepare release metadata only when the
-next report version is approved for deposit.
-
-The draft byline is provisional until the contributor has reviewed and approved
-the integrated manuscript, supplied a contribution statement, and accepted
-accountability for the work, as described in
-`docs/designs/technical-report-collaboration-scoring.md` and issue #447.
-
-The software remains under the MIT License. The technical report and original
-editorial content use CC BY-NC 4.0. Commercial republication, resale, paid
-newsletters, dataset packaging, or commercial product integration requires
-prior written permission from Koutian Wu. Third-party source material remains
-under its original terms.
-
-The report derives its quantitative claims from these versioned files and from
-the current README and report documentation:
-
-- `site/data/radar.json` (generated from the dated snapshots)
-- `site/data/benchmark-index.json` (generated from normalized catalogs)
-- `data/snapshots/2026-08-29.json`
-- `data/model_cards.yml`
-- `data/benchmark_scores.yml`
-- `site/data/models.json`
-- `config.yml`
-- `docs/reports/ai-benchmark-landscape-report.md`
-- `docs/source-probe-evidence.md`
-
-Regenerate and review the report when any of those inputs or the report text
-changes.
+Verify the exported hashes against the paper README and preserve the release
+cutoff. For manuscript edits, rebuild and inspect the figures and manuscript using the
+[paper's build instructions](https://github.com/ktwu01/benchmark-radar-paper#build-locally).
+Commit and push the reviewed changes in the paper repository. Keep paper-only
+work there by default. Update Benchmark Radar's `docs/technical-report/latex`
+submodule pointer only when the user explicitly requests it, after pushing the
+reviewed paper commit.

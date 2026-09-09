@@ -95,7 +95,7 @@ function chartMark(paths, color) {
   return svg;
 }
 
-function card({ id, paths, color, name, sub, layer, layers }) {
+function card({ id, paths, color, name, sub, sources }) {
   const source = iconSource(paths);
   const suspect = suspectGeometry(paths);
 
@@ -104,7 +104,7 @@ function card({ id, paths, color, name, sub, layer, layers }) {
   node.id = id;
   node.dataset.fallback = String(source.fallback);
   node.dataset.suspect = String(suspect);
-  if (layer) node.dataset.layer = layer;
+  node.dataset.sources = (sources || []).join(" ");
 
   const head = document.createElement("div");
   head.className = "logos-card-head";
@@ -128,13 +128,11 @@ function card({ id, paths, color, name, sub, layer, layers }) {
     chip.textContent = "suspect";
     chips.append(chip);
   }
-  // A model both layers reported gets both chips. That join is the thing the
-  // old two-list shape could not express at all: the same model existed twice
-  // as two unrelated entries, and 18 models are in exactly that position.
-  for (const name of layers || (layer ? [layer] : [])) {
+  // Keep every source that reports this model visible on its shared entry.
+  for (const name of sources || []) {
     const chip = document.createElement("span");
-    chip.className = `chip chip-layer chip-layer-${name}`;
-    chip.textContent = name;
+    chip.className = `chip chip-source chip-source-${name}`;
+    chip.textContent = ({model_reports: "Model reports", llm_stats: "LLM Stats", artificial_analysis: "Artificial Analysis", opencompass_hub: "OpenCompass Hub"})[name] || name;
     chips.append(chip);
   }
   head.append(chips);
@@ -201,7 +199,6 @@ async function main() {
   const models = await (await fetch("data/models.json")).json();
   const modelHost = byId("logos-models");
   for (const record of models.models) {
-    const layer = record.layers.includes("curated") ? "curated" : "crawled";
     modelHost.append(
       card({
         id: registry.models[`${record.model}\u241f${record.organization}`] || record.key,
@@ -209,8 +206,7 @@ async function main() {
         color: organizationColor(record.organization),
         name: record.model,
         sub: record.organization,
-        layer,
-        layers: record.layers,
+        sources: record.provenance_sources,
       }),
     );
   }
@@ -232,8 +228,8 @@ async function main() {
             ? node.dataset.fallback !== "true"
             : mode === "suspect"
               ? node.dataset.suspect !== "true"
-              : mode === "curated" || mode === "crawled"
-                ? node.dataset.layer !== mode
+              : ["model_reports", "llm_stats", "artificial_analysis"].includes(mode)
+                ? !node.dataset.sources.split(" ").includes(mode)
                 : false;
       }
     });

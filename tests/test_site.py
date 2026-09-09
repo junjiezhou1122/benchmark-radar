@@ -45,8 +45,9 @@ def test_readmes_offer_free_data_and_an_earned_star_request():
     assert "点击下面的动图" in chinese
     assert "assets/swe-bench-verified.gif" in english
     assert "assets/swe-bench-verified.gif" in chinese
-    assert "data/radar.json" in english and "no crawler or contact required" in english
-    assert "data/radar.json" in chinese and "无需爬虫或联系作者" in chinese
+    download = "releases/download/cli-data/benchmark-radar-data.zip"
+    assert download in english and "daily discovery snapshots in one ZIP" in english
+    assert download in chinese and "每日发现快照" in chinese
     assert "star the repository" in english
     assert "给仓库点个 Star" in chinese
     assert Path("CITATION.cff").exists()
@@ -268,6 +269,22 @@ def test_visible_navigation_items_use_the_same_active_state():
     assert '.view-nav button[aria-current="page"]' not in styles
 
 
+def test_primary_section_titles_share_compact_spacing_and_trends_uses_one_title():
+    html = Path("site/index.html").read_text(encoding="utf-8")
+    styles = Path("site/assets/styles.css").read_text(encoding="utf-8")
+    compact = styles.split("#leaderboard-view,", 1)[1].split("}", 1)[0]
+    assert "#saturation-view," in compact
+    assert "#trends-view" in compact
+    score_header = styles.split(".score-browse-header {", 1)[1].split("}", 1)[0]
+    assert "align-items: flex-start" in score_header
+    assert ".score-browse-header > .score-filter { margin-bottom: 0; }" in styles
+    trends = html.split('id="trends-view"', 1)[1].split("</section>", 1)[0]
+    assert '<h1 id="trends-heading" data-i18n="Trend">Trend</h1>' in trends
+    assert "Recent activity" not in trends
+    assert "Signals over time" not in trends
+    assert "Counts describe discovery volume" not in trends
+
+
 def test_recommendation_threshold_does_not_gate_inclusion_and_rows_carry_no_badge():
     script = Path("site/assets/app.js").read_text(encoding="utf-8")
 
@@ -303,7 +320,7 @@ def test_scan_date_can_be_reset_to_all_dates():
     html = Path("site/index.html").read_text(encoding="utf-8")
 
     assert 'option("all", t("All dates"), state.todayDate === "all")' in script
-    assert 'state.todayDate === "all" || item.snapshot_date === state.todayDate' in script
+    assert "item.snapshot_date >= range.start && item.snapshot_date <= range.end" in script
     assert 'state.todayDate = "all";' in script
     assert 'params.set("date", "all")' in script
     # The list is bounded by explicit pages (issue #322), so reaching the
@@ -375,7 +392,7 @@ def test_automatic_frontier_default_does_not_leak_into_unrelated_urls():
     assert "lfrontierExplicit: false" in script
     assert "state.lfrontierExplicit = Boolean(state.lfrontier)" in script
     assert "if (state.lfrontierExplicit && state.lfrontier)" in script
-    assert "state.lfrontierExplicit = false" in script
+    assert "if (!state.lfrontierExplicit)" in script
     assert "function selectFrontier(benchmarkId)" in script
 
 
@@ -395,8 +412,13 @@ def test_each_view_serializes_only_the_filters_it_reads():
     for key in ("date", "q", "kind", "category", "source", "organization", "event"):
         assert f'params.set("{key}"' in today
 
-    leaderboard = body.split('if (!utility && state.view === "leaderboard")', 1)[1]
-    for key in ("lq", "ldomain", "lorg", "lera", "lfrontier"):
+    leaderboard, saturation = body.split('if (!utility && state.view === "leaderboard")', 1)[
+        1
+    ].split('if (!utility && state.view === "saturation")', 1)
+    assert 'params.set("lfrontier"' not in leaderboard
+    for key in ("lscore", "bq", "lfrontier"):
+        assert f'params.set("{key}"' in saturation
+    for key in ("lq", "ldomain", "lorg", "lera", "lscore"):
         assert f'params.set("{key}"' in leaderboard
 
     assert 'if (!utility && state.view === "map" && state.entity) params.set("entity"' in body
@@ -431,7 +453,14 @@ def test_top_right_utilities_use_shared_icon_geometry_and_contact_control():
     assert ".repo-badges" not in styles
     assert 'class="repo-badge-glyph" id="lang-toggle-label">中<' in html
     assert 'class="brand-icon github-icon"' in html
-    assert "grid-template-columns: repeat(4, 2.1rem)" in styles
+    assert "grid-template-columns: repeat(4, 44px)" in styles
+    mobile_badge = (
+        styles.split("@media (max-width: 760px)", 1)[1]
+        .split(".repo-badge {", 1)[1]
+        .split("}", 1)[0]
+    )
+    assert "width: 44px" in mobile_badge
+    assert "height: 44px" in mobile_badge
     assert "flex: 0 0 1.5rem" in styles
     assert ".repo-badge svg," in styles
 
@@ -566,12 +595,15 @@ def test_clean_route_model_migrates_legacy_urls_and_preserves_utility_background
             section("const VIEW_SEO = {", "// These sheets are also indexable pages."),
             section("const UTILITY_SEO = {", "// One list, not two:"),
             section("const VIEW_PATHS =", "function applySeo("),
+            # readUrl parses the score cutoff through this helper.
+            section("function scoreCutoff(", "function matchesScoreFilter("),
             section("function readUrl()", "// `push` adds a history entry"),
             section("function writeUrl(", "// A pushed entry changes the URL"),
         )
     )
     program = f"""
 const state = {{}};
+const BENCHMARK_SEARCH_LIMIT = 50;
 {route_source}
 function install(url, historyState = null) {{
   const parsed = new URL(url, "https://benchmark-radar.org");
@@ -596,6 +628,33 @@ install("/?view=leaderboard&lq=agent");
 readUrl();
 writeUrl("replace");
 results.legacyView = window.location.pathname + window.location.search;
+
+results.legacyBenchmarks = [];
+for (const url of [
+  "/leaderboard/?lfrontier=bench-95&lscore=70",
+  "/?view=leaderboard&lfrontier=bench-95&lscore=70",
+]) {{
+  install(url);
+  readUrl();
+  writeUrl("replace");
+  results.legacyBenchmarks.push(window.location.pathname + window.location.search);
+}}
+
+install("/saturation/?lscore=40&bq=bench-95&lfrontier=bench-95&lq=agent&lheight=documents");
+readUrl();
+writeUrl("replace");
+results.saturation = {{
+  url: window.location.pathname + window.location.search,
+  view: state.view, query: state.benchmarkQuery, cutoff: state.lscore,
+  selected: state.lfrontier, explicit: state.lfrontierExplicit,
+}};
+state.view = "leaderboard";
+writeUrl("push");
+results.sharedCutoff = window.location.pathname + window.location.search;
+state.view = "saturation";
+state.benchmarkQuery = "";
+writeUrl("replace");
+results.clearedSearch = window.location.pathname + window.location.search;
 
 install("/#rubric=2");
 readUrl();
@@ -623,7 +682,24 @@ console.log(JSON.stringify(results));
     )
     routes = json.loads(result.stdout)
 
-    assert routes["legacyView"] == "/leaderboard/?lq=agent"
+    assert routes["legacyView"] == "/leaderboard/?lscore=70&lq=agent"
+    assert (
+        routes["legacyBenchmarks"]
+        == [
+            "/saturation/?lscore=70&lfrontier=bench-95",
+        ]
+        * 2
+    )
+    assert routes["saturation"] == {
+        "url": "/saturation/?lscore=40&bq=bench-95&lfrontier=bench-95",
+        "view": "saturation",
+        "query": "bench-95",
+        "cutoff": 40,
+        "selected": "bench-95",
+        "explicit": True,
+    }
+    assert routes["sharedCutoff"] == "/leaderboard/?lscore=40&lheight=documents&lq=agent"
+    assert routes["clearedSearch"] == "/saturation/?lscore=40&lfrontier=bench-95"
     assert routes["legacyRubric"] == "/rubric/?version=2"
     assert routes["legacyReturns"] is False
     assert routes["openCli"] == "/cli/"
@@ -672,13 +748,20 @@ def test_routes_degrade_to_static_pages_and_refresh_the_payload_the_route_needs(
     assert "if (anchor) return;" in nav
     assert 'window.location.assign(anchor?.href || VIEW_PATHS[view] || "/")' in nav
     assert "const navigationSequence = ++viewNavigationSequence;" in nav
-    assert nav.count("navigationSequence !== viewNavigationSequence") == 2
+    assert nav.count("navigationSequence !== viewNavigationSequence") == 4
+    trends = script.split("function renderTrends()", 1)[1].split("const TOOLTIP_CATEGORY_LIMIT", 1)[
+        0
+    ]
+    assert trends.count("const navigationSequence = ++viewNavigationSequence;") == 2
+    assert trends.count("navigationSequence !== viewNavigationSequence") == 2
 
     # A route that needs history selects radar.json before fetching, verifies
-    # again after assignment, and only then retires the visible error.
+    # again after assignment, and only then retires the visible error. Trends
+    # uses the chart payload instead of the full corpus.
     assert "state.fullDataLoaded || stateNeedsFullData()" in refresh
-    assert 'needsFullPayload ? "/data/radar.json" : "/data/radar-bootstrap.json"' in refresh
+    assert '"/data/radar-trends.json"' in refresh
     assert 'if (stateNeedsFullData()) await ensureFullData("reload");' in refresh
+    assert 'else if (stateNeedsTrendsData()) await ensureTrendsData("reload");' in refresh
     assert refresh.index(
         'if (stateNeedsFullData()) await ensureFullData("reload");'
     ) < refresh.index('byId("error-state").hidden = true;')
@@ -707,11 +790,12 @@ def test_newer_successful_data_requests_cannot_be_overwritten_by_late_responses(
     assert "if (!applyDashboardData(data, requestSequence" in refresh
     assert "const requestSequence = ++nextDashboardRequestSequence;" in initialize
     assert "if (!applyDashboardData(data, requestSequence, false)) return;" in initialize
-    ensure_full = script.split("async function ensureFullData", 1)[1].split(
-        "async function ensureDataForState", 1
+    fetch_payload = script.split("async function fetchDashboardPayload", 1)[1].split(
+        "async function ensureTrendsData", 1
     )[0]
-    assert "if (!applied && !state.fullDataLoaded)" in ensure_full
-    assert "Full data request was superseded by a bootstrap response" in ensure_full
+    assert "if (!applied && fullPayload && !state.fullDataLoaded)" in fetch_payload
+    assert "Full data request was superseded by a bootstrap response" in fetch_payload
+    assert "Trends data request was superseded by a bootstrap response" in fetch_payload
 
 
 def test_rubric_remains_a_direct_route_without_a_navigation_control():
@@ -760,9 +844,146 @@ def test_initial_page_uses_small_bootstrap_and_lazy_loads_history():
     assert 'fetch("/data/radar-bootstrap.json")' in initialize
     assert "await ensureDataForState();" in initialize
     loader = script.split("async function ensureFullData(", 1)[1].split("\nasync function ", 1)[0]
-    assert 'fetch("/data/radar.json", { cache })' in loader
-    assert '["trends", "map"].includes(state.view)' in script
+    assert 'fetchDashboardPayload("/data/radar.json", cache, requestSequence, true)' in loader
+    trends_loader = script.split("async function ensureTrendsData(", 1)[1].split(
+        "\nasync function ", 1
+    )[0]
+    assert '"/data/radar-trends.json"' in trends_loader
+    nav = script.split('document.querySelectorAll("[data-view]")', 1)[1].split(
+        "// Reads every control rather than the event target", 1
+    )[0]
+    assert nav.index("setView(view);") < nav.index("await ensureTrendsData();")
+    assert 'if (view === "map") await ensureFullData();' not in nav
+    assert "relationship-explorer" in script
+    assert (
+        "state.entity"
+        in script.split("function stateNeedsFullData", 1)[1].split(
+            "function stateNeedsTrendsData", 1
+        )[0]
+    )
+    assert "function mergeDashboardData" in script
     assert 'state.todayDate === "all"' in script
+    # A Trends day has counts but no evidence_items. Mapping those days would
+    # throw and leave Today blank; listing an unloaded historical date would
+    # replace the latest-scan rows with an empty state.
+    assert "(day.evidence_items || []).map" in script
+    today = script.split("function renderToday", 1)[1].split("function renderTrends", 1)[0]
+    assert "!Array.isArray(day.evidence_items)" in today
+    assert "state.todayDate = state.data.latest_date;" in today
+    nav_today = script.split('document.querySelectorAll("[data-view]")', 1)[1].split(
+        "// Reads every control rather than the event target", 1
+    )[0]
+    assert 'if (view === "today" && state.todayDate !== "all")' in nav_today
+
+
+def test_returning_to_explore_after_trends_supersession_reloads_full_data():
+    """Issue #528 review race: full-payload loading -> Trends -> Explore.
+
+    A trends response can supersede an in-flight /data/radar.json fetch while
+    the relationship explorer is open. The <details> element never closes, so
+    no toggle event fires again and the old code left map-canvas with zero
+    children and no new full-data request. The Explore nav click itself must
+    re-run the data gate and redraw once the full corpus lands.
+    """
+    script = Path("site/assets/app.js").read_text(encoding="utf-8")
+    nav = script.split('document.querySelectorAll("[data-view]")', 1)[1].split(
+        "// Reads every control rather than the event target", 1
+    )[0]
+    assert 'if (view === "map") await ensureDataForState();' in nav
+    await_map = nav.index('if (view === "map") await ensureDataForState();')
+    # The gate runs inside the shared try/catch, so a failed retry falls back
+    # to the generated route exactly like a failed Trends upgrade does.
+    assert await_map < nav.index("window.location.assign(anchor?.href || VIEW_PATHS[view]")
+    # The redraw after the await is the second renderTrendMap() call in the
+    # handler; without it the graph stays empty even after the data arrives.
+    redraw = nav.index('if (view === "map") renderTrendMap();', await_map)
+    assert await_map < redraw
+    # The lazy gate is unchanged: entering Explore with the disclosure closed
+    # and no entity permalink still must not fetch the full corpus.
+    assert 'if (view === "map") await ensureFullData();' not in nav
+
+
+def test_refresh_on_today_after_trends_reloads_evidence():
+    """Issue #528 review regression: Refresh must reload Today's evidence after visiting Trends.
+
+    Visiting Trends sets state.trendsDataLoaded = true. If refreshData()
+    selected radar-trends.json whenever that flag was true, returning to
+    Today and clicking Refresh fetched a trends-only payload with no
+    evidence_items, leaving Today unable to display updated or changed
+    evidence. The request on Today must fetch an evidence-bearing payload
+    and apply changed evidence items to state.
+    """
+    import json
+    import shutil
+    import subprocess
+
+    script = Path("site/assets/app.js").read_text(encoding="utf-8")
+    refresh = script.split("async function refreshData()", 1)[1].split(
+        "async function initialize()", 1
+    )[0]
+    assert 'const needsTrendsPayload = !needsFullPayload && state.view === "trends";' in refresh
+
+    node = shutil.which("node")
+    if not node:
+        import pytest
+
+        pytest.skip("node is not installed")
+
+    result = subprocess.run(
+        [node, "tests/refresh_today_evidence_harness.mjs"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    data = json.loads(result.stdout)
+    assert data["initialObservationId"] == "item-old"
+    assert data["requestedPath"] == "/data/radar-bootstrap.json"
+    assert data["refreshedEvidenceId"] == "item-new"
+    assert data["refreshedEvidenceTitle"] == "New Updated Evidence"
+    assert data["refreshedObservationId"] == "item-new"
+    assert data["refreshedObservationTitle"] == "New Updated Evidence"
+
+
+def test_trends_day_load_does_not_override_newer_today_navigation():
+    """Both Trends entry points must preserve later date, range, and search choices."""
+    import json
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        import pytest
+
+        pytest.skip("node is not installed")
+
+    result = subprocess.run(
+        [node, "tests/trends_today_navigation_harness.mjs"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    data = json.loads(result.stdout)
+    expected_dates = {
+        "none": "2026-07-23",
+        "today": "2026-09-05",
+        "2026-08-20": "2026-08-20",
+        "30d": "30d",
+        "60d": "60d",
+        "all": "all",
+        "search": "all",
+        "clear": "all",
+    }
+    assert len(data["scenarios"]) == len(expected_dates) * 2
+    for scenario in data["scenarios"]:
+        expected = expected_dates[scenario["action"]]
+        assert scenario["selectedBeforeResponse"] == expected, scenario
+        assert scenario["dateAfterResponse"] == expected, scenario
+        expected_url = "/" if scenario["action"] == "today" else f"/?date={expected}"
+        if scenario["action"] == "search":
+            expected_url += "&q=benchmark"
+        assert scenario["urlAfterResponse"] == expected_url, scenario
 
 
 def test_rubric_is_read_from_published_data_not_restated_in_the_browser():
@@ -835,7 +1056,8 @@ def test_today_toolbar_keeps_secondary_filters_in_a_popover():
     assert "function closeFiltersDrawer()" in script
     assert "function refreshData()" in script
     assert "state.fullDataLoaded || stateNeedsFullData()" in script
-    assert 'needsFullPayload ? "/data/radar.json" : "/data/radar-bootstrap.json"' in script
+    assert '"/data/radar-trends.json"' in script
+    assert '"/data/radar-bootstrap.json"' in script
     assert 'const response = await fetch(path, { cache: "reload" });' in script
     assert "drawer.hidden = true" in script
 
@@ -930,7 +1152,7 @@ def test_all_dates_keeps_only_the_latest_matching_sighting_per_source_record():
     import pytest
 
     script = Path("site/assets/app.js").read_text(encoding="utf-8")
-    assert 'state.todayDate === "all" ? latestObservationsByRecord(matches) : matches' in script
+    assert "todayIsMultiDate() ? latestObservationsByRecord(matches) : matches" in script
 
     node = shutil.which("node")
     if not node:
@@ -1108,7 +1330,9 @@ def test_static_html_references_existing_local_assets():
     generated_assets = {
         "feed.xml",
         "data/radar.json",
+        "blog/",
         "leaderboard/",
+        "saturation/",
         "trends/",
         "explore/",
         "rubric/",
@@ -1223,7 +1447,7 @@ def test_leaderboard_view_is_a_first_class_dashboard_view():
     assert 'data-view="leaderboard"' in html
     assert '"map", "leaderboard"' in script
     assert 'if (view === "leaderboard") renderLeaderboard();' in script
-    assert "state.data?.model_card_leaderboard" in script
+    assert "const board = catalogDocumentBoard();" in script
 
 
 def test_leaderboard_states_what_it_measures_before_the_ranking():
@@ -1363,23 +1587,15 @@ def test_model_card_rows_expand_to_the_benchmarks_they_report():
     assert '"Open source document ↗"' in script
     # Says a mention is not a score at the point where an expanded list would
     # otherwise read as an extract of the card's results table.
-    assert "These are mentions, not scores" in script
+    assert "Each linked benchmark counts once for this document" in script
 
 
-def test_leaderboard_degrades_when_the_curated_registry_is_absent():
+def test_leaderboard_availability_does_not_depend_on_the_model_report_registry():
     script = Path("site/assets/app.js").read_text(encoding="utf-8")
-
-    # No registry means no ranking. Hiding the nav entry and redirecting a
-    # ?view=leaderboard permalink beats offering a tab that opens blank.
-    assert "document.querySelector('[data-view=\"leaderboard\"]')" in script
-    assert "navButton.hidden = !state.data?.model_card_leaderboard;" in script
-    assert 'state.view === "leaderboard" && !state.data.model_card_leaderboard' in script
-    # The entry has to reflect the data from every view, not only from the one
-    # being rendered. Boot settles it before it picks a view to draw, so Today
-    # cannot leave a dead tab on screen for a click to push /leaderboard/ over.
-    boot = script.split("renderTodayDateOptions();\n    syncLeaderboardNav();", 1)
-    assert len(boot) == 2, "boot does not sync the leaderboard nav"
-    assert 'if (state.view === "leaderboard") renderLeaderboard();' in boot[1]
+    assert "navButton.hidden = false" in script
+    assert 'state.view === "leaderboard" && !state.data.model_card_leaderboard' not in script
+    assert 'if (state.view === "leaderboard") renderLeaderboard();' in script
+    assert "Full benchmark catalog could not be loaded." in script
 
 
 def test_leaderboard_names_an_unadopted_benchmark_rather_than_showing_a_bare_zero():
@@ -2414,12 +2630,12 @@ def test_a_benchmark_name_search_reaches_the_registry_not_only_the_daily_feed():
     section = script.split("function renderTodayBenchmarks()", 1)[1].split(
         "function renderToday(", 1
     )[0]
-    assert "searchCuratedEntries(board, query, { includeUnscored: true })" in section
+    assert "searchCuratedEntries" not in section
     assert "searchBenchmarkIndex(state.benchmarkIndex || [], query)" in section
 
     # Curated rows rank above crawled ones: same order the leaderboard picker
     # uses, and the layer with a protocol and a time axis.
-    assert section.index("curatedResultRow") < section.index("benchmarkResultRow")
+    assert "const total = matches.length;" in section
 
     # Registry matches are named as such. Folding them into a list sorted by
     # daily priority is what surfaced the arXiv paper over the benchmark.
@@ -2435,8 +2651,8 @@ def test_a_benchmark_name_search_reaches_the_registry_not_only_the_daily_feed():
     # Capped before the rows are built. "bench" matches 355 of the 1,148
     # crawled records, and building all of them into DOM subtrees with
     # listeners to then drop all but 50 is work repeated on every keystroke.
-    assert "curated.slice(0, BENCHMARK_SEARCH_LIMIT)" in section
-    assert section.index("externalShown") < section.index("benchmarkResultRow(record")
+    assert "matches.slice(0, BENCHMARK_SEARCH_LIMIT)" in section
+    assert section.index("matches.slice") < section.index("benchmarkResultRow(record")
 
     # A failed catalog fetch is reported whether or not the curated layer
     # matched. Only saying so on an empty result would present half a registry
@@ -2451,13 +2667,9 @@ def test_a_benchmark_name_search_reaches_the_registry_not_only_the_daily_feed():
     assert 'return !total && indexPending ? "pending" : total;' in section
     assert 'benchmarkMatches === "pending"' in script
 
-    # With no leaderboard to land on, rows render inert rather than as buttons
-    # whose click does nothing the reader can see. "Has entries" is not the
-    # test: renderAdoptionFrontier() gives up unless an adopted entry has a
-    # readable score record and a default entry resolves.
-    assert "inert: !navigate" in section
-    assert "scoreRecord(item.benchmark_id)" in section
-    assert "frontierDefaultEntry(board)" in section
+    # Every catalog record opens its own detail, even without report evidence.
+    assert "benchmarkResultRow(record, { navigate: true })" in section
+    assert "model_card_leaderboard" not in section
 
     # A truncated list says so. Presenting 50 of 383 as "the matches" invites
     # the reader to conclude a benchmark past row 50 is absent, which is the
@@ -2468,9 +2680,9 @@ def test_a_benchmark_name_search_reaches_the_registry_not_only_the_daily_feed():
     # Clicking a row must draw the view it lands on. setView() toggles
     # visibility and the URL but does not render, so without this a first-time
     # visitor arrives at an empty leaderboard: 0 chart children, 0 table rows.
-    for row in ("function curatedResultRow(entry", "function benchmarkResultRow(record"):
+    for row in ("function benchmarkResultRow(record",):
         body = script.split(row, 1)[1].split("\nfunction ", 1)[0]
-        assert 'setView("leaderboard");\n      renderLeaderboard();' in body, row
+        assert 'setView("saturation");\n      renderSaturation();' in body, row
 
     # And the empty list stops advising a filter change that cannot help when
     # the thing being searched for was found in the registry instead.
@@ -2486,7 +2698,7 @@ def test_a_benchmark_name_search_reaches_the_registry_not_only_the_daily_feed():
 
     # "on this date" is false in All dates mode, where the search already
     # covered the whole archive, so that mode gets its own sentence.
-    assert 'state.todayDate === "all"' in helper
+    assert "todayIsMultiDate()" in helper
     assert "No collected observation mentions" in helper
 
     # A t() string needs both halves in app.js: the English key the call site
@@ -2636,14 +2848,25 @@ def test_heading_outline_and_scale_stay_quiet():
         html,
         re.S,
     )
-    assert {name for name, _, _ in sections} == {"today", "leaderboard", "map", "trends"}
+    assert {name for name, _, _ in sections} == {
+        "today",
+        "leaderboard",
+        "saturation",
+        "map",
+        "trends",
+    }
     for name, _, body in sections:
         assert body.count("<h1") == 1, name
     visible = [name for name, attrs, _ in sections if " hidden" not in attrs]
     assert visible == ["today"], visible
 
-    assert '<h1 class="today-heading" data-i18n="Today\'s radar">' in html
-    for heading_id in ("leaderboard-heading", "map-heading", "trends-heading"):
+    assert '<h1 id="today-heading" class="today-heading" data-i18n="Today\'s radar">' in html
+    for heading_id in (
+        "leaderboard-heading",
+        "saturation-heading",
+        "map-heading",
+        "trends-heading",
+    ):
         assert f'<h1 id="{heading_id}"' in html
 
     # The today h1 renders exactly like the counts caption beside it: the shared
@@ -2784,7 +3007,7 @@ def test_issue_333_the_page_never_scrolls_sideways():
 
     # 2. Crawled README banners made of box-drawing characters are a single
     #    unbreakable run, and one of them pushed a 720px column to 1349px.
-    wrap = _css_rule(styles, ".record-card,\n.map-detail,\n.external-block {")
+    wrap = _css_rule(styles, ".record-card,\n.map-detail,\n.catalog-block {")
     assert "overflow-wrap: anywhere;" in wrap
 
     # And a structural backstop so the next decorative overhang cannot bring it

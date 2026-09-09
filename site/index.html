@@ -114,7 +114,7 @@
           "@type": "SearchAction",
           "target": {
             "@type": "EntryPoint",
-            "urlTemplate": "https://benchmark-radar.org/leaderboard/?lq={search_term_string}"
+            "urlTemplate": "https://benchmark-radar.org/saturation/?bq={search_term_string}"
           },
           "query-input": "required name=search_term_string"
         }
@@ -210,12 +210,41 @@
     <a class="skip-link" href="#main-content" data-i18n="Skip to content">Skip to content</a>
 
     <header class="masthead">
-      <a class="brand" href="/" aria-label="Benchmark Radar home">
-        <span class="brand-mark" aria-hidden="true">
-          <span></span>
-        </span>
-        <strong>Benchmark Radar</strong>
-      </a>
+      <div class="masthead-main">
+        <a class="brand" href="/" aria-label="Benchmark Radar home">
+          <span class="brand-mark" aria-hidden="true">
+            <span></span>
+          </span>
+          <strong>Benchmark Radar</strong>
+        </a>
+        <nav class="view-nav" aria-label="Dashboard views" data-i18n-aria="Dashboard views">
+          <button type="button" class="nav-active" data-view="today" aria-controls="today-view" aria-current="page" data-i18n="Today">Today</button>
+          <a
+            href="/cli/"
+            id="cli-nav"
+            aria-haspopup="dialog"
+            aria-controls="cli-dialog"
+            aria-expanded="false"
+            data-i18n="CLI"
+          >
+            CLI
+          </a>
+          <!-- Real links, not tab buttons. Each one is this same dashboard served
+               at its own path with that view already open and its rows already in the
+               HTML, so a crawler and a reader with a slow connection both get content
+               from the first response. app.js intercepts the click and keeps the
+               navigation client-side for anyone whose script has loaded. -->
+          <a href="/leaderboard/" data-view="leaderboard" aria-controls="leaderboard-view" data-i18n="Leaderboard">
+            Leaderboard
+          </a>
+          <a href="/saturation/" data-view="saturation" aria-controls="saturation-view" data-i18n="Saturation">Saturation</a>
+          <a href="/trends/" data-view="trends" aria-controls="trends-view" data-i18n="Trends">Trends</a>
+          <!-- The blog is a set of documents, not a dashboard view, so this link
+               carries no data-view: app.js only intercepts clicks on elements that
+               have one, and a brief has to arrive as a full page load. -->
+          <a href="/blog/" data-i18n="Blog">Blog</a>
+        </nav>
+      </div>
       <div class="masthead-end" aria-label="Site utilities" data-i18n-aria="Site utilities">
         <a
           class="repo-badge feed-badge"
@@ -291,33 +320,6 @@
     </header>
 
     <p class="stale-banner" id="stale-banner" hidden></p>
-
-    <nav class="view-nav" aria-label="Dashboard views" data-i18n-aria="Dashboard views">
-      <button type="button" class="nav-active" data-view="today" aria-controls="today-view" aria-current="page" data-i18n="Today">Today</button>
-      <a
-        href="/cli/"
-        id="cli-nav"
-        aria-haspopup="dialog"
-        aria-controls="cli-dialog"
-        aria-expanded="false"
-        data-i18n="CLI"
-      >
-        CLI
-      </a>
-      <!-- Real links, not tab buttons. Each one is this same dashboard served
-         at its own path with that view already open and its rows already in the
-         HTML, so a crawler and a reader with a slow connection both get content
-         from the first response. app.js intercepts the click and keeps the
-         navigation client-side for anyone whose script has loaded. -->
-      <a href="/leaderboard/" data-view="leaderboard" aria-controls="leaderboard-view" data-i18n="Leaderboard">
-        Leaderboard
-      </a>
-      <a href="/trends/" data-view="trends" aria-controls="trends-view" data-i18n="Trends">Trends</a>
-      <!-- The blog is a set of documents, not a dashboard view, so this link
-           carries no data-view: app.js only intercepts clicks on elements that
-           have one, and a brief has to arrive as a full page load. -->
-      <a href="/blog/" data-i18n="Blog">Blog</a>
-    </nav>
 
     <main id="main-content" tabindex="-1">
       <section class="view" id="today-view" aria-label="Today">
@@ -400,12 +402,14 @@
         <div class="content-grid">
           <div>
             <div class="section-title">
-              <h1 class="today-heading" data-i18n="Today's radar">Today's radar</h1>
+              <h1 id="today-heading" class="today-heading" data-i18n="Today's radar">Today's radar</h1>
               <div class="results-meta" aria-live="polite">
                 <span id="today-breakdown"></span>
                 <span id="today-sort"></span>
               </div>
             </div>
+            <p id="today-range" class="section-note" hidden></p>
+            <p id="today-load-error" class="empty-state" role="status" hidden></p>
             <!-- Search is archive-wide by default even though browsing opens
                  on the newest scan. This first result row makes that scope
                  explicit and gives large result sets a practical export path. -->
@@ -469,15 +473,71 @@
       </section>
 
       <section class="view" id="leaderboard-view" aria-labelledby="leaderboard-heading" hidden>
-        <!-- One title, not three. "Which benchmarks do model cards report?",
-             "How many curated model cards report each benchmark..." and "Most
-             reported in model cards" were the same sentence written three ways,
-             stacked above the figure. This heading is the view's accessible
-             name, and the (i) beside it carries the caveat. -->
-        <section class="leaderboard-top" aria-labelledby="leaderboard-heading">
+        <div class="score-browse-header">
+          <h1 id="leaderboard-heading" data-i18n="Leaderboard">Leaderboard</h1>
+        </div>
+
+        <section class="benchmark-skyline" id="benchmark-skyline" aria-labelledby="benchmark-skyline-heading">
+          <div class="skyline-heading">
+            <div>
+              <h2 id="benchmark-skyline-heading" data-i18n="Benchmark Frontier">Benchmark Frontier</h2>
+              <p class="skyline-subtitle" data-i18n="Which difficult benchmarks have been tested most">Which difficult benchmarks have been tested most</p>
+            </div>
+          </div>
+          <div class="skyline-toolbar">
+            <label class="score-filter" for="leaderboard-score-filter">
+              <span data-i18n="Show benchmarks with highest reported score below:">Show benchmarks with highest reported score below:</span>
+              <input id="leaderboard-score-filter" name="lscore" type="range" min="10" max="100" step="10" value="70" list="score-filter-steps" data-score-filter aria-controls="benchmark-skyline-chart">
+              <output id="leaderboard-score-value" for="leaderboard-score-filter">70</output>
+            </label>
+            <datalist id="score-filter-steps">
+              <option value="10"></option><option value="20"></option><option value="30"></option>
+              <option value="40"></option><option value="50"></option><option value="60"></option>
+              <option value="70"></option><option value="80"></option><option value="90"></option>
+              <option value="100" label="All"></option>
+            </datalist>
+            <label class="skyline-height-control" for="benchmark-skyline-height">
+              <span data-i18n="Height">Height</span>
+              <select id="benchmark-skyline-height">
+                <option value="models" data-i18n="Models with reported scores">Models with reported scores</option>
+                <option value="documents" data-i18n="Source documents">Source documents</option>
+              </select>
+            </label>
+          </div>
+          <div class="frontier-chart skyline-chart" id="benchmark-skyline-chart" tabindex="0" role="region" aria-label="Benchmark Frontier chart" data-i18n-aria="Benchmark Frontier chart"></div>
+          <div class="skyline-caption">
+            <div id="benchmark-skyline-legend" aria-label="Chart legend" data-i18n-aria="Chart legend"></div>
+            <details class="skyline-method" id="benchmark-skyline-method">
+              <summary class="info-disclosure-toggle" aria-label="Chart notes" data-i18n-aria="Chart notes"><span aria-hidden="true">i</span></summary>
+              <div class="skyline-method-body">
+                <p id="benchmark-skyline-count" role="status"></p>
+                <p id="benchmark-skyline-note"></p>
+                <p id="benchmark-skyline-sources"></p>
+                <p id="benchmark-skyline-coverage"></p>
+                <p id="benchmark-skyline-pareto"></p>
+                <p data-i18n="skyline.reading">Each mark is one benchmark record. Height counts distinct models with numeric scores. Source model IDs preserve evaluated configurations; repeated score rows add no models. Source documents counts distinct cited reports or registry pages through the same evidence collection. Both counts appear on hover.</p>
+            <p data-i18n="skyline.pareto">The side view projects reported scores and the selected counts onto the left wall, leaving out time. The gold staircase compares only benchmarks with verified score scales. Within the dated 2024+ cohort, a benchmark is Pareto when no other eligible benchmark has an equal or lower normalized score and an equal or greater selected count, with at least one strict advantage. Dates select the cohort; they do not determine dominance. Scores and counts are never multiplied. The score slice cannot promote a dominated benchmark onto the frontier.</p>
+            <p data-i18n="skyline.scope">Height uses log1p(count); ticks, tooltips and Pareto use raw counts. The axis covers the full scored 2024+ cohort and stays fixed while filtering. Only declared percentage metrics with a known selected count enter Pareto; lower-is-better percentages become 100 minus the original value. Hollow points flag an unverified score scale or an unknown count, which is never treated as zero. Overlapping caps are spaced apart; hover or focus traces their exact coordinates. Arrow keys move through benchmarks. A shared scale does not establish equivalent test protocols or prove a benchmark is solved.</p>
+            <p data-i18n="skyline.regions">The timeline starts on January 1, 2024, inclusive. Dates use the benchmark's release first, then its earliest numeric LLM score report. When a source dates score entries by model release, the earliest entry supplies a clearly labelled model-release proxy; this is not a verified score-publication date. Crawl timestamps and adoption-only mentions never supply dates. Known dates before 2024 are excluded. Records with no date remain individually visible in a labelled area.</p>
+              </div>
+            </details>
+          </div>
+        </section>
+
+        <section class="score-ranking leaderboard-top" aria-label="Ranked by data points" data-i18n-aria="Ranked by data points">
+          <div class="leaderboard-top-columns" aria-hidden="true">
+            <span class="leaderboard-top-columns-rank" data-i18n="Rank">Rank</span>
+            <span class="leaderboard-top-columns-name" data-i18n="Benchmark">Benchmark</span>
+            <span class="leaderboard-top-columns-count" data-i18n="Data points">Data points</span>
+          </div>
+          <ol class="leaderboard-top-list" id="score-ranking-list"></ol>
+          <p id="score-ranking-empty" class="empty-state" data-i18n="No scored benchmarks match these filters." hidden>No scored benchmarks match these filters.</p>
+          <button id="score-ranking-more" class="leaderboard-top-more" type="button" data-i18n="Show more" hidden>Show more</button>
+        </section>
+
+        <section class="leaderboard-top" aria-labelledby="leaderboard-adoption-heading">
           <div class="leaderboard-top-heading">
-            <h1 id="leaderboard-heading" data-i18n="Most reported benchmarks in model cards">Most reported benchmarks in model cards</h1>
-            <span id="leaderboard-top-info"></span>
+            <h2 id="leaderboard-adoption-heading" data-i18n="Most documented benchmarks">Most documented benchmarks</h2>
             <!-- Written but not shown: the visible copy is in the (i). A screen
                  reader announces it with the heading. -->
             <p class="leaderboard-deck visually-hidden" id="leaderboard-measures"></p>
@@ -485,7 +545,7 @@
           <div class="leaderboard-top-columns" aria-hidden="true">
             <span class="leaderboard-top-columns-rank" data-i18n="Rank">Rank</span>
             <span class="leaderboard-top-columns-name" data-i18n="Benchmark">Benchmark</span>
-            <span class="leaderboard-top-columns-count" data-i18n="leaderboard.column.model_cards">Model cards</span>
+            <span class="leaderboard-top-columns-count" data-i18n="leaderboard.column.model_cards">Source documents</span>
           </div>
           <ol class="leaderboard-top-list" id="leaderboard-top-list"></ol>
           <button
@@ -495,112 +555,18 @@
             aria-label="Show more ranked benchmarks"
             hidden
           >Show more ranked benchmarks</button>
+          <div class="figure-caption">
+            <span id="leaderboard-top-info"></span>
+          </div>
         </section>
 
-        <div class="benchmark-workbench">
-          <!-- A tool region, not a content section. The examples used to be a
-               titled block with two subheadings and eight cards, which outranked
-               the search box it was meant to support; they are now one line of
-               chips for a reader who has nothing in mind to type. -->
-          <aside class="benchmark-navigator" aria-labelledby="benchmark-search-heading">
-            <div class="benchmark-search">
-              <h2 class="benchmark-search-label" id="benchmark-search-heading">
-                <label for="benchmark-search-input"
-                       data-i18n="Search every benchmark">Search every benchmark</label>
-              </h2>
-              <input id="benchmark-search-input" type="search" autocomplete="off"
-                     class="benchmark-search-input"
-                     data-i18n-placeholder="Search benchmarks, tasks, domains…"
-                     placeholder="Search benchmarks, tasks, domains…" />
-              <p id="benchmark-search-status" class="benchmark-search-status"></p>
-              <div id="benchmark-search-results"></div>
-              <!-- "Most reported" alone invited the reading that AIME 2025 with 115
-                   crawled scores should outrank GPQA Diamond with 26 model cards
-                   (issue #269). They are different measures: this list ranks by
-                   how many curated model cards report a benchmark, which is the
-                   reading this registry is built to make, and a crawled score
-                   count answers a different question entirely. -->
-              <div class="benchmark-example-heading">
-                <p class="benchmark-example-lead" data-i18n="Jump to a benchmark">Jump to a benchmark</p>
-                <span id="benchmark-example-info"></span>
-              </div>
-              <div id="benchmark-shortlist" class="benchmark-shortlist"></div>
-            </div>
-          </aside>
-
-          <section class="frontier-panel" id="adoption-frontier" aria-labelledby="frontier-heading">
-            <div class="frontier-heading-row">
-              <div>
-                <p class="eyebrow" id="frontier-eyebrow" data-i18n="Scores over time">Scores over time</p>
-                <!-- The title owns its own (i): the provenance note used to sit on a
-                     second heading inside the scores block, which repeated the source
-                     name already shown in the badge and pushed the chart down the
-                     page (issue #298). -->
-                <div class="frontier-title-row">
-                  <h2 id="frontier-heading" data-i18n="Benchmark reported scores over time">Benchmark reported scores over time</h2>
-                  <span id="frontier-heading-info"></span>
-                  <details class="frontier-explainer-sub" id="frontier-explainer-sub">
-                    <summary data-i18n="How to read this chart">How to read this chart</summary>
-                    <p class="section-note" data-i18n="frontier.explainer.sub">
-                      Every value that could be read verbatim from a cited document, placed at the date
-                      that document was published rather than at any evaluation date. The line directly
-                      links actual observations that set a new reported record among the values shown; it
-                      neither holds a score between reports nor extends past the final record. Test versions
-                      and run conditions can differ, so this is a reported-record path, not a like-for-like
-                      trend. When no newer number could be read, the gap is marked rather than drawn through.
-                      Whether a benchmark has saturated stays a reading you make, not a score this panel prints.
-                    </p>
-                  </details>
-                </div>
-                <p class="frontier-subline" id="frontier-subline" hidden></p>
-              </div>
-              <div class="frontier-controls">
-                <span class="frontier-stage" id="frontier-stage"></span>
-                <label class="frontier-picker">
-                  All tracked benchmarks
-                  <select id="frontier-benchmark" name="lfrontier"></select>
-                </label>
-              </div>
-            </div>
-            <div class="frontier-external" id="frontier-external" hidden></div>
-            <div class="frontier-chart" id="frontier-chart"></div>
-            <!-- Legend below the figure it explains: above it, it pushed the
-                 chart down to explain marks the reader had not seen yet. -->
-            <div class="frontier-legend" id="frontier-legend" aria-label="Chart legend"></div>
-            <div class="frontier-org-key" id="frontier-org-key" aria-label="Reporting organization color key"></div>
-            <div class="score-readout" id="frontier-score-readout"></div>
-            <div class="frontier-evidence" id="frontier-evidence">
-              <aside class="frontier-context" aria-labelledby="frontier-task-heading">
-                <div id="frontier-task-preview"></div>
-                <details class="pareto-readiness">
-                  <summary data-i18n="pareto.readiness.summary">What would it take to chart best score against lowest cost?</summary>
-                  <p data-i18n="pareto.readiness.note1">
-                    Two scores can only be compared when each one records which version of
-                    the test it used, which slice of it, whether a high number is good or bad,
-                    which model, what software ran it, how much thinking time it was given,
-                    what it cost, how long it took, when it was published, and where the number
-                    came from. The test and the way it was run have to match; the model, cost,
-                    time and date are free to differ, because those are what the chart compares.
-                    This site records that a model card mentioned a benchmark. It does not yet
-                    record those measurements.
-                  </p>
-                  <p data-i18n="pareto.readiness.note2">
-                    Once they exist, this chart could plot cost or speed against score, and draw
-                    a line through only the results that nothing else beats on both at once. A
-                    date slider would then show how that line moved over time.
-                  </p>
-                </details>
-              </aside>
-            </div>
-          </section>
-        </div>
 
         <div class="evidence-strip" id="leaderboard-insights" aria-label="Registry overview" data-i18n-aria="Registry overview"></div>
 
         <details class="findings-panel" id="benchmark-findings" aria-labelledby="findings-heading" hidden>
           <summary class="section-title findings-summary">
             <span>
-              <span class="eyebrow" data-i18n="What the two layers say">What the two layers say</span>
+              <span class="eyebrow" data-i18n="What the evidence shows">What the evidence shows</span>
               <strong id="findings-heading" data-i18n="Stated findings">Stated findings</strong>
             </span>
             <span id="findings-count" aria-live="polite"></span>
@@ -610,15 +576,11 @@
           <p class="section-note findings-limits" id="findings-limits"></p>
         </details>
 
-        <!-- The ranking leads the page it is named after (issue #256). Five
-             lines, one measure: how many curated model cards report each
-             benchmark. Everything that explains how the number was computed
-             stays below, and the full 80-row table with its filters is the
-             expandable underneath. -->
+        <!-- Adoption counts are a separate, cumulative evidence view. -->
         <details class="trend-panel adoption-table" id="adoption-table">
           <summary class="section-title adoption-table-summary">
             <span>
-              <strong id="leaderboard-table-heading">Benchmarks by model card adoption</strong>
+              <strong id="leaderboard-table-heading">Benchmarks by source documents</strong>
             </span>
             <span id="leaderboard-count" aria-live="polite"></span>
           </summary>
@@ -649,10 +611,8 @@
             </button>
           </form>
           <p class="section-note" data-i18n="leaderboard.filters.note">
-            Each model card counts once per benchmark. A card reporting AIME in four
-            configurations counts the same as a card reporting it once, so a long appendix
-            cannot outweigh a different vendor. Organizations breaks the tie: the same count
-            from six vendors is a shared standard, from one vendor a house style.
+            Each source document counts once per benchmark record. Repeated scores or
+            mentions in the same document add no citations. This table covers all sources.
           </p>
           <div class="leaderboard-list" id="leaderboard-list"></div>
           <div class="leaderboard-list-actions">
@@ -670,15 +630,14 @@
           <summary class="ledger-summary">
             <span>
               <span class="eyebrow" data-i18n="Audit the counts">Audit the counts</span>
-              <strong id="leaderboard-cards-heading" data-i18n="Model cards in the registry">Model cards in the registry</strong>
+              <strong id="leaderboard-cards-heading" data-i18n="Source documents in the catalog">Source documents in the catalog</strong>
             </span>
             <span id="leaderboard-cards-count"></span>
           </summary>
           <div class="ledger-body">
             <p class="section-note" data-i18n="leaderboard.ledger.note">
-              The curated source list this ranking is computed from. Expand any card to see
-              every benchmark it reports, grouped the way the source document groups them, so
-              our data can be checked line by line against the original.
+              Source documents from every registry. Expand a document to inspect
+              the benchmarks it records and open the original evidence.
             </p>
             <div class="leaderboard-list" id="leaderboard-cards"></div>
           </div>
@@ -729,13 +688,116 @@
         </details>
       </section>
 
+      <section class="view" id="saturation-view" aria-labelledby="saturation-heading" hidden>
+        <div class="score-browse-header">
+          <h1 id="saturation-heading" data-i18n="Saturation">Saturation</h1>
+          <label class="score-filter" for="saturation-score-filter">
+            <span data-i18n="Show benchmarks with highest reported score below:">Show benchmarks with highest reported score below:</span>
+            <input id="saturation-score-filter" name="lscore" type="range" min="10" max="100" step="10" value="70" list="score-filter-steps" data-score-filter aria-controls="benchmark-search-results frontier-benchmark">
+            <output id="saturation-score-value" for="saturation-score-filter">70</output>
+          </label>
+        </div>
+
+        <div class="benchmark-workbench">
+          <!-- A tool region, not a content section. The examples used to be a
+               titled block with two subheadings and eight cards, which outranked
+               the search box it was meant to support; they are now one line of
+               chips for a reader who has nothing in mind to type. -->
+          <aside class="benchmark-navigator" aria-labelledby="benchmark-search-heading">
+            <div class="benchmark-search">
+              <h2 class="benchmark-search-label" id="benchmark-search-heading">
+                <label for="benchmark-search-input"
+                       data-i18n="Browse all benchmarks">Browse all benchmarks</label>
+              </h2>
+              <input id="benchmark-search-input" type="search" autocomplete="off"
+                     class="benchmark-search-input"
+                     data-i18n-placeholder="Search benchmarks, tasks, domains…"
+                     placeholder="Search benchmarks, tasks, domains…" />
+              <p id="benchmark-search-status" class="benchmark-search-status"></p>
+              <div id="benchmark-search-results"></div>
+              <button id="benchmark-search-more" class="clear-button" type="button" data-i18n="Show more" hidden>Show more</button>
+              <div class="benchmark-example-heading" hidden>
+                <p class="benchmark-example-lead" data-i18n="Jump to a benchmark">Jump to a benchmark</p>
+                <span id="benchmark-example-info"></span>
+              </div>
+              <div id="benchmark-shortlist" class="benchmark-shortlist" hidden></div>
+            </div>
+          </aside>
+
+          <section class="frontier-panel" id="adoption-frontier" aria-labelledby="frontier-heading">
+            <div class="frontier-heading-row">
+              <div>
+                <p class="eyebrow" id="frontier-eyebrow" data-i18n="Scores over time">Scores over time</p>
+                <!-- The title owns its own (i): the provenance note used to sit on a
+                     second heading inside the scores block, which repeated the source
+                     name already shown in the badge and pushed the chart down the
+                     page (issue #298). -->
+                <div class="frontier-title-row">
+                  <h2 id="frontier-heading" data-i18n="Benchmark reported scores over time">Benchmark reported scores over time</h2>
+                  <span id="frontier-heading-info"></span>
+                  <details class="frontier-explainer-sub" id="frontier-explainer-sub">
+                    <summary data-i18n="How to read this chart">How to read this chart</summary>
+                    <p class="section-note" data-i18n="frontier.explainer.sub">
+                      Every value that could be read verbatim from a cited document, placed at the date
+                      that document was published rather than at any evaluation date. The line directly
+                      links actual observations that set a new reported record among the values shown; it
+                      neither holds a score between reports nor extends past the final record. Test versions
+                      and run conditions can differ, so this is a reported-record path, not a like-for-like
+                      trend. When no newer number could be read, the gap is marked rather than drawn through.
+                      Whether a benchmark has saturated stays a reading you make, not a score this panel prints.
+                    </p>
+                  </details>
+                </div>
+                <p class="frontier-subline" id="frontier-subline" hidden></p>
+              </div>
+              <div class="frontier-controls">
+                <span class="frontier-stage" id="frontier-stage"></span>
+                <label class="frontier-picker">
+                  All tracked benchmarks
+                  <select id="frontier-benchmark" name="lfrontier"></select>
+                </label>
+              </div>
+            </div>
+            <p id="frontier-filter-note" class="section-note" role="status" hidden></p>
+            <p id="frontier-highest-score" class="section-note" hidden></p>
+            <div class="frontier-catalog" id="frontier-catalog" hidden></div>
+            <div class="frontier-chart" id="frontier-chart"></div>
+            <!-- Legend below the figure it explains: above it, it pushed the
+                 chart down to explain marks the reader had not seen yet. -->
+            <div class="frontier-legend" id="frontier-legend" aria-label="Chart legend"></div>
+            <div class="frontier-org-key" id="frontier-org-key" aria-label="Reporting organization color key"></div>
+            <div class="score-readout" id="frontier-score-readout"></div>
+            <div class="frontier-evidence" id="frontier-evidence">
+              <aside class="frontier-context" aria-labelledby="frontier-task-heading">
+                <div id="frontier-task-preview"></div>
+                <details class="pareto-readiness">
+                  <summary data-i18n="pareto.readiness.summary">What would it take to chart best score against lowest cost?</summary>
+                  <p data-i18n="pareto.readiness.note1">
+                    Two scores can only be compared when each one records which version of
+                    the test it used, which slice of it, whether a high number is good or bad,
+                    which model, what software ran it, how much thinking time it was given,
+                    what it cost, how long it took, when it was published, and where the number
+                    came from. The test and the way it was run have to match; the model, cost,
+                    time and date are free to differ, because those are what the chart compares.
+                    This site records that a model card mentioned a benchmark. It does not yet
+                    record those measurements.
+                  </p>
+                  <p data-i18n="pareto.readiness.note2">
+                    Once they exist, this chart could plot cost or speed against score, and draw
+                    a line through only the results that nothing else beats on both at once. A
+                    date slider would then show how that line moved over time.
+                  </p>
+                </details>
+              </aside>
+            </div>
+          </section>
+        </div>
+
+      </section>
+
       <section class="view" id="trends-view" aria-labelledby="trends-heading" hidden>
         <header class="view-heading">
-          <div>
-            <p class="eyebrow" data-i18n="Recent activity">Recent activity</p>
-            <h1 id="trends-heading" data-i18n="Signals over time">Signals over time</h1>
-          </div>
-          <p class="heading-note" data-i18n="trends.heading.note">Counts describe discovery volume, not scientific quality.</p>
+          <h1 id="trends-heading" data-i18n="Trend">Trend</h1>
         </header>
 
         <div class="domain-panel">
@@ -749,17 +811,10 @@
         <div class="trend-panel">
           <div class="section-title">
             <h2 data-i18n="trends.daily.title">Daily evidence and attention volume</h2>
-            <div class="legend" id="trend-legend" aria-label="Category legend"></div>
           </div>
-          <p class="section-note" data-i18n="trends.daily.note">
-            Category tags overlap. Each bar is an independent count, not a part of a stacked total.
-          </p>
           <label class="trend-filter">
             <input type="checkbox" id="trend-released-only" />
             <span data-i18n="trends.releaseOnly">Releases only</span>
-            <span class="heading-note" data-i18n="trends.releaseOnly.note">
-              Excludes records re-announced as an update to something already surfaced.
-            </span>
           </label>
           <p class="trend-message" id="trend-message" role="status"></p>
           <div class="trend-chart-frame">
@@ -767,6 +822,14 @@
                  presentational and hide their tooltip description. -->
             <div class="trend-chart" id="trend-chart" role="group" aria-label="Daily category counts"></div>
             <div class="day-tooltip" id="day-tooltip" role="tooltip" aria-hidden="true" hidden></div>
+          </div>
+          <div class="figure-caption">
+            <div class="legend" id="trend-legend" aria-label="Category legend"></div>
+            <details class="figure-note">
+              <summary class="info-disclosure-toggle" aria-label="Chart notes" data-i18n-aria="Chart notes"><span aria-hidden="true">i</span></summary>
+              <p class="section-note" data-i18n="trends.daily.note">Category tags overlap. Each bar is an independent count, not a part of a stacked total.</p>
+              <p class="section-note" data-i18n="trends.releaseOnly.note">Releases only excludes records re-announced as an update to something already surfaced.</p>
+            </details>
           </div>
         </div>
 

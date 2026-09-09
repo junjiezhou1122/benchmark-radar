@@ -159,6 +159,18 @@ def test_catalog_search_is_deterministic_and_explains_matches(tmp_path: Path) ->
     assert result["data"]["catalog_count"] == 3
 
 
+@pytest.mark.parametrize("source", ["model_reports", "llm_stats", "artificial_analysis"])
+def test_registered_aliases_are_searchable_for_every_source(tmp_path: Path, source: str) -> None:
+    paths = _catalog(tmp_path)
+    payload = json.loads(paths.index.read_text())
+    payload["benchmarks"][0].update(source=source, aliases=["Exact Registered Alias"])
+    paths.index.write_text(json.dumps(payload))
+    result = QueryService(paths).search("Exact Registered Alias", scope="catalog")
+    assert result["search_status"] == "full_matches_found"
+    assert result["results"][0]["key"] == "opencompass:agent-workbench"
+    assert "name" in result["results"][0]["match"]["matched_fields"]
+
+
 def test_search_returns_partial_candidates_with_evidence_for_agent_judgment(
     tmp_path: Path,
 ) -> None:

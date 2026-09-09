@@ -140,7 +140,7 @@ def test_every_brand_path_is_well_formed_and_inside_the_viewbox():
 
 def test_the_organization_table_is_keyed_by_canonical_names_only():
     """A key the data never produces is a mark nothing can draw (#261)."""
-    from benchmark_radar.external_catalog import CANONICAL_ORGANIZATIONS
+    from benchmark_radar.catalog import CANONICAL_ORGANIZATIONS
 
     keys = set(_tables()["ORGANIZATION_ICONS"])
     assert "Google DeepMind" not in keys, "renamed to Google"
@@ -203,31 +203,30 @@ def test_every_model_that_draws_a_point_has_a_card_whichever_layer_it_came_from(
     # Layers live in models.json, the one structure that answers which models
     # exist; the logo registry only freezes what each is called in review.
     doc = json.loads(Path("site/data/models.json").read_text(encoding="utf-8"))
-    layers = {f"{m['model']}␟{m['organization']}": m["layers"] for m in doc["models"]}
+    sources = {f"{m['model']}␟{m['organization']}": m["provenance_sources"] for m in doc["models"]}
 
-    assert set(models) == set(layers), "every model must declare its layer"
-    assert {name for value in layers.values() for name in value} == {"curated", "crawled"}
+    assert set(models) == set(sources), "every model must declare its sources"
+    assert {name for value in sources.values() for name in value} == {
+        "model_reports",
+        "llm_stats",
+        "artificial_analysis",
+    }
     # The case that was reported: Xiaomi ships MiMo through the crawled layer.
     assert any(k.endswith("␟Xiaomi") for k in models), "Xiaomi has no model card"
     # And the curated side is still there rather than displaced.
     assert any("Gemini" in k for k in models), "Gemini has no model card"
-    assert sum(1 for v in layers.values() if "crawled" in v) > 100
+    assert sum(1 for value in sources.values() if "artificial_analysis" in value) > 100
 
 
-def test_the_two_layers_stay_labelled_rather_than_merged():
-    """Same mark, different evidence.
-
-    A crawled row carries no protocol and no evaluation date. Showing it
-    beside a curated card without saying which is which would make them look
-    equivalent, which is the one thing this project's data model refuses to do.
-    """
+def test_every_source_uses_the_same_provenance_chips_and_filters():
     logos = Path("site/assets/logos.js").read_text(encoding="utf-8")
     html = Path("site/logos.html").read_text(encoding="utf-8")
 
     # Layers come from models.json now -- the shared registry, not a list the
     # page assembles for itself.
     assert 'fetch("data/models.json")' in logos
-    assert "record.layers" in logos
-    assert "chip-layer-${name}" in logos
-    assert 'data-filter="crawled"' in html
-    assert 'data-filter="curated"' in html
+    assert "record.provenance_sources" in logos
+    assert "chip-source-${name}" in logos
+    for name in ("model_reports", "llm_stats", "artificial_analysis"):
+        assert f'data-filter="{name}"' in html
+    assert "not a curated card" not in html

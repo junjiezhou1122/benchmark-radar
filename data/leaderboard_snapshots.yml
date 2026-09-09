@@ -37,7 +37,7 @@
 #
 # `opencompass_round2/` is a JSONL enrichment pass over a snapshot already
 # listed here, not a leaderboard crawl of its own, so it has no entry and is
-# read by `external_opencompass.py`.
+# read by `catalog_opencompass.py`.
 
 schema_version: 1
 

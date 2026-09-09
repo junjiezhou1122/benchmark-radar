@@ -195,84 +195,49 @@ def test_lower_is_better_headroom_is_described_against_zero():
     assert "points to zero, the floor of this metric" in script
 
 
-def test_only_a_benchmark_with_a_readable_score_can_be_selected():
-    # The panel is the score track now, so a benchmark with no readable value has
-    # nothing to draw. It is filtered out of the picker rather than opening an
-    # empty chart, which would read as "scores went to zero here". 20 of the 79
-    # adopted registry benchmarks take this path.
+def test_the_picker_uses_the_full_population_cutoff_contract():
     script = source("site/assets/app.js")
-    render = script.split("function renderAdoptionFrontier(board)", 1)[1].split("\nfunction ", 1)[0]
-
-    assert (
-        "const scored = (board.entries || []).filter((entry) => scoreRecord(entry.benchmark_id));"
-        in render
-    )
-    # The <select>, the resolution of a ?lfrontier= permalink, and the empty
-    # state all read from `scored`, so none of them can surface an unscored one.
-    assert "renderFrontierPicker(scored, state.lfrontier);" in render
-    # And the picker itself applies the same rule to the crawled layer.
+    membership = script.split("function matchesScoreFilter(summary)", 1)[1].split("\n}", 1)[0]
+    # Unknown scores remain visible under principle.md. The Node harness tests
+    # their membership together with strict numeric boundaries and all sources.
+    assert "matchesScoreCutoff(summary, state.lscore)" in membership
     picker = script.split("function frontierPickerGroups(scored)", 1)[1].split("\n}", 1)[0]
-    assert "record.score_count > 0" in picker
-    assert "scored.find((candidate) => candidate.benchmark_id === state.lfrontier)" in render
-    assert "if (!scored.length || !defaultEntry)" in render
-    # The default selection is drawn from the same set.
-    default_entry = script.split("function frontierDefaultEntry(board)", 1)[1].split("\n}", 1)[0]
-    assert "scoreRecord(entry.benchmark_id)" in default_entry
+    assert "scored.map((row)" in picker
+    assert "renderFrontierPicker(scored, state.lfrontier);" in script
 
 
 def test_the_picker_and_the_search_both_cover_both_layers():
-    # The two layers used to have opposite blind spots: the <select> held only
-    # the 59 curated benchmarks, while the search box read only the crawled
-    # index, so typing "GPQA" surfaced crawled rows but not the curated GPQA
-    # Diamond record the panel actually charts. Both entry points now reach
-    # both layers.
     script = source("site/assets/app.js")
-
-    picker = script.split("function frontierPickerGroups(scored)", 1)[1].split("\n}", 1)[0]
-    assert 't("Curated registry")' in picker
-    assert "state.benchmarkIndex || []" in picker
-    # Grouped, never interleaved: only the curated layer carries an instrument,
-    # a protocol and a publication date, so a reader must be able to tell which
-    # layer a row is from before selecting it.
-    assert '"optgroup"' in script
-    assert "externalSourceMeta(source).name" in picker
-
+    rows = script.split("function scoreBrowseRows(", 1)[1].split("\n}", 1)[0]
+    assert "board?.entries" not in rows
+    assert "state.benchmarkIndex" in rows
+    assert "scorePopulation(" in rows
+    assert "a.source.localeCompare" not in rows
     render = script.split("function renderBenchmarkSearch()", 1)[1].split("\nfunction ", 1)[0]
-    assert "searchCuratedEntries(board, state.benchmarkQuery)" in render
-    assert "searchBenchmarkIndex(records, state.benchmarkQuery)" in render
-    # Curated results come first, and the cap spans both lists so a common name
-    # cannot push every curated hit off the end.
-    assert render.index("shownCurated") < render.index("shownExternal")
-    assert "BENCHMARK_SEARCH_LIMIT - shownCurated.length" in render
+    assert "saturationRows()" in render
+    query = script.split("function benchmarkQueryIds()", 1)[1].split("\n}", 1)[0]
+    assert "searchCuratedEntries" not in query
+    assert "searchBenchmarkIndex(state.benchmarkIndex || [], state.benchmarkQuery)" in query
+    assert "rows.slice(0, state.benchmarkVisibleLimit)" in render
 
 
-def test_curated_search_matches_aliases_and_ranks_the_exact_one_first():
-    # The registry records aliases so a reader need not know the canonical
-    # spelling. It also records `HLEAutomationBench`, which made AutomationBench
-    # a prefix hit for "HLE" and, ranked on entry-name length, beat the record
-    # literally named HLE. The matched alias is what gets ranked.
+def test_catalog_search_matches_aliases_without_source_preference():
     script = source("site/assets/app.js")
-    search = script.split("function searchCuratedEntries(board, query", 1)[1].split("\n}", 1)[0]
-
-    assert "entry.aliases || []" in search
-    assert "name === needle ? 0 : name.startsWith(needle) ? 1 : 2" in search
-    # Only scored benchmarks are offered, same rule as the picker.
-    # The picker drives a chart, so it still skips entries with no score
-    # record. Issue #245 added an opt-in for callers asking only "is this
-    # tracked?"; the default must stay off so this panel is unaffected.
-    assert "if (!includeUnscored && !scoreRecord(entry.benchmark_id)) continue;" in search
-    assert "includeUnscored = false" in search
+    search = script.split("function searchBenchmarkIndex(records, query)", 1)[1].split("\n}", 1)[0]
+    assert "record.aliases || []" in search
+    assert "names.includes(needle) ? 0" in search
+    assert "record.source" not in search
+    assert "includeUnscored" not in search
 
 
-def test_search_still_works_when_the_crawled_index_is_unavailable():
-    # The curated layer lives in the dashboard payload, which is already loaded,
-    # so a failed or pending index fetch must degrade only the crawled half
-    # rather than blanking search entirely.
+def test_missing_catalog_fails_without_a_preferred_source_fallback():
     script = source("site/assets/app.js")
     render = script.split("function renderBenchmarkSearch()", 1)[1].split("\nfunction ", 1)[0]
-
-    assert "if (!records && !curatedCount)" in render
-    assert "records\n    ? searchBenchmarkIndex(records, state.benchmarkQuery)\n    : []" in render
+    assert "const rows = saturationRows();" in render
+    query = script.split("function benchmarkQueryIds()", 1)[1].split("\n}", 1)[0]
+    assert "state.benchmarkIndex || []" in query
+    assert "const failed = state.benchmarkIndexLoaded && !state.benchmarkIndex" in render
+    assert "The benchmark catalog could not be loaded." in render
 
 
 def test_the_navigator_is_a_tool_region_not_a_content_section():
@@ -292,7 +257,7 @@ def test_the_navigator_is_a_tool_region_not_a_content_section():
         assert gone not in navigator, f"{gone} still occupies the navigator"
     # The search label is the only heading, so it is the panel's one anchor.
     assert navigator.count("<h2") == 1
-    assert 'data-i18n="Search every benchmark"' in navigator
+    assert 'data-i18n="Browse all benchmarks"' in navigator
     # And the examples label is not `.eyebrow`, whose accent blue would plant a
     # second anchor competing with the field.
     assert 'class="eyebrow"' not in navigator
@@ -316,7 +281,7 @@ def test_the_search_field_carries_the_panel_weight_through_affordance():
 
     field = styles.split(".benchmark-search-input {", 1)[1].split("}", 1)[0]
     assert "border: 2px solid var(--ink)" in field
-    assert "background: white" in field
+    assert "background-color: white" in field
 
     label = styles.split(".benchmark-search-label {", 1)[1].split("}", 1)[0]
     assert "font-size: 0.78rem" in label, "the label must not grow"
@@ -326,29 +291,13 @@ def test_the_search_field_carries_the_panel_weight_through_affordance():
     assert "opacity: 0.75" in status
 
 
-def test_the_examples_are_ranked_by_how_many_cards_report_them():
-    # No editorial list and no computed subheadings: "most reported" is both the
-    # rank and the reason a name is worth trying, which is the one reading this
-    # registry exists to make. Curated only, because `card_count` is a curated
-    # fact; the crawled layer is reached from the field and the picker instead.
+def test_shortcuts_use_the_same_score_ranking_as_the_picker():
     script = source("site/assets/app.js")
-    styles = source("site/assets/styles.css")
-
     navigator = script.split("function renderBenchmarkNavigator(board)", 1)[1].split(
         "\nfunction ", 1
     )[0]
-    assert "b.card_count - a.card_count || a.name.localeCompare(b.name)" in navigator
-    assert "entry.card_count > 0 && scoreRecord(entry.benchmark_id)" in navigator
-    assert "BENCHMARK_EXAMPLE_LIMIT" in navigator
-    assert 'metricLabel(entry.card_count, "model card")' in navigator
-    # Every example is on the page: an inner scroller hid ranks 8-20 behind a
-    # scrollbar that read as the end of the list. The sticky aside is what gets
-    # bounded to the viewport instead.
-    shortlist = styles.split(".benchmark-shortlist {", 1)[1].split("}", 1)[0]
-    assert "max-height" not in shortlist
-    aside = styles.split(".benchmark-navigator {", 1)[1].split("}", 1)[0]
-    assert "max-height: calc(100vh - 2rem)" in aside
-    assert "overflow-y: auto" in aside
+    assert "saturationRows().slice(0, 3).map(scoreBrowseResultRow)" in navigator
+    assert "card_count" not in navigator
 
 
 def test_the_navigator_still_starts_the_crawled_index_fetch():
@@ -367,72 +316,36 @@ def test_the_navigator_still_starts_the_crawled_index_fetch():
 
 
 def test_the_search_reach_line_counts_only_what_it_can_return():
-    # A count that advertised records the box cannot return would be a boast
-    # rather than a statement of reach, so it is derived from the loaded layers
-    # and drops when the crawled index fails. "Sources" counts those layers, not
-    # the radar's discovery connectors, which contribute no benchmark here.
     script = source("site/assets/app.js")
     render = script.split("function renderBenchmarkSearch()", 1)[1].split("\nfunction ", 1)[0]
-
-    assert 't("{n} benchmarks")' in render
-    assert 'metricLabel(sources.size, "source")' in render
-    assert "const sources = new Set((records || []).map((record) => record.source));" in render
-    assert 'if (curatedCount) sources.add("curated");' in render
-    # No literal totals anywhere: the numbers are computed, never written down.
-    assert "4,861" not in script and "4861" not in script
+    assert 't("{shown} of {total} matches")' in render
+    assert "shown.length.toLocaleString()" in render
+    assert "rows.length.toLocaleString()" in render
+    assert "Still checking the benchmark registry" in render
 
 
 def test_search_matches_the_fields_the_placeholder_promises():
-    # The box says "benchmarks, tasks, domains". Name and alias cover the first,
-    # and `domain` covers the rest: the task shape rendered in the panel is
-    # selected by domain, so matching it is what makes "agent" or "science"
-    # return a set instead of nothing. The crawled catalog carries no domain, so
-    # publisher and modality are the equivalent there.
     script = source("site/assets/app.js")
-
-    curated = script.split("function searchCuratedEntries(board, query", 1)[1].split("\n}", 1)[0]
-    assert "foldName(entry.domain).includes(needle)" in curated
-    # A field hit is a weaker answer than a name hit and ranks below every one.
-    assert "const best = hits.length ? Math.min(...hits.map(tier)) : 3;" in curated
-
-    external = script.split("function searchBenchmarkIndex(records, query)", 1)[1].split("\n}", 1)[
-        0
-    ]
-    assert "foldName(record.publisher).includes(needle)" in external
-    assert "foldName(record.modality).includes(needle)" in external
+    search = script.split("function searchBenchmarkIndex(records, query)", 1)[1].split("\n}", 1)[0]
+    assert "record.categories || []" in search
+    assert "foldName(record.publisher).includes(needle)" in search
+    assert "foldName(record.modality).includes(needle)" in search
 
 
-def test_a_link_to_an_unscored_benchmark_says_so_instead_of_swapping():
-    # These 20 benchmarks resolved and drew an adoption staircase before this
-    # change, so links to them are already out there. Falling through to the
-    # default entry would show a different benchmark under the reader's own URL
-    # with nothing to say so, which is a worse failure than an explicit refusal.
+def test_a_link_to_an_unscored_benchmark_uses_the_full_catalog():
     script = source("site/assets/app.js")
-    render = script.split("function renderAdoptionFrontier(board)", 1)[1].split("\nfunction ", 1)[0]
-
-    assert "const unscoredEntry = state.lfrontier" in render
-    assert "&& !scoreRecord(candidate.benchmark_id)" in render
-    assert "so there is no track to draw" in render
-    # It resolves before the default-entry fallback, or the fallback wins.
-    fallback = "state.lfrontier = defaultEntry.benchmark_id"
-    assert render.index("const unscoredEntry") < render.index(fallback)
-    # And the reader's URL is left alone: the panel names the benchmark they
-    # asked for rather than rewriting the address to one they did not.
-    assert "heading: unscoredEntry.name" in render
+    render = script.split("function renderAdoptionFrontier(board)", 1)[1].split("\n// ---", 1)[0]
+    assert "state.benchmarkIndex.find((row) => row.slug === state.lfrontier)" in render
+    assert "renderCatalogBenchmark(board, scored, record)" in render
+    assert "scoreRecord(" not in render
 
 
-def test_no_route_into_the_panel_can_land_on_an_unscored_benchmark():
-    # The picker is not the only way in: a leaderboard row and a finding card
-    # both jump here. Either would snap to the default entry for an unscored
-    # benchmark and lie about what it opened, so neither offers the jump.
+def test_document_rows_can_open_details_for_scored_and_unscored_records():
     script = source("site/assets/app.js")
-
-    row = script.split("function leaderboardRow(entry)", 1)[1]
-    assert "const frontierButton = scoreRecord(entry.benchmark_id)" in row
-
-    finding = script.split("function findingCard(finding, board)", 1)[1]
-    guard = "entry.benchmark_id === finding.benchmark_id && scoreRecord(entry.benchmark_id)"
-    assert guard in finding
+    row = script.split("function leaderboardRow(entry)", 1)[1].split("\nfunction ", 1)[0]
+    assert 'const frontierButton = element("button"' in row
+    assert "scoreRecord(" not in row
+    assert 't("View benchmark details ↑")' in row
 
 
 def test_the_time_range_covers_the_score_track_at_both_ends():
@@ -448,31 +361,13 @@ def test_the_time_range_covers_the_score_track_at_both_ends():
     assert "record.last_reported_at" in range_block
 
 
-def test_scores_render_whether_or_not_any_mention_carries_a_date():
-    # The registry permits a card without `published`. When the adoption band led
-    # the panel, a benchmark with no dated mention was routed through a separate
-    # early return and a second entry point into the chart. The score track needs
-    # no dated mention at all: its own axis is bounded by the score record, and
-    # `lastMention` is consulted only to bound the reading-gap marker.
+def test_scores_render_from_observation_dates_without_requiring_dated_citations():
     script = source("site/assets/app.js")
-
-    assert "if (!events.length) {" not in script
-    render = script.split("function renderAdoptionFrontier(board)", 1)[1].split("\nfunction ", 1)[0]
-    paint = (
-        'replaceChildren(byId("frontier-chart"), '
-        "[scoreTrackChart(entry, board), frontierTooltip()])"
-    )
-    assert paint in render
-
-    chart = script.split("function scoreTrackChart(", 1)[1].split(
-        "\nfunction clearAdoptionFrontier", 1
-    )[0]
-    assert "const startText = record.first_reported_at;" in chart
-    # The only adoption field the renderer touches is the mention date, and only
-    # to bound the reading gap. It reads no advance flag and no running count.
-    assert "const lastMention = frontierEvents(entry).at(-1)?.published;" in chart
-    assert ".advances" not in chart
-    assert "organizationCount" not in chart
+    chart = script.split("function catalogScoreChart(", 1)[1].split("\nfunction ", 1)[0]
+    assert "catalogPlottedRows(payload)" in chart
+    assert "row.reported_date" in chart
+    assert "frontierEvents(" not in chart
+    assert "adopters" not in chart
 
 
 def test_there_is_exactly_one_renderer_per_score_layer():
@@ -483,13 +378,13 @@ def test_there_is_exactly_one_renderer_per_score_layer():
     #
     # The crawled layer has its own single renderer rather than a variant of this
     # one, and that separation is the point: `scoreTrackChart` owns the time axis
-    # and the join rule, `externalScoreChart` owns a rank axis and joins nothing.
+    # and the join rule, `catalogScoreChart` owns a rank axis and joins nothing.
     # One function serving both would have to carry a mode flag deciding whether
     # a date exists, which is exactly how a crawled row ends up on a chronology.
     script = source("site/assets/app.js")
 
     assert script.count("function scoreTrackChart(") == 1
-    assert script.count("function externalScoreChart(") == 1
+    assert script.count("function catalogScoreChart(") == 1
     assert "function scoreOnlyChart(" not in script
     assert "function adoptionFrontierChart(" not in script
     # And no permanently-false flag left behind in its place: a switch nobody can
@@ -595,10 +490,8 @@ def test_the_axis_and_header_name_the_score_reading():
     # "Scores over time" above a heading reading "<name> reported scores over
     # time". What must not drift is that a single reading is never presented as
     # a track over time.
-    assert 'byId("frontier-heading").textContent = entry.name;' in script
-    assert "spansTime(record)" in script
-    assert 't("Scores over time")' in script
-    assert '"charted score"' in script
+    assert "heading: record.name" in script
+    assert "subline: catalogSubline(record, meta)" in script
     assert "adoption trajectory" not in script
     # The counts line and the reporting-stage sentence are gone from the markup,
     # so nothing can repopulate them.
@@ -741,8 +634,7 @@ def test_a_finding_can_move_the_chart_to_the_benchmark_it_is_about():
         "\nfunction renderBenchmarkFindings", 1
     )[0]
 
-    assert "selectFrontier(target.benchmark_id)" in card
-    assert "renderAdoptionFrontier(board)" in card
+    assert "openSaturation(target.benchmark_id)" in card
     # Corpus-scope findings name no benchmark, so there is nothing to focus.
     assert "finding.benchmark_id" in card
 
@@ -807,7 +699,7 @@ def test_issue_312_the_saturation_view_reveals_left_to_right():
     # The crawled layer's points share the same reveal: one kind of mark gets
     # one entrance, so selecting a crawled benchmark does not fade everything
     # in at once while the curated one staggers.
-    external = script.split("function externalScoreChart(", 1)[1].split("\nfunction ", 1)[0]
+    external = script.split("function catalogScoreChart(", 1)[1].split("\nfunction ", 1)[0]
     assert "frontierPointRevealDelay" in external
 
     # The line is exposed by an x-axis clip, not by path distance. A dash takes
@@ -819,7 +711,7 @@ def test_issue_312_the_saturation_view_reveals_left_to_right():
 
     # A shell or empty state replaces the chart on screen, so a running
     # completion timer may not spend the reveal it can no longer show.
-    shell = script.split("function renderExternalShell(", 1)[1].split("\nfunction ", 1)[0]
+    shell = script.split("function renderCatalogShell(", 1)[1].split("\nfunction ", 1)[0]
     assert "drawnFrontierEntranceKey = null;" in shell
     clear_fn = script.split("function clearAdoptionFrontier(message)", 1)[1].split("\n}", 1)[0]
     assert "drawnFrontierEntranceKey = null;" in clear_fn
@@ -842,7 +734,7 @@ def test_issue_312_the_saturation_view_reveals_left_to_right():
     # crawled catalog settling mid-reveal replays rather than cancels it.
     assert "function frontierShouldAnimate(key)" in script
     gate = script.split("function frontierShouldAnimate(key)", 1)[1].split("\n}", 1)[0]
-    assert 'if (state.view !== "leaderboard") return false;' in gate
+    assert 'if (state.view !== "saturation") return false;' in gate
     assert "completedFrontierEntranceKey === key" in gate
     # And the completion callback rechecks visibility and the drawn selection:
     # leaving mid-reveal -- to another view, another benchmark, or a hidden
@@ -850,22 +742,21 @@ def test_issue_312_the_saturation_view_reveals_left_to_right():
     assert "const spendOrDefer = () => {" in gate
     assert 'document.visibilityState !== "visible"' in gate
     assert "drawnFrontierEntranceKey === key" in gate
-    assert 'state.view === "leaderboard" && drawnFrontierEntranceKey === key' in gate
+    assert 'state.view === "saturation" && drawnFrontierEntranceKey === key' in gate
     assert "const FRONTIER_SWEEP_MS = 3600;" in script
     assert "FRONTIER_SWEEP_DELAY_MS + FRONTIER_SWEEP_MS + FRONTIER_POINT_FADE_MS" in script
-    assert "frontierShouldAnimate(`curated:${entry.benchmark_id}`)" in script
-    assert "frontierShouldAnimate(`external:${record.slug}`)" in script
-    assert script.count('"score-chart-enter"') == 2
+    assert "frontierShouldAnimate(`catalog:${record.slug}`)" in script
+    assert script.count('"score-chart-enter"') == 1
 
     # A superseded shard callback may not paint: two renders of one record
     # before its cached shard settles would otherwise let the second paint
     # clear the entrance class before the browser drew a frame.
-    assert "let externalRenderSeq = 0;" in script
-    external_render = script.split("function renderExternalBenchmark(board, scored, record)", 1)[
+    assert "let catalogRenderSeq = 0;" in script
+    catalog_render = script.split("function renderCatalogBenchmark(board, scored, record)", 1)[
         1
     ].split("\nfunction ", 1)[0]
-    assert "const renderToken = ++externalRenderSeq;" in external_render
-    assert "if (renderToken !== externalRenderSeq) return;" in external_render
+    assert "const renderToken = ++catalogRenderSeq;" in catalog_render
+    assert "if (renderToken !== catalogRenderSeq) return;" in catalog_render
 
     clip_rule = styles.split(".score-chart-enter .score-frontier-clip {", 1)[1][:300]
     assert "animation: score-frontier-sweep 3600ms linear 180ms both" in clip_rule

@@ -36,8 +36,9 @@
         <div class="logos-filters">
           <button type="button" data-filter="all" class="is-active">All</button>
           <button type="button" data-filter="fallback">No brand mark</button>
-          <button type="button" data-filter="curated">Curated</button>
-          <button type="button" data-filter="crawled">Crawled</button>
+          <button type="button" data-filter="model_reports">Model reports</button>
+          <button type="button" data-filter="llm_stats">LLM Stats</button>
+          <button type="button" data-filter="artificial_analysis">Artificial Analysis</button>
           <button type="button" data-filter="suspect">Suspect geometry</button>
         </div>
       </header>
@@ -56,14 +57,10 @@
       <section class="logos-section">
         <h2>Model-family resolution</h2>
         <p class="logos-note">
-          Every model that draws a point, from both layers, run through
-          <code>modelIcon()</code>. This is where a family mark (Claude, Gemini,
-          Grok) overrides the organization mark, and where it does not. The
-          layer chip says which record a model came from: a
-          <span class="chip chip-layer-crawled">crawled</span> row records neither
-          how the test was run nor when, so it is not a
-          <span class="chip chip-layer-curated">curated</span> card's equal
-          even though both resolve their mark the same way.
+          Models from all sources use <code>modelIcon()</code>. A family mark
+          such as Claude, Gemini or Grok can override the organization mark.
+          Source chips show where each model appears. Scores, protocols and
+          dates retain their own evidence in the benchmark catalog.
         </p>
         <div class="logos-grid" id="logos-models"></div>
       </section>

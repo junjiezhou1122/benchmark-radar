@@ -17,6 +17,9 @@ one side has an obvious counterpart on the other.
 
 from __future__ import annotations
 
+import math
+from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from .citation import apa_citation
@@ -61,14 +64,26 @@ def _collate(name: str) -> tuple[str, str]:
 LEADERBOARD_TOP_LIMIT = 5
 
 # The sentence renderLeaderboardTop joins onto board.measures inside the (i)
-# beside the ranking. It is the caveat that keeps an adoption count from being
+# below the ranking. It is the caveat that keeps a document count from being
 # read as a quality score, so a page that ships the ranking ships it too.
-LEADERBOARD_TOP_NOTE = (
-    "A report counts once per test, even if it lists that test several times. "
-    "Some reports publish their results as a picture rather than text, and we "
-    "read those with software that can misread a digit, so the list at the "
-    "bottom of this page links every count back to the report it came from."
-)
+LEADERBOARD_TOP_NOTE = "Open the source-document list below to trace each count to its citations."
+
+
+# The slider's default position in site/index.html. The seed must render the
+# same cutoff the browser starts on, or the first paint would change on hydrate.
+DEFAULT_SCORE_CUTOFF = 70
+
+
+def _display_value(value: float) -> str:
+    """One decimal, matching scoreSummaryLabel in app.js so seeds and renders agree.
+
+    Half-up rather than Python's default banker's rounding, because
+    toLocaleString rounds half-up; without this a 0.95 prints as "1" in the
+    browser and "0.9" in the seed. Rounding is display only: a 69.95 shows as
+    "70" and still belongs under the <70 cutoff, which filters on the raw value.
+    """
+    rounded = Decimal(str(value)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    return f"{rounded:,f}".rstrip("0").rstrip(".")
 
 
 def _info_disclosure(text: str) -> str:
@@ -82,13 +97,16 @@ def _info_disclosure(text: str) -> str:
     )
 
 
-def _leaderboard_seed(dashboard: dict[str, Any]) -> dict[str, str]:
+def _leaderboard_seed(
+    dashboard: dict[str, Any], catalog_index: list[dict[str, Any]]
+) -> dict[str, str]:
     """The top rows, the measures note and the caveat renderLeaderboardTop emits."""
     board = dashboard.get("model_card_leaderboard") or {}
     ranked = [entry for entry in (board.get("entries") or []) if (entry.get("card_count") or 0) > 0]
     entries = ranked[:LEADERBOARD_TOP_LIMIT]
+    ranking_seed = _score_ranking_seed(dashboard, catalog_index)
     if not entries:
-        return {}
+        return ranking_seed
     # Scaled against the top row on screen rather than the top row overall,
     # because that is what the renderer scales against.
     top = max(int(entry["card_count"]) for entry in entries)
@@ -101,7 +119,7 @@ def _leaderboard_seed(dashboard: dict[str, Any]) -> dict[str, str]:
         f'style="width:{int(entry["card_count"]) / top * 100:.1f}%"></span>'
         "</span>"
         '<span class="leaderboard-top-count">'
-        f"{esc(_metric_label(entry.get('card_count'), 'model card'))}</span>"
+        f"{esc(_metric_label(entry.get('card_count'), 'source document'))}</span>"
         "</li>"
         for entry in entries
     )
@@ -141,7 +159,199 @@ def _leaderboard_seed(dashboard: dict[str, Any]) -> dict[str, str]:
             '<p class="leaderboard-deck visually-hidden" id="leaderboard-measures" data-seed>'
             f"{esc(measures)}</p>"
         )
-    return seed
+    return {**seed, **ranking_seed}
+
+
+def _browser_score_summary(record: dict[str, Any]) -> dict[str, Any] | None:
+    """Match scoreBrowserSummary: preserve source values except declared error percentages."""
+    summary = record.get("score_summary")
+    if not summary:
+        return None
+    minimum = summary.get("raw_min")
+    maximum = summary.get("raw_max")
+    if (
+        record.get("unit") == "percent"
+        and (record.get("score_direction") or record.get("direction")) == "lower_is_better"
+        and isinstance(minimum, (int, float))
+        and isinstance(maximum, (int, float))
+        and 0 <= minimum <= maximum <= 100
+    ):
+        return {**summary, "display_max": 100 - minimum, "normalized_from_lower": True}
+    return summary
+
+
+def _benchmark_date(
+    record: dict[str, Any], entry: dict[str, Any] | None = None
+) -> tuple[str | None, str | None]:
+    """Mirror skyline.js: release, score publication, then a labelled score-date proxy."""
+
+    def valid(value: Any) -> bool:
+        try:
+            return isinstance(value, str) and date.fromisoformat(value).isoformat() == value
+        except ValueError:
+            return False
+
+    for released in [(entry or {}).get("released"), record.get("released")]:
+        if valid(released):
+            return released, "Released"
+    reports = [record.get("first_reported_at"), record.get("first_score_reported_at")]
+    reports += [
+        row.get("reported_at") or row.get("reported_date")
+        for row in record.get("observations") or []
+        if isinstance(row.get("value"), (int, float))
+        and not isinstance(row["value"], bool)
+        and math.isfinite(row["value"])
+        and row.get("date_precision") not in {"model_announcement", "crawl"}
+    ]
+    first = min((value for value in reports if valid(value)), default=None)
+    if first:
+        return first, "First LLM score reported"
+    first_record = record.get("first_score_record") or {}
+    if first_record.get("date_precision") in {
+        "day",
+        "document_publication",
+        "score_publication",
+        "model_announcement",
+    } and valid(first_record.get("reported_at")):
+        label = (
+            "First dated LLM score (model-release proxy)"
+            if first_record.get("date_precision") == "model_announcement"
+            else "First LLM score reported"
+        )
+        return first_record["reported_at"], label
+    return None, None
+
+
+def _catalog_score_rows(catalog_index: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The complete population and ordering used by scoreBrowseRows."""
+    rows = [
+        {
+            "id": record["slug"],
+            "name": record["name"],
+            "source": record["source"],
+            "summary": _browser_score_summary(record),
+            "date": _benchmark_date(record),
+        }
+        for record in catalog_index
+    ]
+    rows.sort(key=lambda row: (-(row["summary"] or {}).get("numeric_count", 0), row["id"]))
+    return rows
+
+
+def _has_reported_score(row: dict[str, Any]) -> bool:
+    summary = row["summary"] or {}
+    value = summary.get("display_max")
+    return (
+        summary.get("numeric_count", 0) > 0
+        and isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    )
+
+
+_SCORE_SOURCE_NAMES = {
+    "model_reports": "Model reports",
+    "llm_stats": "LLM Stats",
+    "artificial_analysis": "Artificial Analysis",
+    "opencompass_hub": "OpenCompass Hub",
+}
+
+
+def _score_browser_seed(
+    dashboard: dict[str, Any], catalog_index: list[dict[str, Any]]
+) -> dict[str, str]:
+    """Saturation's empty-search browser, with the shared default cutoff."""
+    if not catalog_index:
+        return {}
+    rows = [
+        row
+        for row in _catalog_score_rows(catalog_index)
+        if not _has_reported_score(row) or row["summary"]["display_max"] < DEFAULT_SCORE_CUTOFF
+    ]
+    shown = rows[:50]
+    content = ""
+    for index, row in enumerate(shown):
+        label = _SCORE_SOURCE_NAMES.get(row["source"], row["source"])
+        dated, basis = row["date"]
+        date_label = f"{basis} {_medium_date(dated)}" if dated else "Date unknown"
+        facts = f"{label} · {date_label}"
+        if not _has_reported_score(row):
+            facts += " · No score reported"
+        pressed = "true" if index == 0 else "false"
+        content += (
+            '<button class="benchmark-result score-browse-result" '
+            f'type="button" aria-pressed="{pressed}">'
+            f'<span class="benchmark-result-name">{esc(row["name"])}</span>'
+            f'<span class="benchmark-result-facts">{esc(facts)}</span>'
+            "</button>"
+        )
+    if not rows:
+        content = (
+            '<p class="empty-state">No benchmarks match these filters.</p>'
+            '<button class="clear-button" type="button">All</button>'
+        )
+    seeds = {
+        '<div id="benchmark-search-results"></div>': (
+            f'<div id="benchmark-search-results" data-seed>{content}</div>'
+        ),
+        '<p id="benchmark-search-status" class="benchmark-search-status"></p>': (
+            '<p id="benchmark-search-status" class="benchmark-search-status" data-seed>'
+            f"{len(shown):,} of {len(rows):,} matches</p>"
+        ),
+    }
+    if len(rows) > 50:
+        button = (
+            '<button id="benchmark-search-more" class="clear-button" type="button" '
+            'data-i18n="Show more" hidden>Show more</button>'
+        )
+        seeds[button] = button.replace(" hidden>", " data-seed>")
+    return seeds
+
+
+def _score_ranking_seed(
+    dashboard: dict[str, Any], catalog_index: list[dict[str, Any]]
+) -> dict[str, str]:
+    """The score ranking keeps its scored 2024+ cohort, independent of the slider."""
+    rows = [
+        row
+        for row in _catalog_score_rows(catalog_index)
+        if _has_reported_score(row) and (row["date"][0] is None or row["date"][0] >= "2024-01-01")
+    ]
+    if not rows:
+        return {}
+    maximum = rows[0]["summary"]["numeric_count"]
+    ranking = ""
+    for rank, row in enumerate(rows[:5], 1):
+        summary = row["summary"]
+        value = _display_value(summary["display_max"])
+        unit = summary.get("unit")
+        suffix = "%" if unit == "percent" else f" {unit}" if unit else ""
+        label = _SCORE_SOURCE_NAMES.get(row["source"], row["source"])
+        count = _metric_label(summary["numeric_count"], "data point")
+        width = summary["numeric_count"] / maximum * 100
+        ranking += (
+            '<li class="leaderboard-top-row">'
+            f'<span class="leaderboard-top-rank">{rank:02}</span>'
+            '<span class="leaderboard-top-name">'
+            '<button class="score-ranking-link" type="button" aria-pressed="false">'
+            f"<span>{esc(row['name'])}</span>"
+            f"<small>{esc(label + ' · ' + value + suffix)}</small></button></span>"
+            '<span class="leaderboard-top-bar"><span class="leaderboard-top-bar-fill" '
+            f'style="width:{width:.1f}%"></span></span>'
+            f'<span class="leaderboard-top-count">{esc(count)}</span></li>'
+        )
+    seeds = {
+        '<ol class="leaderboard-top-list" id="score-ranking-list"></ol>': (
+            f'<ol class="leaderboard-top-list" id="score-ranking-list" data-seed>{ranking}</ol>'
+        ),
+    }
+    if len(rows) > 5:
+        button = (
+            '<button id="score-ranking-more" class="leaderboard-top-more" type="button" '
+            'data-i18n="Show more" hidden>Show more</button>'
+        )
+        seeds[button] = button.replace(" hidden>", " data-seed>")
+    return seeds
 
 
 # --- Trends -------------------------------------------------------------------
@@ -344,11 +554,14 @@ def _map_seed(dashboard: dict[str, Any]) -> dict[str, str]:
 
 
 def view_seeds(
-    dashboard: dict[str, Any], palette: tuple[dict[str, str], list[str]]
+    dashboard: dict[str, Any],
+    palette: tuple[dict[str, str], list[str]],
+    catalog_index: list[dict[str, Any]] | None = None,
 ) -> dict[str, dict[str, str]]:
     """Every view's seed, keyed by view. An empty dict means nothing to publish."""
     return {
-        "leaderboard": _leaderboard_seed(dashboard),
+        "leaderboard": _leaderboard_seed(dashboard, catalog_index or []),
+        "saturation": _score_browser_seed(dashboard, catalog_index or []),
         "trends": _trends_seed(dashboard, palette),
         "map": _map_seed(dashboard),
     }

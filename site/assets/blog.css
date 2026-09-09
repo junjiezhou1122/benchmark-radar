@@ -2,12 +2,8 @@
    and only compose its existing tokens into a reading layout. Nothing here
    applies to the dashboard: every rule is scoped to .blog-page, which only the
    generated blog documents carry. */
-.blog-page .masthead-end {
-  display: flex;
-}
-
 .blog-page .blog-view {
-  padding: clamp(2.25rem, 4vw, 3.75rem) 0 6rem;
+  padding: clamp(1.25rem, 2vw, 1.75rem) 0 6rem;
 }
 
 .blog-page .blog-hero {
@@ -19,6 +15,7 @@
 
 .blog-page .blog-hero h1 {
   max-width: 920px;
+  font-size: clamp(1.25rem, 2vw, 1.5rem);
 }
 
 .blog-page .blog-lede {

@@ -62,6 +62,8 @@ from typing import Any
 
 import yaml
 
+from .score_summary import score_summary
+
 _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 SCORES_SCHEMA_VERSION = 1
@@ -718,6 +720,7 @@ def score_progression(
             "metric": metric["metric"],
             "direction": metric["direction"],
             "unit": metric["unit"],
+            "score_summary": score_summary(rows, unit=metric["unit"]),
             "observation_count": len(rows),
             "dated_observation_count": len(dates),
             "organization_count": len({row["organization"] for row in rows}),
