@@ -1,8 +1,8 @@
 {
   "note": "Frozen IDs for the logo audit page (site/logos.html). An ID is assigned once and never reused, so review feedback citing it stays valid across rebuilds. Which models and organizations exist is decided by models.json, not here.",
   "high_water": {
-    "O": 68,
-    "M": 1054
+    "O": 69,
+    "M": 1056
   },
   "organizations": {
     "AI21 Labs": "O-01",
@@ -68,7 +68,8 @@
     "Swiss AI Initiative": "O-64",
     "TII UAE": "O-65",
     "Thinking Machines": "O-66",
-    "Trillion Labs": "O-67"
+    "Trillion Labs": "O-67",
+    "ApodexAI": "O-69"
   },
   "models": {
     "Olmo 3 (7B and 32B)␟Ai2": "M-01",
@@ -80,7 +81,7 @@
     "DeepSeek-V3␟DeepSeek": "M-07",
     "DeepSeek-V4␟DeepSeek": "M-08",
     "DeepSeek-V4-Pro␟DeepSeek": "M-09",
-    "DeepSeek-V4-Pro-0813␟DeepSeek": "M-10",
+    "DeepSeek V4 Pro-0813␟DeepSeek": "M-10",
     "Gemini 2.0 Flash Thinking␟Google": "M-100",
     "Qwen3 VL 32B (Reasoning)␟Qwen": "M-1000",
     "Qwen3 VL 4B (Reasoning)␟Qwen": "M-1001",
@@ -142,6 +143,8 @@
     "o3 high␟OpenAI": "M-1052",
     "Qwen3-235B-A22B (Thinking)␟Qwen": "M-1053",
     "Grok 3 Beta Extended Thinking␟xAI": "M-1054",
+    "Apodex 1.1␟ApodexAI": "M-1055",
+    "Qwen 3.8 Max␟Qwen": "M-1056",
     "Gemini 3 Pro␟Google": "M-106",
     "Gemini 3.1 Flash-Lite␟Google": "M-107",
     "Gemini 3.5 Flash␟Google": "M-108",
@@ -842,7 +845,7 @@
     "DiffusionGemma 26B A4B␟Google": "M-907",
     "Gemini 1.5 Flash 8B␟Google": "M-908",
     "Phi 4␟Microsoft": "M-909",
-    "DeepSeek-V4-Flash-0731␟DeepSeek": "M-91",
+    "DeepSeek V4 Flash-0731␟DeepSeek": "M-91",
     "Phi-4 Multimodal Instruct␟Microsoft": "M-910",
     "MiniMax M1 40K␟MiniMax": "M-911",
     "MiniMax M1 80K␟MiniMax": "M-912",
