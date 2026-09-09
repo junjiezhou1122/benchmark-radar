@@ -552,3 +552,55 @@ assert.equal(controls.get('leaderboard-score-value').textContent,'All');
 assert.equal(controls.get('saturation-score-value').textContent,'All');
 assert.equal(urlWrites,4);
 console.log('Shared slider, independent rankings, and full-catalog Saturation searches passed.');
+
+// Exercise the active score renderer with the rebuilt publisher leaderboard.
+// Checking the retired scoreTrackChart source would miss both of these bugs.
+const scoreChartDeps = {
+  svgElement, t: translate, window: {innerWidth: 1280},
+  catalogSourceMeta: source => ({name: source}),
+  dateValue: date => Date.parse(date), formatDate: date => date,
+  frontierPointRevealDelay: () => 0,
+  frontierPointSizes: () => ({face: 9, glyph: 12}),
+  modelGlyph: () => svgElement('path'),
+  makeFrontierPointInteractive: (node, details) => {node.details = details;},
+  enableFrontierTouchTargets: () => {},
+};
+const renderScores = new Function(...Object.keys(scoreChartDeps),
+  ['catalogPlottedRows','catalogDisplayFactor','catalogScorePositions','catalogRecordSetters','recordSetterPath','catalogScoreChart'].map(fn).join('\n') + '\nreturn catalogScoreChart;'
+)(...Object.values(scoreChartDeps));
+const publisherPayload = JSON.parse(readFileSync('site/data/benchmarks/frontier_challenge.json','utf8')).scores_by_source.model_reports;
+for (const viewport of [1280, 390]) {
+  scoreChartDeps.window.innerWidth = viewport;
+  const rendered = renderScores('model_reports', publisherPayload);
+  const marks = rendered.children.filter(node => node.attrs['data-frontier-point'] === '');
+  assert.equal(marks.length,13);
+  const faces = marks.map(node => node.children.find(child => child.tag === 'circle'));
+  assert.equal(new Set(faces.map(node => `${node.attrs.cx}|${node.attrs.cy}`)).size,13,
+    'each tied system needs its own selectable position');
+  const yByScore = new Map();
+  for (const mark of marks) {
+    const face = mark.children.find(child => child.tag === 'circle');
+    const details = Object.fromEntries(mark.details.rows.map(row => [row.label,row.value]));
+    const score = details['Score as reported'];
+    if (yByScore.has(score)) assert.equal(face.attrs.cy,yByScore.get(score),'ties keep exact score heights');
+    yByScore.set(score,face.attrs.cy);
+    assert.equal(details['Measured by'],'ApodexAI');
+    assert.equal(details['Reported by'],'benchmark publisher');
+    assert.equal(mark.details.url,'https://apodexai.github.io/FrontierAgent/benchmarks/FrontierChallenge/');
+    assert.equal(details['Document publication date'],'2026-08-25');
+    assert(face.attrs.cx >= 68 && face.attrs.cx <= (viewport <= 760 ? 500 : 900));
+  }
+  const guides = rendered.children.filter(node => node.attrs.class === 'score-tie-guide');
+  assert.equal(guides.length,5);
+  assert(guides.every(node => node.attrs.x1 === 68 && node.attrs.y1 === node.attrs.y2));
+  assert(rendered.children.some(node => node.tag === 'text' && node.text === '2026-08-25'));
+}
+// Chronological spacing stays unchanged when there is no collision; zero stays.
+const ordinary = renderScores('llm_stats', {series:{direction:'higher_is_better'}, rows:[
+  {value:0,reported_date:'2025-01-01',obs_id:'zero',model_name:'Zero'},
+  {value:50,reported_date:'2026-01-01',obs_id:'later',model_name:'Later'},
+]});
+const ordinaryMarks = ordinary.children.filter(node => node.attrs['data-frontier-point'] === '');
+assert.equal(ordinaryMarks.length,2);
+assert.deepEqual(ordinaryMarks.map(node=>node.children.find(child=>child.tag==='circle').attrs.cx),[68,500]);
+assert(!ordinary.children.some(node=>node.attrs.class==='score-tie-guide'));

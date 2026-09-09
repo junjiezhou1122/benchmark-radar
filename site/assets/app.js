@@ -5549,6 +5549,25 @@ function catalogDisplayFactor(series) {
   return series?.score_summary?.display_multiplier ?? 1;
 }
 
+// Spread coincident glyphs horizontally; their score and date anchors stay fixed.
+function catalogScorePositions(rows, x, left, right) {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = `${dateValue(row.reported_date)}|${row.value}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+  const positions = new Map();
+  for (const group of groups.values()) {
+    const dateX = x(dateValue(group[0].reported_date));
+    const gap = Math.min(28, (right - left) / Math.max(1, group.length - 1));
+    const width = (group.length - 1) * gap;
+    const start = Math.max(left, Math.min(dateX - width / 2, right - width));
+    group.forEach((row, index) => positions.set(row, { dateX, pointX: start + index * gap }));
+  }
+  return positions;
+}
+
 function catalogScoreChart(source, payload) {
   const meta = catalogSourceMeta(source);
   // A row whose value did not parse is in the table verbatim and out of the
@@ -5735,9 +5754,16 @@ function catalogScoreChart(source, payload) {
     ),
   );
 
+  const positions = catalogScorePositions(plotted, x, margin.left, width - margin.right);
   for (const row of plotted) {
-    const pointX = x(dateValue(row.reported_date));
+    const { dateX, pointX } = positions.get(row);
     const pointY = scoreY(row.value);
+    if (pointX !== dateX) {
+      svg.append(svgElement("line", {
+        x1: dateX, x2: pointX, y1: pointY, y2: pointY,
+        class: "score-tie-guide",
+      }));
+    }
     const thirdParty = row.reported_by === "third_party";
     const offTheLine = hasRecordPath && !recordMarks.has(row.obs_id);
     // Reveal observations in chronological order for every source.
@@ -5752,7 +5778,9 @@ function catalogScoreChart(source, payload) {
       style: `--reveal-delay:${frontierPointRevealDelay(pointX, margin, plotWidth)}ms`,
       "aria-label":
         `${row.model_name || t("not recorded")} ${t("by")} ${row.organization || t("not recorded")}` +
-        (thirdParty ? `, ${t("cited by")} ${meta.name}` : "") +
+        (row.measurement_kind === "benchmark_publisher_run"
+          ? `, ${t("Measured by")} ${row.measured_by}`
+          : thirdParty ? `, ${t("cited by")} ${meta.name}` : "") +
         `. ${t("Click to pin record details")}.`,
     });
     const size = frontierPointSizes(offTheLine);
@@ -5788,6 +5816,9 @@ function catalogScoreChart(source, payload) {
         // would tell the reader the opposite of what the row records.
         ...(row.measured_by ? [{ label: t("Measured by"), value: row.measured_by }] : []),
         { label: t("Listed by"), value: meta.name },
+        ...(row.measurement_kind === "benchmark_publisher_run"
+          ? [{ label: t("Reported by"), value: t("benchmark publisher") }]
+          : []),
         ...(row.reported_by === "self_reported"
           ? [{ label: t("Reported by"), value: t("self reported") }]
           : []),
@@ -5856,6 +5887,10 @@ function catalogScoreChart(source, payload) {
       }
       cursor.setUTCMonth(cursor.getUTCMonth() + 3);
     }
+  } else {
+    svg.append(svgElement("text", {
+      x: margin.left, y: height - 26, "text-anchor": "start", class: "frontier-tick",
+    }, formatDate(plotted[0].reported_date, { dateStyle: "medium" })));
   }
   svg.append(
     svgElement(
@@ -5916,6 +5951,9 @@ function catalogSourceTable(source, payload) {
     );
   }
   const chart = catalogScoreChart(source, payload);
+  if (chart?.querySelector(".score-tie-guide")) {
+    notes.push(t("Tied markers are separated horizontally for selection; connectors lead to their recorded date. Score heights are unchanged."));
+  }
   // Put the color key and the single provenance note below the figure.
   return element("div", { className: "catalog-source" }, [
     // frontier-chart's own layout class (position: relative, full-width svg)

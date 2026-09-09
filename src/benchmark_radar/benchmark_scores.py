@@ -98,6 +98,7 @@ _REQUIRED_RESULT_FIELDS = (
 # a row claiming some other provenance is a data error, not a new category to
 # be accepted silently, because the UI grades evidence on this field.
 _READ_FROM = ("pdf_text", "html_text", "table_image")
+_MEASUREMENT_KINDS = ("reported_self_score", "benchmark_publisher_run")
 
 # Below this many distinct dates a run cannot express a direction over time at
 # all: two points define one segment, which is a comparison, not a trend.
@@ -184,6 +185,11 @@ def load_scores(path: Path = DEFAULT_SCORES_PATH) -> dict[str, Any]:
             "unit": str(benchmark["unit"]),
         }
 
+    if "sources" in document:
+        raise BenchmarkScoreError(
+            f"{path}: register source_documents in the model card registry, not the score file"
+        )
+
     seen: set[tuple[str, ...]] = set()
     rows: list[dict[str, Any]] = []
     for index, result in enumerate(results):
@@ -239,11 +245,16 @@ def load_scores(path: Path = DEFAULT_SCORES_PATH) -> dict[str, Any]:
             "reported_at": reported_at,
             "value": value,
             "read_from": read_from,
+            "measurement_kind": str(result.get("measurement_kind") or "reported_self_score"),
             # Present only on a third-party citation: the publisher repeated
             # someone else's self-reported figure. Weaker evidence, and the UI
             # marks it rather than mixing it in.
             "reported_by": str(result["reported_by"]) if result.get("reported_by") else None,
         }
+        if row["measurement_kind"] not in _MEASUREMENT_KINDS:
+            raise BenchmarkScoreError(
+                f"{label} measurement_kind must be one of {', '.join(_MEASUREMENT_KINDS)}"
+            )
         # The same model measured twice on one instrument under one protocol in
         # one document is a contradiction: the chart would draw two points at
         # one x with no way to say which is the reading.
@@ -266,22 +277,40 @@ def load_scores(path: Path = DEFAULT_SCORES_PATH) -> dict[str, Any]:
 
 
 def _cross_check_sources(scores: dict[str, Any], registry: dict[str, Any]) -> None:
-    """Every score must cite a document the registry already knows.
+    """Every score must cite a model card or declared benchmark source.
 
     Provenance is the whole basis of this layer's claim to be readable-out-of-a
     -document rather than assembled from memory. A `source_id` with no matching
-    card is a citation to nothing: it would render as a linkless number that a
-    reader cannot check, which is the one thing this dataset promises not to do.
+    card or source document is a citation to nothing: it would render
+    as a linkless number that a reader cannot check, which is the one thing this
+    dataset promises not to do.
     """
-    reported: dict[str, set[str]] = {
-        str(card["id"]): {str(ref) for ref in card["benchmarks"]}
-        for card in registry["model_cards"]
+    documents = {
+        str(document["id"]): document
+        for document in [*registry["model_cards"], *registry.get("source_documents", [])]
+    }
+    reported = {
+        source_id: {str(ref) for ref in document["benchmarks"]}
+        for source_id, document in documents.items()
     }
     unknown = sorted({row["source_id"] for row in scores["results"]} - reported.keys())
     if unknown:
         raise BenchmarkScoreError(
             f"score rows cite source_ids absent from the model card registry: {', '.join(unknown)}"
         )
+    for row in scores["results"]:
+        document = documents[row["source_id"]]
+        row["source_title"] = document.get("name") or document.get("model")
+        row["source_url"] = document.get("url")
+        row["source_document_type"] = document.get("document_type")
+        if row["measurement_kind"] == "benchmark_publisher_run" and (
+            document.get("document_type") != "benchmark_leaderboard"
+            or not document.get("publisher")
+        ):
+            raise BenchmarkScoreError(
+                f"{row['source_id']}: publisher-run scores require a registered "
+                "benchmark leaderboard with a named publisher"
+            )
     registry_ids = {str(benchmark["id"]) for benchmark in registry["benchmarks"]}
     stray = sorted(set(scores["benchmarks"]) - registry_ids)
     if stray:
@@ -435,6 +464,19 @@ def _evidence_grade(series: list[dict[str, Any]], rows: list[dict[str, Any]]) ->
             ),
         }
     dates = {row["reported_at"] for row in rows}
+    if len(dates) == 1 and len(rows) >= 2:
+        return {
+            "id": "same_day_comparison",
+            "label": "Same-day comparison",
+            "supports": (
+                "Multiple values are readable from documents on one date, so the table "
+                "supports a cross-system snapshot comparison."
+            ),
+            "does_not_support": (
+                "Any movement over time. All observations share one date, so this is a "
+                "leaderboard snapshot rather than a longitudinal series."
+            ),
+        }
     if len(dates) >= 2:
         return {
             "id": "unjoinable",

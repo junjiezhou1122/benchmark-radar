@@ -3240,6 +3240,12 @@ td a {
   }
 }
 
+.score-tie-guide {
+  stroke: #8b9ba4;
+  stroke-width: 1;
+  pointer-events: none;
+}
+
 .score-best-line {
   stroke: #8fd0c4;
   stroke-dasharray: 2 4;
