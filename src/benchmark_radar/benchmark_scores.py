@@ -340,7 +340,7 @@ def _cross_check_sources(scores: dict[str, Any], registry: dict[str, Any]) -> No
     source_metadata.update(
         {
             str(source["id"]): {
-                "title": str(source.get("title") or ""),
+                "title": str(source.get("title") or source.get("name") or ""),
                 "url": str(source.get("url") or ""),
                 "document_type": str(source.get("document_type") or ""),
             }
