@@ -129,7 +129,7 @@ npx skills add ktwu01/benchmark-radar
 
 每日信息流也接入了 [Crossref](https://www.crossref.org) 的公开 DOI 元数据。
 
-前沿模型分数层（包括上方的 SWE-bench Verified 时间线）基于 [LLM Stats](https://llm-stats.com) 采集的 benchmark 数据构建，感谢他们把这些数据公开出来。
+前沿模型分数综合了三类来源。上方的 SWE-bench Verified 时间线来自各家实验室的模型报告和 system card；其余的模型分数几乎都来自 [Artificial Analysis](https://artificialanalysis.ai) 和 [LLM Stats](https://llm-stats.com)，每条分数都保留了原始来源引用。感谢两家把数据公开出来。更大范围的 benchmark 目录还有第四类来源 [OpenCompass Hub](https://hub.opencompass.org.cn)。
 
 特别感谢 [Xiaopai Liu](https://github.com/liuxiaopai-ai)（[@bourneliu66](https://x.com/bourneliu66)）在 X 上为 Benchmark Radar 宣传，也感谢他的每日 builder 简报 [BuilderPulse](https://github.com/BuilderPulse/BuilderPulse)。
 
