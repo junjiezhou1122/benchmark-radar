@@ -189,9 +189,13 @@ and [Hacker News](https://news.ycombinator.com), plus first-party lab feeds from
 [IBM Research](https://research.ibm.com), [Databricks](https://www.databricks.com),
 [LangChain](https://www.langchain.com/blog), and [Meituan Engineering](https://tech.meituan.com).
 
-The frontier-model score layer, including the SWE-bench Verified timeline above,
-is built on benchmark data collected by [LLM Stats](https://llm-stats.com).
-Thank you for keeping that data open.
+The frontier-model scores draw on three kinds of source. Lab model reports and
+system cards supply the SWE-bench Verified timeline shown above. Nearly all the
+remaining model scores come from [Artificial Analysis](https://artificialanalysis.ai)
+and [LLM Stats](https://llm-stats.com), and every score keeps a citation to the
+source it was read from. Thank you both for publishing that data openly. The
+wider benchmark catalog adds [OpenCompass Hub](https://hub.opencompass.org.cn)
+as a fourth source.
 
 A special thank you to [Xiaopai Liu](https://github.com/liuxiaopai-ai)
 ([@bourneliu66](https://x.com/bourneliu66)) for the shout-out on X, and to his
