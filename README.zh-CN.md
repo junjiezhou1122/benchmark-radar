@@ -114,6 +114,27 @@ npx skills add ktwu01/benchmark-radar
 
 机器可读的引用元数据见 [`CITATION.cff`](CITATION.cff)。
 
+## 摘要
+
+做 benchmark 研究的人，以及开发大语言模型（LLM）和其他 AI 系统的人，都需要找到
+合适的评测，找到它的数据集和代码，并搞清楚那些公布的分数是在什么条件下测出来的。
+Benchmark Radar 是一个持续更新的 AI benchmark 数据库和搜索引擎，覆盖 LLM 评测、
+agentic 和工具调用类 benchmark，以及代码、推理、安全和各个垂直领域的评测。它把
+benchmark 论文、代码仓库、数据集和 release 的每日发现，和一个可搜索的 benchmark
+目录、模型卡与技术报告中的引用、以及分数变化历史放在一起。每条记录都保留自己的
+来源标识和引用，方便你核对一个 benchmark 和它背后的评测证据。
+
+每日发现覆盖 37 个来源：13 个直接 connector 和 24 个机构自有的研究与工程 feed。
+目录汇集了来自 4 个 benchmark 目录的记录，并为其中有分数的记录保留数值观测。项目
+提供 web dashboard，包含 benchmark 排行榜、分数与实际使用量的 Pareto 前沿视图、
+saturation 和趋势视图、每日 feed、可下载的证据数据，以及一个可离线查询的命令行
+工具（CLI）和可复现的分析流程。
+
+以上是
+[技术报告](https://github.com/ktwu01/benchmark-radar-paper/blob/main/main.pdf)
+的概要。报告里详细写了数据采集和检索方式，对整个目录做了审计，并讨论了 benchmark
+的 saturation、被采用的趋势，以及分数之间横向比较的局限。
+
 ## Star 历史
 
 <a href="https://www.star-history.com/#ktwu01/benchmark-radar&Date">

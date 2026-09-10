@@ -130,6 +130,32 @@ technical report:
 
 See [`CITATION.cff`](CITATION.cff) for machine-readable citation metadata.
 
+## Abstract
+
+Benchmark researchers and developers of large language models (LLMs) and other
+AI systems need to find relevant evaluations, locate their benchmark datasets
+and code, and understand the settings behind reported scores. Benchmark Radar
+is a living database and search engine for retrieval and discovery of AI
+benchmarks, covering LLM evaluation, agentic and tool-use benchmarks, coding,
+reasoning, safety, and domain-specific evaluations. It combines daily discovery
+of benchmark papers, repositories, datasets and releases with a searchable
+benchmark catalog, mentions in model cards and technical reports, and score
+histories. It retains source identities and citations so readers can inspect
+candidate benchmarks and their evaluation evidence.
+
+Daily discovery draws on 37 sources: 13 direct connectors and 24 first-party
+research and engineering feeds. The catalog collects source records from four
+benchmark catalogs, with numeric score observations on the records that carry
+them. The project publishes the web dashboard with a benchmark leaderboard, a
+Pareto frontier view of score against measured use, saturation and trend views,
+daily feeds, downloadable evidence, a command-line interface (CLI) for offline
+queries, and reproducible analysis.
+
+This summarizes the
+[technical report](https://github.com/ktwu01/benchmark-radar-paper/blob/main/main.pdf),
+which describes collection and retrieval, audits the full catalog, and examines
+benchmark saturation, adoption trends, and the limits of score comparisons.
+
 ## Star History
 
 <a href="https://www.star-history.com/#ktwu01/benchmark-radar&Date">
