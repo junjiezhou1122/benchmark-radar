@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from benchmark_radar.citation import ARXIV_ID, ARXIV_URL, TITLE
 from benchmark_radar.feed import SITE_URL
 from benchmark_radar.site_seo import INDEXABLE_VIEWS, sitemap_tree, write_sitemap
 
@@ -172,3 +173,19 @@ def test_sitemap_lists_the_blog_with_a_per_brief_lastmod():
 def test_a_build_that_writes_no_blog_lists_no_blog_urls():
     root = sitemap_tree([{"generated_at": "2026-09-01T02:17:00+00:00"}]).getroot()
     assert not [node.text for node in root.findall("sm:url/sm:loc", NS) if "/blog/" in node.text]
+
+
+def test_llms_txt_names_the_paper_it_asks_agents_to_cite():
+    """llms.txt is the first file an agent or answer engine reads.
+
+    The preferred citation is the arXiv report, so the paper has to be named
+    there rather than one request deeper behind /cite/. The identifiers come
+    from citation.py, so this surface cannot drift from the citation contract.
+    """
+    llms = Path("site/llms.txt").read_text(encoding="utf-8")
+
+    assert ARXIV_ID in llms
+    assert ARXIV_URL in llms
+    # Written in arXiv's title case, so compare against citation.py's APA
+    # sentence case without pinning the exact casing in two places.
+    assert TITLE.lower() in llms.lower()
